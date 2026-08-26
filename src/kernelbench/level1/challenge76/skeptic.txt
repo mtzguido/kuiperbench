@@ -1,0 +1,51 @@
+Skeptic review — KernelBench L1 #76 (Kuiper.KB.Conv1DGeneral, dilated/strided)
+==============================================================================
+
+Verdict: PASSES `bash run.sh` (matches PyTorch reference at f32 tol
+1e-4 via `eval_kernel_against_ref`).  This challenge re-uses the
+exact same verified primitive and wrapper as L1 #67
+(`Kuiper.Kernel.Conv1D.Naive.conv1d_naive_gpu` via
+`Kuiper.KB.Conv1DGeneral.conv1d_general_f32`); the only difference is
+the Python ModelNew passes the reference Model's stride and dilation
+through and pad=0 (the reference exposes no padding parameter).
+
+The output length and the output-buffer allocation are now computed by
+the VERIFIED self-allocating layer `Kuiper.KB.Conv1DAlloc`
+(`conv1d_out_dim` + `conv1d_general_alloc_f32`); the bridge does no
+hand-rolled output-size division and no `torch::empty`.  See
+`../challenge67/skeptic.txt` for the migration details.
+
+For the canonical analysis (what's verified, what's admitted, bridge
+correctness, TF32 caveat), see `../challenge67/skeptic.txt`.
+
+What this challenge specifically exercises
+------------------------------------------
+* Non-unit stride and non-unit dilation simultaneously (default test
+  inputs: stride=3, dilation=4, kernel_size=3, length=524280, B=64,
+  Cin=64, Cout=128).  The output length is therefore
+    Lout = (524280 - 4*(3-1) - 1) / 3 + 1 = 174757
+  and nthr = 64*128*174757 ≈ 1.43e9, well under 2^31.
+* The verified `__conv1d_single` summation index is
+    l_idx = ol*stride + k_i*dilation - pad
+  which the bridge passes through unmodified to the Karamel-extracted
+  `Kuiper_KB_Conv1DGeneral_conv1d_general_f32`.  Same code path as
+  #67 (where stride=dilation=1 trivially holds) — passing this
+  challenge is the real test that the dilation factor is wired
+  correctly all the way from spec → primitive → bridge → CUDA.
+
+Numerical sensitivity
+---------------------
+Same TF32 fence as #67: the Python wrapper disables TF32 on cuDNN and
+matmul before invoking the reference.  Without this, the reference
+diverges from our naive f32 accumulator past the 1e-4 tolerance.
+
+What this would NOT catch
+-------------------------
+* Bias correctness — #76 default has bias=False, so the bias path is
+  exercised by #67 (bias=False there too actually, so the bias path
+  goes through cudaMemset(0); this is OK because both reference and
+  Kuiper add zero).  A future Conv1D challenge with bias=True would
+  cross-validate the bias forwarding.
+* A bug specifically in the stride-dilation interaction in spec — the
+  kernel proves runtime equals spec outright, so only this run.sh
+  proves the spec is right at runtime.

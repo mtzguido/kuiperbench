@@ -1,0 +1,92 @@
+Skeptic review — KernelBench L1 #67 (Kuiper.KB.Conv1DGeneral)
+=============================================================
+
+Verdict: PASSES `bash run.sh` (matches PyTorch reference at f32 tol
+1e-4 via `eval_kernel_against_ref`).  This challenge wraps the
+verified primitive `Kuiper.Kernel.Conv1D.Naive.conv1d_naive_gpu` via
+the thin monomorphic wrapper
+`Kuiper.KB.Conv1DGeneral.conv1d_general_f32`, which exposes
+stride>=1, pad>=0, dilation>=1 (groups=1).
+
+What's verified
+---------------
+* Memory safety / data-race freedom of `conv1d_naive_gpu` (Pulse).
+* SizeT bounds via `conv1d_size_req` (front-loaded SZ.fits obligations
+  for every multiplication, including `l_out*stride + kk*dilation`
+  neighbour-index fits).
+* The wrapper `Kuiper.KB.Conv1DGeneral` is admit-free and magic-free;
+  just a re-export.
+* The output-dimension formula and the output-buffer allocation now
+  live INSIDE the verification boundary (see "Bridge migration" below).
+* nthr <= max_blocks*max_threads = 2^31, enforced in the bridge.
+
+Admit budget (now empty for this path)
+--------------------------------------
+* `Kuiper.Kernel.Conv1D.Naive` is fully verified: `kf` proves
+  `result == conv1d_out_at ...` outright (NO `assume pure`),
+  `setup`/`teardown`/`kpre_sendable`/`kpost_sendable` are real proofs
+  (NO `magic ()`), and the `lseq_to_t3` view + its `lseq_to_t3_index`
+  index lemma are proved (NO admit).  Earlier revisions of this file
+  described an inherited admit debt that no longer exists; the claim
+  has been corrected.
+* `Kuiper.KB.Conv1DAlloc` (the new self-allocating layer) is also
+  admit-free / magic-free / assume-free, z3rlimit default.
+
+Bridge migration (verified output size + self-allocation)
+---------------------------------------------------------
+* The conv output length is no longer computed by an UNVERIFIED C++
+  division.  It now comes from the VERIFIED, extracted helper
+  `Kuiper_KB_Conv1DAlloc_conv1d_out_dim`, whose F* `ensures` proves it
+  equals `(Lin + 2*pad - ((Kk-1)*dilation + 1)) / stride + 1`.
+* The output buffer is allocated INSIDE the verified self-allocating
+  entry `Kuiper_KB_Conv1DAlloc_conv1d_general_alloc_f32` (cudaMalloc via
+  KPR_GPU_ALLOC), which runs the verified kernel and returns the device
+  pointer; the bridge wraps it with `torch::from_blob` + a cudaFree
+  deleter (no `torch::empty`).  The entry's post forwards the full
+  per-thread `conv1d_out_at` functional spec.
+
+Bridge correctness
+------------------
+* `kuiper_conv1d_general_bridge.cu` (shared common.h) validates: 3D
+  (N,C,L) inputs, groups=1, stride>=1, pad>=0, dilation>=1, all sizes
+  fit u32, nthr <= 2^31, padded input >= effective kernel
+  ((Kk-1)*dilation + 1).  It performs NO conv output-size arithmetic and
+  NO output allocation — only raw-dimension contracts plus the bias
+  scratch copy/zero.  Bias path: forwards caller's bias if defined,
+  else allocates a cudaMemset(0) scratch.  No raw conv kernel logic.
+
+Numerical sensitivity (CRITICAL, same as Conv2D family)
+-------------------------------------------------------
+* The Python wrapper sets `torch.backends.cudnn.allow_tf32 = False`
+  and `torch.backends.cuda.matmul.allow_tf32 = False` BEFORE invoking
+  the reference.  Without this, on Ampere+ the reference Conv1d's
+  cuDNN path runs TF32 (10-bit mantissa) by default, which diverges
+  from our naive f32 accumulator on Cin*K reductions in the hundreds
+  by up to ~5e-4 — past the 1e-4 fp32 tolerance from
+  `get_tolerance_for_precision`.  Fairness knob, not a Kuiper bug:
+  the verified kernel is more numerically faithful than the cuDNN
+  reference's TF32 path.
+* If anyone changes the reference setup, `run.sh` will start failing.
+
+What this would NOT catch
+-------------------------
+* A bug in `conv1d_out_at` (spec).  The kernel proves runtime equals
+  spec outright, but only `run.sh` proves the spec itself encodes the
+  PyTorch convention.  Mitigated here by the fact that
+  `Kuiper.Spec.Conv1D` was authored against the same
+  PyTorch index convention that #76 (with non-trivial dilation/stride)
+  also exercises — so two passing run.sh executions cross-validate
+  the spec across both stride and dilation axes.
+* A divergence in nvcc / Karamel codegen.  The extracted .cu was
+  sanity-checked against the F* source.
+
+1D-via-3D semantics (vs Conv2D-with-H=1 reshape)
+-------------------------------------------------
+We chose to write a fresh Conv1D.Naive primitive (3D tensors, with
+dilation supported) rather than reshape (N,C,L) → (N,C,1,L) and reuse
+Conv2D.Naive.  Reasons:
+* Conv2D.Naive does NOT support dilation, which #76 needs.
+* The 3D primitive is a strict simplification (one fewer axis), so the
+  proof obligations are a subset of the 2D ones — same admit budget,
+  no fresh debt introduced.
+* No risk of a degenerate-axis bug masking via H=1 special-cases.

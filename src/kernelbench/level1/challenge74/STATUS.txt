@@ -1,0 +1,70 @@
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 74 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+STATUS — KernelBench L1 #74 ConvTranspose1D
+===========================================
+
+Phase 0 (functional spec) landed.  GPU kernel impl deferred.
+
+Landed (verified, ADMIT=0):
+
+  - src/lib/spec/Kuiper.Spec.ConvTranspose1D.{fst,fsti}
+    Scalar-polymorphic functional spec for 1-D transposed
+    convolution, form-(a) scatter definition (per-output-pixel
+    sum with strided + zero-padded input read).  Exact spec at
+    the [scalar et] level; FP-approximate post lifts via the
+    standard [Kuiper.Approximates.real_like] machinery.
+
+NOT landed:
+
+  - GPU kernel implementation.  See
+    src/kernelbench/level1/CONV_TRANSPOSED_DESIGN.md §5 for LOC
+    estimates and §7 for the recommended impl order across the
+    17-challenge cluster.  This challenge is NOT first in the
+    suggested order.
+
+  - Per-challenge `Kuiper.KB.ConvTranspose1D_74` host wiring
+    (~150 LOC, mechanical once the shared 1-D kernel core lands).
+
+  - The Python harness, bridge, and `run.sh` — deliberately not
+    stubbed because the kernel they would call doesn't exist yet.
+
+Per-challenge dimensions
+------------------------
+
+From `KernelBench/KernelBench/level1/74_conv_transposed_1D_dilated.py`:
+
+  batch_size = 32, in_channels = 32, out_channels = 64
+  spatial input = 131072
+  kernel = 5
+  stride = 1
+  padding = 0
+  dilation = 3
+  output_padding = 0
+  groups = 1
+  bias = False
+
+Notes: 1-D ConvTranspose with dilation=3.
+
+Output spatial dims via the standard PyTorch formula
+  L_out = (L_in - 1)*S - 2*P + D*(K - 1) + OPad + 1   (per axis)
+computed by the bridge via the VERIFIED extracted helper
+[convt_out_dim] (Kuiper.KB.ConvT2DGeneral / ConvT3DGeneral), whose
+[ensures] equals the formula above per axis — there is no hand-rolled
+C++ output-size arithmetic.  The output buffer itself is allocated
+INSIDE the verified self-allocating entry [convt*_general_alloc_f32]
+and returned to the bridge via from_blob (no torch::empty).
+
+Resume instructions
+-------------------
+
+See `src/kernelbench/level1/CONV_TRANSPOSED_DESIGN.md` for the
+unified design plan covering all 17 transposed-convolution
+challenges (#57, #58, #61, #64, #65, #68-#75, #77-#79, #81),
+the form-(a)-vs-form-(b) tradeoff, the grouped-variant strategy,
+and the recommended per-challenge resume order.

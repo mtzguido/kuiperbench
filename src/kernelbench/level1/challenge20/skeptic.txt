@@ -1,0 +1,46 @@
+SKEPTIC — KernelBench L1 #20: LeakyReLU
+========================================
+
+Verdict: genuinely verified end-to-end against the elementwise functional
+spec, modulo Kuiper's standard f32 axioms.
+
+What is actually proved
+-----------------------
+- Bridge calls `Kuiper_KB_LeakyReLU_leaky_relu_fw_f32`, which is the
+  Karamel extraction of `Kuiper.KB.LeakyReLU.leaky_relu_fw_f32`
+  (src/kernelbench/level1/challenge19/Kuiper.KB.LeakyReLU.fst).
+- The kernel is a thin specialisation of `Kuiper.Kernel.Map` over the
+  pure step function `leaky_step slope x = if x > 0 then x else x*slope`
+  (concrete, no `assume`, no `magic`, no `admit`).
+- Functional postcondition:
+    on gpu_loc (a |-> leaky_relu_result slope s)
+  where `leaky_relu_result` is `KS.lseq_map (leaky_step slope) s`
+  — i.e. exactly the elementwise PyTorch semantics.
+- Race-freedom and host/device permission accounting are discharged by
+  Pulse from the `kernel_desc_n` framework (no per-element
+  inter-thread interaction).
+
+What is assumed
+---------------
+- `Kuiper.Float32` axioms (associativity-of-fadd-style facts are NOT
+  used here; the only f32 ops involved are comparison and multiplication,
+  which are bit-exact deterministic).
+- `kernel_desc_n` machinery in Kuiper core (block-sized launch with
+  bounds check), reviewed and used by many other challenges.
+
+Bridge correctness
+------------------
+- `kuiper_leaky_relu_cuda` clones the input to a contiguous float32
+  CUDA tensor, takes its `data_ptr<float>()`, and calls the verified
+  symbol with `numel` cast to `uint32_t`. The function works in place.
+- One small caveat: the bridge does `static_cast<uint32_t>(numel)` with
+  no overflow guard. Verified entry point requires
+  `lena ≤ max_blocks * max_threads ≈ 2^31`. KernelBench L1 #20 input
+  is (16, 16384) = 262144 elements, well within range. For inputs above
+  ~2^31 elements the cast would silently wrap; not a concern for this
+  benchmark but worth noting if reused.
+
+Test result
+-----------
+`bash src/kernelbench/level1/challenge20/run.sh` → PASS
+(KernelBench eval_kernel_against_ref, default fp32 tolerance).

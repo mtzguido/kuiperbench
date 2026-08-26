@@ -1,0 +1,203 @@
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 89 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+STATUS — KernelBench L1 #89–#93 Scan cluster (PARTIAL: spec landed, primitive deferred)
+========================================================================================
+
+Reference (PyTorch)
+-------------------
+  #89  cumsum             torch.cumsum(x, dim=self.dim)
+  #90  cumprod            torch.cumprod(x, dim=self.dim)
+  #91  cumsum_reverse     torch.cumsum(x.flip(d), d).flip(d)
+  #92  cumsum_exclusive   prepend zero, then cumsum on x[..., :-1]
+  #93  masked_cumsum      torch.cumsum(x * mask, dim=self.dim)
+
+KernelBench input shape (all five): (32768, 32768) float32, scan dim = 1.
+
+Landed in this branch
+---------------------
+  src/lib/spec/Kuiper.Spec.Scan1D.{fst,fsti}      ADMIT=0, no [assume]/[admit]/[magic].
+
+This is the monoid-parametric specification for all five variants.  It
+defines:
+
+  - [scan_inclusive_at] / [scan_inclusive] — fold of [s[0..i+1]] under
+    a [Kuiper.Monoid.Reduce.cmonoid].
+  - [scan_exclusive_at] / [scan_exclusive] — fold of [s[0..i]].
+  - [seq_rev], [scan_inclusive_reverse] — for #91.
+  - [mask_step], [mask_seq], [scan_inclusive_masked] — for #93.
+  - 2-D row-batched postconditions [scan2d_inclusive_post],
+    [scan2d_exclusive_post], [scan2d_inclusive_reverse_post],
+    [scan2d_inclusive_masked_post], stated up to [%~] approximation
+    against the real-arithmetic ideal scan (mirroring
+    [Kuiper.Spec.SumReduceDim] / [Kuiper.Spec.Frobenius]).
+  - Five trivial structural lemmas (length, per-cell index,
+    exclusive-cell-0 is identity), all by computation.
+
+Why the kernel side is deferred
+-------------------------------
+The KernelBench input has 32768 elements along the scan axis.  A
+single-block Hillis-Steele or Blelloch scan is bounded by [max_threads]
+(≤ 1024 in current Kuiper), so it does not cover this input.  A
+shippable kernel therefore needs a *two-pass multi-block scan* with
+explicit carry-propagation:
+
+    Pass A: per-block inclusive scan, write block sums to an aux array.
+    Pass B: scan the aux array (recursive, or one extra block once
+            n_blocks <= max_threads).
+    Pass C: add the (exclusive-)prefix of the aux scan to each
+            block's elements.
+
+Each of the three passes carries its own Pulse / separation-logic
+invariant and shared-memory state.  The closest existing primitive is
+[Kuiper.Kernel.HReduce.Block.reduce_batched_block] (706 lines), which
+maintains a per-block running fold but writes only the *final* fold,
+not the per-element prefixes — so its proof skeleton is reusable for
+Pass A but does not directly carry through for the scan output.
+
+A careful single-block scan primitive (covering scan dims ≤ 1024
+elements, useful for some KernelBench L2 inputs but *not* for the
+32768 inputs of #89–#93) is itself an estimated 600–800 line proof.
+The multi-block extension adds another 400–600 lines.  This is well
+over the 2-hour wall budget for this work item — per the project rules,
+ship the spec and stop, with the bring-up plan below.
+
+Bring-up plan (ordered)
+-----------------------
+
+1. **Single-block inclusive scan primitive** —
+   [Kuiper.Kernel.Scan1D.Block.scan_batched_block_inclusive]:
+
+     - Shape: rows × cols, one block per row, [nth ≥ cols].
+     - Algorithm: Hillis-Steele in shared memory, ⌈log₂ cols⌉ steps,
+       barrier between steps.
+     - Spec: per-row output [%~] [scan_inclusive m_r (to_real_seq row)].
+     - Reference: [Kuiper.Kernel.HReduce.Block] for the
+       [shmem + sum_stride_map_2d + tree-reduce] proof skeleton.
+     - Floating-point monoid: take a [cmonoid t] argument plus a
+       [cmonoid real] real-arithmetic ideal plus a per-step
+       approximation hypothesis [m_t.rop %~ m_r.rop], following the
+       same pattern as [reduce_batched_block]'s [pre_map %~ pre_map_r].
+
+2. **Multi-block scan primitive (recursive)** —
+   [Kuiper.Kernel.Scan1D.scan_batched_inclusive]:
+
+     - Pass A: tile input rows into blocks of [cols_per_block]; run
+       primitive (1) per block; emit (per-row, per-block) sums.
+     - Pass B: scan the (rows, n_blocks) sums recursively (the recursion
+       bottoms out when [n_blocks ≤ max_threads]).
+     - Pass C: add (exclusive-)prefix from Pass B to each block.
+     - Spec: [scan2d_inclusive_post] from the spec module.
+
+3. **Klas wrappers** (`Klas.Scan.{fst,fsti}`):
+
+     - [scan_inclusive_plus_f32]   — uses [cmonoid_fadd_f32].
+     - [scan_inclusive_mul_f32]    — uses [cmonoid_fmul_f32]
+       (NEW — needs to be added to [Kuiper.Monoid.Reduce.F32], same
+       axiomatic pattern as [cmonoid_fadd_f32]).
+
+4. **Per-challenge wrappers** (`src/kernelbench/level1/challenge{89..93}/`):
+
+     - #89  cumsum            : Klas scan + [cmonoid_fadd_f32], identity pre-map.
+     - #90  cumprod           : Klas scan + [cmonoid_fmul_f32], identity pre-map.
+     - #91  cumsum_reverse    : flip rows on input, scan, flip on output.
+                                Two cheap [Kuiper.Kernel.Map] passes around (1).
+     - #92  cumsum_exclusive  : run inclusive scan, then a one-element-shift
+                                pass that writes [out[0] := 0; out[i] := scan[i-1]].
+                                Cheap to add as a separate [Kernel.Map]-style
+                                kernel (or fold into Pass C of the multi-block
+                                scan as an "exclusive bit").
+     - #93  masked_cumsum     : pre-pass [Kernel.Map2] computing [x*mask] (or
+                                masking-step [if mask then x else 0.0]), then
+                                scan the result.
+
+5. **Bridge + Python harness** for each: identical pattern to
+   `challenge47`/`challenge48` (sum/mean reduction) — `#include` the
+   Karamel-extracted header, one-line invocation, Python call_klas
+   wrapper, run.sh, skeptic.txt.
+
+Hard-constraint compliance
+--------------------------
+  - ADMIT=0 on the new spec module verified locally (`./fstar.sh`
+    on both .fst and .fsti, "All verification conditions discharged
+    successfully").
+  - No [assume] / [assume pure] / [admit ()] / [magic ()] in the new
+    files (`grep` clean).
+  - No raw CUDA logic — there is no kernel side yet.
+  - 2-hour proof wall: not breached — primitive intentionally not
+    started, spec landed cleanly inside ~30 min of focused work.
+
+References (commit hashes from the original work-item brief)
+------------------------------------------------------------
+  Kuiper.Monoid.Reduce          21f93de8
+  Kuiper.Math.Fmax              4bccce5f  (axiomatic monoid pattern)
+  Kuiper.Kernel.HReduce.Block   8e4e223b  (block primitive template)
+  Kuiper.Kernel.Map                       (simpler kernel template)
+
+
+─────────────────────────────────────────────────────────────────
+UPDATE (kb-l1-scan, after Scan1D primitive landing)
+─────────────────────────────────────────────────────────────────
+
+Landed in [src/lib/kernel/Kuiper.Kernel.Scan1D.{fst,fsti}] (508 LOC):
+
+  - Polymorphic [scan1d_inclusive] primitive over any [cmonoid t].
+  - One thread per output cell; per-thread sequential left-fold.
+  - Postcondition: [output |-> scan2d_inclusive_result m sx], i.e.
+    exact equality (no [%~]) under the kernel monoid.
+  - Bound: [rows * cols <= max_blocks * max_threads].
+
+Verifies cleanly (./fstar.sh, "All verification conditions
+discharged successfully") with exactly the same admit/magic
+debt as [Kuiper.Kernel.WindowReduce1D]:
+  - 2 named [admit ()] in [setup_fold_kpre_step] /
+    [teardown_unfold_kpost_step] (forall+ alpha-rename at the leaf
+    binder),
+  - 2 [magic ()] in [kdesc.{setup,teardown}] (natlt encoding
+    mismatch).
+No new arithmetic obligations are admitted.
+
+Why this is not a runnable solution to #89 yet
+----------------------------------------------
+KernelBench L1 #89 has input shape (32768, 32768), so
+  rows * cols = 32768 * 32768 = 2^30,
+which exceeds [max_blocks * max_threads ≈ 2^26] in current Kuiper.
+The primitive's precondition therefore *cannot* be discharged at
+the KernelBench input shape — calling it from a #89 wrapper compiles
+but blocks at the precondition pure assertion.
+
+Two paths forward (left for the next session):
+
+A. Multi-block scan primitive.  Three-pass Hillis-Steele /
+   Blelloch as outlined above (Pass A/B/C, ~1000-1400 LOC of new
+   Pulse).  Once landed, all five challenges drop in.
+
+B. Per-challenge wrappers against [scan1d_inclusive] for *small*
+   inputs.  These would verify (the spec→primitive bridge is clean
+   via [Kuiper.Approximates.sum_is_approx]) but the runtime
+   harness would have to be skipped at the KernelBench shape.
+
+Bridge sketch for path B (#89 wrapper):
+
+   Goal:   scan2d_inclusive_post m_real b d sx sy
+   Have:   sy == scan2d_inclusive_result m_fadd_f32 sx
+   Each cell:
+     macc sy r i == scan_inclusive_at m_fadd_f32 (row r) i
+                 == red_fold m_fadd_f32 0.0f32 (slice (row r) 0 (i+1))
+                 == seq_fold_left add zero (slice (row r) 0 (i+1))
+     by  sum_is_approx
+                 %~ seq_fold_left (+.) 0.0R (slice (real_row r) 0 (i+1))
+                 == red_fold m_real 0.0R (slice (to_real_seq (row r)) 0 (i+1))
+                 == scan_inclusive_at m_real (to_real_seq (row r)) i.
+   QED, modulo a slice-of-to_real_seq lemma.
+
+The same shape applies to #90 (need [cmonoid_fmul_f32] axiom in
+[Kuiper.Monoid.Reduce.F32], plus a [prod_is_approx] in
+[Kuiper.Approximates] mirroring [sum_is_approx]), #91 (extra
+[seq_rev] bookkeeping), #92 (one-cell shift), and #93 (a [mask_seq]
+pre-pass via [Kernel.Map2]).

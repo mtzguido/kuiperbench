@@ -1,0 +1,73 @@
+L1 #97 — Scaled Dot-Product Attention — skeptic notes
+=====================================================
+
+What's verified
+---------------
+The whole composition now goes through ONE verified F* orchestrator,
+`Kuiper.KB.SDPA.sdpa_f32` (extracted to `Kuiper_KB_SDPA_sdpa_f32`). It
+chains four verified primitives internally and carries a functional
+postcondition for the *entire* pipeline:
+
+  out = softmax(scale * (Q @ K^T)) @ V          (no mask, no dropout)
+
+Internally it calls (all F*-verified, zero admit/assume/magic):
+  - Kuiper_KB_BatchedGEMM_batched_gemm_f32   (scores = Q @ K^T)
+  - smul (ScalarMul, bundled static)         (scores *= scale)
+  - row_softmax_rm_f32 (RowSoftmax, bundled static) (per-row softmax)
+  - Kuiper_KB_BatchedGEMM_batched_gemm_f32   (out = probs @ V)
+
+The proven postcondition (`Kuiper.KB.SDPA.fsti`, lines 94-104):
+
+  probs %~ softmax_pages (to_real (mscale scale (batched_matmul sQ sKT)))
+  eOut  == batched_matmul probs sV
+
+i.e. the two GEMMs and the scalar multiply are EXACT (==-pinned in the
+ghost reals), and the softmax is the single [%~] (float-models-real)
+approximation step. This matches the PyTorch reference exactly up to the
+softmax's `exp` intrinsic. This is a FULL functional spec — the earlier
+"no top-level F* module gluing the four calls" caveat is gone.
+
+What is NOT verified at the F* level
+------------------------------------
+- The host-side K-transpose: KT = K.transpose(-2,-1).contiguous() is a
+  PyTorch op, not a Kuiper kernel. The spec takes `gKT` already
+  transposed and proves `batched_matmul sQ sKT` (= Q @ K^T). The
+  transpose itself is trusted (same pattern as L1 #17 "A B^T").
+- The scale value: the bridge computes scale = 1/sqrt(D) in C; the spec
+  takes `scale` as an opaque parameter. The reference uses 1/sqrt(d_k),
+  so this matches, but the literal constant is not proven in F*.
+- softmax uses the opaque `exp` intrinsic (the single %~ step), so the
+  spec is precise "up to approximation", not bit-exact.
+
+Bridge correctness review
+-------------------------
+- Bridge is a pure host-side orchestrator: shape arithmetic, two
+  cudaMalloc scratch buffers (gScores = BH*S*S, gOut = BH*S*D), the
+  host-side K-transpose, one call to Kuiper_KB_SDPA_sdpa_f32, a
+  device-to-device memcpy of the result, and two cudaFree.
+- gScores / gOut are caller-allocated and passed in (the orchestrator
+  fills them); both are freed after the result is copied out — no leak.
+- All shape/ABI bounds required by the underlying primitives are
+  asserted up front with TORCH_CHECK (max_blocks, max_threads, fits).
+- No handwritten __global__ kernels, no raw CUDA arithmetic.
+
+Build notes
+-----------
+- Kuiper_KB_SDPA is extracted with +Klas added to the extract set (see
+  the top-level Makefile) so Klas.RowSoftmax is bundled into the same translation
+  unit and its erased ghost args are dropped consistently. Without this,
+  the cross-module call kept stray (void*)0 args (ABI mismatch).
+- The single remaining extern is Kuiper_KB_BatchedGEMM_batched_gemm_f32
+  (7-arg, output-param form); the bridge includes Kuiper_KB_BatchedGEMM.cu
+  alongside Kuiper_KB_SDPA.cu. The two .cu define disjoint static
+  __hoisted_N kernels, so no symbol clash (no anonymous-namespace
+  wrapping needed anymore).
+- The pinned Kuiper package includes the Karamel fix that guards an empty
+  type-argument list in remove_unused_parameters; no local compiler source
+  patch is required.
+
+Verdict
+-------
+FULL. Numerically correct (matches PyTorch within KernelBench fp32
+tolerance atol=rtol=1e-4), every GPU compute primitive is F*-verified,
+AND the whole composition carries a proven functional postcondition.

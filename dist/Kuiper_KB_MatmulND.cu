@@ -1,0 +1,41 @@
+
+#include "Kuiper_KB_MatmulND.h"
+
+__global__
+/**
+  hoisted when extracting matmul_nd_f32
+*/
+static void
+__hoisted_matmul_nd_f32_0(uint32_t k, uint32_t l, float *gA, float *gB,
+                          float *gC, uint32_t nm)
+{
+    if (1024U * blockIdx.x + threadIdx.x < nm * l) {
+        uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / l;
+        uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % l;
+        uint32_t k1 = 0U;
+        float acc = 0.0f;
+        float c = 0.0f;
+        for (; k1 < k; k1++) {
+            uint32_t __anf0 = k1;
+            float old_acc = acc;
+            float yc = gA[trow * k + __anf0] * gB[__anf0 * l + tcol] - c;
+            float t = old_acc + yc;
+            c = t - old_acc - yc;
+            acc = t;
+        }
+        gC[trow * l + tcol] = acc;
+    }
+}
+
+void Kuiper_KB_MatmulND_matmul_nd_f32(uint32_t n, uint32_t m, uint32_t k,
+                                      uint32_t l, float *gA, float *gB,
+                                      float *gC)
+{
+    uint32_t nm = n * m;
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_matmul_nd_f32_0,
+              nm * l / 1024U + (uint32_t) (nm * l % 1024U != 0U), 1024U, 0U, s,
+              k, l, gA, gB, gC, nm);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+}

@@ -1,0 +1,68 @@
+L1 #90 CumProd — Skeptic review
+=================================
+
+What's genuinely verified
+-------------------------
+
+* `Kuiper.Kernel.Scan1D.RowBlock.scan1d_inclusive_rowblock` is the
+  same fully-verified primitive used by #89 CumSum. It is generic in
+  the commutative monoid; this challenge instantiates it with
+  `cmonoid_fmul_f32` (multiplicative monoid on f32: rop=mul, rid=one).
+* The `Kuiper.KB.CumProd` wrapper proves the per-element functional
+  spec `Seq.index sy (r * d + c) %~ rprod (slice (to_real_seq (row sx
+  r)) 0 (c+1))` by composing the monoid postcondition with:
+    1. `macc_scan2d_inclusive_result_f32` (definitional reduction)
+    2. `cmonoid_fmul_f32_proj` (record-component equalities; body `=
+       ()`, mirrors `cmonoid_fadd_f32_proj`)
+    3. `prod_is_approx` + slice/to_real_seq commute
+    4. `Pulse.Lib.Forall.intro_2` over a per-cell postcondition.
+* The bridge `kuiper_cumprod_bridge.cu` does NOT contain any
+  handwritten CUDA compute — it `#include`s the Karamel-extracted
+  `Kuiper_KB_CumSum.cu` for the row-block driver (parameterised by
+  monoid) and calls the cumprod entry point. Bounds checks identical
+  to #89 (B,D ≤ UINT32_MAX; B*D ≤ UINT32_MAX; B ≤ max_blocks).
+
+What could hide bugs
+--------------------
+
+* `cmonoid_fmul_f32_proj` is `= ()` — same abstraction-barrier
+  pattern as the additive case. Works only because the body of
+  `cmonoid_fmul_f32` literally pins `rop = mul`, `rid = one`. If
+  someone refactors the body, the proof here silently breaks at the
+  definition site (not at this proj).
+* `Kuiper.Math.Fmul` axiomatises `fmul_assoc`, `fmul_comm`,
+  `fmul_one_neutral`. These are project-level postulates about IEEE
+  fp32 multiplication. They are NOT bit-exact — fp32 multiplication is
+  in fact non-associative. The whole project's float-real abstraction
+  (`%~`, `prod_is_approx`) is what bridges this gap: `%~` denotes
+  "approximately equal within real_like bounds". Same caveat as
+  `fadd_assoc` for #89, just for mul.
+* `prod_is_approx`/`prod_is_approx'` are new (added to
+  `Kuiper.Approximates`). They mirror `sum_is_approx` and are proved
+  by induction using the existing `a_mul` lemma in the `real_like`
+  class. No new axioms; pure proof. As a side-effect on SMT context,
+  adding them perturbed L2Norm.fst's `assert (r == vi)` after `if r <
+  vi`; mitigated by `--z3rlimit 100 --z3refresh --split_queries
+  always` + an explicit `assert (~ (r < vi))` nudge. Result remains
+  fully proved.
+* PyTorch `torch.cumprod` and the bridge produce values that match
+  within fp32 atol/rtol = 1e-4 (KernelBench's
+  `get_tolerance_for_precision`). Long product chains amplify
+  roundoff, so for inputs with values far from 1 the absolute error
+  could approach this bound; the test inputs (sampled near 1) stay
+  comfortably inside.
+
+Bridge correctness
+------------------
+
+* The bridge accepts `(x, dim)` and only supports `dim == ndim-1`
+  (last dim). It contiguous-ifies the input and reshapes to (B, D)
+  where D = size of last dim, B = product of leading dims. Output is
+  reshaped back. No data-dependent control flow inside CUDA.
+
+Bottom line
+-----------
+
+#90 is as solid as #89; it adds only one new axiom family
+(`Kuiper.Math.Fmul`) and one new approx lemma (`prod_is_approx`),
+both small and well-contained.

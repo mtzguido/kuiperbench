@@ -1,0 +1,64 @@
+SKEPTIC — KernelBench L1 #48 Mean reduction over dim=1
+======================================================
+
+Scope
+-----
+Kuiper.Spec.MeanReduceDim and Kuiper.KB.ReduceMean.
+
+Spec faithfulness
+-----------------
+The verified entry point [reduce_mean_fw_f32] establishes
+[meanreduce_post] from Kuiper.Spec.MeanReduceDim: for every output cell
+[r] of the (B*M)-row flattened view there exists a floating-point
+witness [sumr %~ rsum (to_real_seq (row r of the input))] such that
+[sout' @! r == mul sumr inv_d].
+
+The bridge passes [inv_d = 1.0f / (float)D] verbatim, matching
+PyTorch's reference [torch.mean(x, dim=1)] up to the standard fp
+tolerance the harness applies.
+
+The (B, D, M) input is viewed via the existing
+[Kuiper.Tensor.Layout.BCMPages] layout with parameters
+(b=B, hw=M, c=D); row r=b*M+j of that view is the length-D slice
+x[b, :, j].  No new layout, no new primitive — the kernel is the
+composition of the verified [reduce_sum_fw_f32] (challenge 47) with
+[Kuiper.KB.ScalarMul.smul_fw_f32].
+
+Inherited debt
+--------------
+None new.  Inherits the [magic ()] [kpre_sendable] / [kpost_sendable]
+fields of the underlying [reduce_batched_block] and [smul_fw_f32]
+primitives — the same legacy debt every plain [kernel_desc] kernel in
+tree carries.  ReduceMean itself adds zero new
+[magic ()] / [admit ()] / [assume pure].
+
+Edge cases
+----------
+- All-zero / all-equal input row: sum is exact, output is the exact
+  PyTorch value.
+- Non-finite input (NaN/Inf): propagates; spec is still satisfied
+  because the existential is on a floating-point witness.
+- D = 0: ruled out at the type level (szp).
+- Large shapes: bounded by B*M ≤ max_blocks (2²¹) AND D ≤ max_threads
+  (1024).  The KB harness reference shape (128, 4096, 4095) lies
+  comfortably inside these bounds (B*M ≈ 524k ≤ 2²¹, D = 4096 > 1024).
+  WAIT — D = 4096 > max_threads = 1024.  The bridge precondition
+  [D ≤ max_threads] is therefore FALSE for the harness shape, and the
+  bridge would TORCH_CHECK-fail.  See follow-ups below.
+
+Performance
+-----------
+2 GPU launches: one block-per-row tree reduction over D cells, then
+one element-wise scalar multiply over B*M cells.  Single launch
+amortises the reduction across all B*M rows.
+
+Follow-ups
+----------
+- The verified [reduce_batched_block] requires [nth ≤ max_threads],
+  and our wrapper hard-codes [nth = 1024sz] inside [reduce_sum_fw_f32].
+  To support the KB harness shape (D = 4096) the kernel would need
+  multi-pass tree-reduction (cooperative blocks) or a strided per-thread
+  prefix-sum.  This is the same restriction that #47 already carries.
+  See challenge47/skeptic.txt; the fix lives upstream in the HReduce
+  block primitive.
+- Generalise to 4D / arbitrary leading-dim layouts.

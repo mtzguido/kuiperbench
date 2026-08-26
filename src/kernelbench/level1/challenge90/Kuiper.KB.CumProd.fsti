@@ -1,0 +1,61 @@
+module Kuiper.KB.CumProd
+
+(* KernelBench L1 #90: cumulative product (prefix product) along the
+   inner dimension of a 2-D (B, D) row-major tensor.  PyTorch reference:
+       y = torch.cumprod(x, dim=1)                   # shape (B, D)
+
+   Same row-per-block sequential-scan kernel as CumSum, just specialised
+   to the [cmonoid_fmul_f32] (multiplication / one) commutative monoid
+   instead of [cmonoid_fadd_f32] (addition / zero).
+
+   Postcondition lifts the bit-exact f32 product fold to an
+   [%~]-approximation of the real-arithmetic ideal cumulative product
+   ([rprod] over the corresponding slice of [to_real_seq] of the row).
+
+   No assume / magic / admit.  Exactly 1 GPU kernel launch. *)
+
+#lang-pulse
+open Kuiper
+open Kuiper.KB.Compat.Product
+open Kuiper.Approximates
+open Kuiper.Tensor
+open Kuiper.Tensor.Layout.Alg { l2_row_major }
+module EM = Kuiper.EMatrix
+module SZ = Kuiper.SizeT
+module Seq = FStar.Seq
+
+let cumprod_post
+  (#t : Type0) {| scalar t, real_like t |}
+  (b d : nat)
+  (sx : EM.chest2 t b d)
+  (sy : EM.chest2 t b d)
+  : prop
+  = forall (r : nat) (i : nat).
+      r < b /\ i < d ==>
+      acc2 sy r i %~
+        rprod (Seq.slice (to_real_seq (EM.ematrix_row sx r)) 0 (i + 1))
+
+inline_for_extraction noextract
+type cumprod_fw_ty (t:Type0) {| scalar t, real_like t |} =
+  fn (b : szp { b <= max_blocks })
+     (d : szp { SZ.fits (SZ.v b * SZ.v d) })
+     (input  : array2 t (l2_row_major (SZ.v b) (SZ.v d))
+               { is_global input  })
+     (output : array2 t (l2_row_major (SZ.v b) (SZ.v d))
+               { is_global output })
+     (#sx  : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
+     (#sy0 : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
+     requires
+       cpu **
+       on gpu_loc (input  |-> sx) **
+       on gpu_loc (output |-> sy0)
+     ensures
+       cpu **
+       on gpu_loc (input |-> sx) **
+       (exists* (sy : EM.chest2 t (SZ.v b) (SZ.v d)).
+          on gpu_loc (output |-> sy) **
+          pure (cumprod_post (SZ.v b) (SZ.v d) sx sy))
+
+val cumprod_fw_f32 : cumprod_fw_ty f32
+
+inline_for_extraction let () = ()

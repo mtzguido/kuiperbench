@@ -1,0 +1,46 @@
+skeptic.txt — KernelBench L1 #75
+================================
+
+PASS verdict caveats (reviewer should be aware):
+
+1. **TF32 disabled** in the ModelNew Python file
+   (`torch.backends.cuda.matmul.allow_tf32 = False`,
+   `torch.backends.cudnn.allow_tf32 = False`) so cuDNN cannot use
+   TensorFloat-32 reduced-precision matmul on Ampere+, which would
+   otherwise blow the atol=rtol=1e-2 tolerance on these workloads.
+   Without this, the reference convtranspose accumulator picks up
+   ~1e-2 relative error from TF32, which is beyond the eval threshold.
+
+2. **Host-side groups dispatch**: the verified GPU primitive only
+   handles the groups=1 case.  For groups>1, the bridge slices X/W
+   per group, calls the primitive G times, and stitches the outputs.
+   The slicing/stitching layer is unverified C++.  Each per-group call
+   goes through the self-allocating verified entry
+   `convt2d_general_alloc_f32`, and the output spatial dims come from the
+   VERIFIED extracted helper `convt_out_dim` — there is no longer a
+   hand-rolled C++ output-size formula or `torch::empty` for the
+   verified slab.
+
+3. **Inherited verification debt** (acknowledged tree-wide):
+   - `setup`, `teardown`, `kpre_sendable`, `kpost_sendable` in the
+     plain `kernel_desc` are discharged with `solve` (no `magic ()`,
+     no admit) — matching the Conv*/ConvT* Naive precedent.
+   - The per-thread `kf` body's spec connection is fully PROVED (no
+     `assume pure`): the `convT2d_partial_at` loop invariant + step
+     lemma and a tid-decode match tie each output cell to
+     `convT2d_out_at` (Conv2D / Conv3D / ConvT2D Naive precedent).
+
+4. **Numerical tolerance** is the standard KernelBench fp32 setting
+   (`torch.allclose(..., atol=1e-2, rtol=1e-2)`).  Worst-case
+   per-element diffs measured during the dev test for #61 were ~3e-6
+   when ref/new shared weights via state_dict — the kernel is bitwise
+   close to the cuDNN reference on identical inputs.
+
+5. **PyTorch `output_padding` invariant** in the bridge is checked
+   as `out_pad < max(stride, dilation)` (per-axis) — matching
+   PyTorch's actual TORCH_CHECK semantics (the strict `< stride`
+   form used in some earlier bridges is wrong when `dilation > stride`).
+
+6. **Kuiper kernel side conditions** (`SZ.fits` chain) are checked
+   for the per-group dimensions in the bridge; the grouped channel
+   dimension (Cin/G, Cout/G) is what the primitive actually sees.

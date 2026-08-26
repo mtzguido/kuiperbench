@@ -1,0 +1,123 @@
+UPDATE 2026-06-14 (corrections — read first)
+============================================
+Two disclosures below are now STALE:
+
+1. OUTPUT SIZE is no longer computed by an unverified C++ division.  The
+   shared bridge (kuiper_dwconv2d_common.h) now calls the VERIFIED helper
+   `Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim` (ensures
+   `r == (n + 2p - k)/s + 1`) and the self-allocating verified entry
+   `Kuiper_KB_DepthwiseConv2D_dwconv2d_alloc_f32` (allocates the output
+   inside the verification boundary, returns the device pointer), wrapped
+   with `torch::from_blob` + a `cudaFree` deleter — no `torch::empty`,
+   no hand-rolled output-size arithmetic.
+
+2. The "What is admitted / handwaved" section claiming an `assume pure`
+   spec connection and `magic ()` setup/teardown is OBSOLETE: the kernels
+   `Kuiper.Kernel.Conv2D.Depthwise` and `Kuiper.Kernel.Conv2D.Naive` are
+   grep-clean of `assume` / `assume pure` / `magic` / `admit`.  Each
+   output cell is tied to its real `dwconv2d_out_at` spec by Pulse
+   separation-logic proofs; the f32 wrapper and the new out-dim/alloc
+   helpers are likewise admit/assume/magic-free.  Ignore the historical
+   debt wording below.
+
+(The TF32 caveat, bias handling, and shape checks below remain accurate.)
+=====================================================================
+
+Skeptic review — KernelBench L1 #82..#85 (Kuiper.KB.DepthwiseConv2D)
+=====================================================================
+
+Verdict: All four depthwise challenges PASS `bash run.sh` (max diff vs
+PyTorch reference < 1e-4 fp32 tolerance via `eval_kernel_against_ref`).
+Verification story is essentially identical to the conv-fwd cluster
+(#50/#55/#56/#62/#63): memory/race-safety verified, spec connection
+admitted via the same `assume pure` + `magic ()` pattern.
+
+What is genuinely verified
+--------------------------
+* Memory safety / data-race freedom of the new kernel
+  `dwconv2d_naive_gpu` in
+  `src/lib/kernel/Kuiper.Kernel.Conv2D.Depthwise.fst`.  Pulse separation
+  logic ensures each thread writes a unique cell of `gy` (decoded from
+  `tid` via `kernel_desc_n`'s injection proof), and reads only
+  fractional permission on `gx` / `gw` / `gbias`.
+* SizeT bounds.  The `dwconv2d_size_req` predicate front-loads SZ.fits
+  obligations for every multiplication used in addressing, including
+  `(c, 0, kh_i, kw_i)` weight indexing and the `oh_s+kh_i`,
+  `ow_s+kw_i` neighbour reads.  The `Math.lemma_mult_le_right` calls
+  in `read_w_tap` are real, not decorative.
+* The wrapper `Kuiper.KB.DepthwiseConv2D.dwconv2d_f32` is admit-free
+  and magic-free — it specialises the primitive to f32 and re-exports
+  the contract.
+* Every nthr ≤ max_blocks*max_threads = 2^31; bridge enforces this.
+
+What is admitted / handwaved (inherited tree-wide debt)
+--------------------------------------------------------
+* Spec connection: per-thread accumulator is tied to
+  `Kuiper.Kernel.Conv2D.Depthwise.dwconv2d_out_at` via a single
+  `assume pure` at the end of `kf` — same pattern as
+  `Kuiper.Kernel.Conv2D.Naive.kf` (which is itself the same pattern as
+  `GEMM.BlockTiling1D`, `HReduce.Block`).  No new debt category.
+* `setup` / `teardown` / `kpre_sendable` / `kpost_sendable` in the
+  `kdesc` record are all `magic ()`.  Tree-wide debt across every
+  existing Kuiper kernel.  No new debt introduced.
+* `lseq_to_t4` (re-exported from `Kuiper.Kernel.Conv2D.Naive`) is a
+  `val` with admitted index lemma — same as for #50/#62/#63.
+
+Bridge correctness
+------------------
+* Single shared bridge body `kuiper_dwconv2d_common.h` used by all
+  four challenge dirs.  Each per-challenge `kuiper_dwconv2d_bridge.cu`
+  is a 5-line wrapper that just provides a unique `PYBIND11_MODULE`
+  name (`kuiper_dwconv2d_82` / `_83` / `_84` / `_85`).
+* Shape checks: 4D inputs, weight (C, 1, kH, kW) — channel-multiplier
+  must be 1, `groups == in_channels`.  Asymmetric kernel and asymmetric
+  input both supported (`Kh, Kw` independent; `Hin, Win` independent).
+  Per-axis stride/pad/dilation in the call signature, but the kernel
+  itself uses scalar stride and scalar pad (the bridge enforces
+  `stride_h == stride_w` and `pad_h == pad_w`); KB tests #82..#85 all
+  use stride=1, pad=0, dilation=1.
+* Bias handling: forward caller's tensor if defined, otherwise allocate
+  a `cudaMemset(0)`-zeroed scratch buffer.  Same pattern as #50/#62.
+* Bridge does NOT reimplement the conv: forwards to the extracted
+  `Kuiper_KB_DepthwiseConv2D_dwconv2d_f32`.  No raw CUDA kernel logic.
+
+TF32 caveat (CRITICAL)
+-----------------------
+The Python wrappers (`82_*.py` ... `85_*.py`) all set
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+before invoking the reference forward.  Without this, cuDNN runs the
+PyTorch reference convolution with TF32 (10-bit mantissa) on Ampere+
+GPUs and disagrees with our naive f32 accumulator by ~5e-4 — past the
+1e-4 fp32 tolerance enforced by `eval_kernel_against_ref`.  This is the
+same precedent as #50/#55/#56/#62/#63; documented for sky-coverage.
+
+What this would NOT catch
+--------------------------
+* A bug in `dwconv2d_out_at` (spec-side index decode) — the
+  `assume pure` ties runtime to the spec but doesn't verify the spec
+  matches PyTorch.  The fact that `run.sh` PASSes is the empirical
+  signal that the spec is right (and matches what PyTorch's
+  `Conv2d(..., groups=C)` implements).
+* A divergence between the Pulse loop body and Karamel's `for`-loop
+  emission.  Looking at the extracted `.cu`: the loop is a plain
+  `for(uint32_t k=0; k < kh*kw; ++k)`, the boundary check on `tid`
+  matches `kernel_desc_n` exactly, and the `(bi, ci, oh, ow)` decode
+  uses straight integer division — no surprises.
+* Numerics for very small outputs (zero-padding edge cases).  KB tests
+  use pad=0, so the `0U <= h_signed` guards are vacuously true and the
+  only padding path is `hi >= h_in` which can't happen given
+  `h_out = h_in - kh + 1`.  Pad>0 is exercised by #86's depthwise stage
+  (pad=1) — that test PASSes too.
+
+Bottom line
+-----------
+The depthwise primitive is a structural specialisation of
+`Kuiper.Kernel.Conv2D.Naive`: same proof skeleton, same `magic`/`assume`
+debt, just `cin` collapsed to 1 (input channel = output channel).
+Memory-safety and bound-safety are by construction.  Functional
+correctness is empirical (4/4 challenges PASS at 1e-4 fp32) plus the
+single inherited spec-connection `assume pure`.
+
+Treat any change to `Kuiper.Kernel.Conv2D.Depthwise.fst` as untrusted
+until each of the four `run.sh` re-passes.

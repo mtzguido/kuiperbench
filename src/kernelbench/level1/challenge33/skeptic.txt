@@ -1,0 +1,65 @@
+SKEPTIC — KernelBench L1 #33 BatchNorm
+======================================
+
+Scope
+-----
+Kuiper.KB.BatchNorm (host orchestrator) over the strided
+Kuiper.Tensor.Layout.BCMChannels view of (N, C, H, W) row-major.
+
+Spec faithfulness
+-----------------
+The verified entry point [batchnorm_fw_f32] establishes
+[batchnorm_post] from Kuiper.Spec.BatchNorm: for every channel ci, the
+output row equals [bn_row_result inv neg_mean_inv γ[ci] β[ci] row]
+where (inv, neg_mean_inv) are existentially-bound floating witnesses
+approximating 1/sqrt((1/(N·H·W))Σx² - ((1/(N·H·W))Σx)² + eps) and
+-mean*inv.  Per-channel sum / sum-of-squares are bound via the [%~]
+approximation relation (same MeanVarNorm pattern).  Variance is
+biased (denom = N·H·W), matching nn.BatchNorm2d's default training
+forward.  γ, β default to 1/0 in PyTorch so the harness comparison
+under default tolerance is exact.
+
+Two-affine architecture
+-----------------------
+Rather than introducing a new RowAffine kernel, each per-channel body
+runs two [Aff.affine_f32] passes after the two HReduce passes:
+  pass A: x[ci,k] := (x[ci,k] - mean) * inv          -- centred & scaled
+  pass B: x[ci,k] := x[ci,k] * γ[ci] + β[ci]         -- affine
+The bridge lemma [bn_via_double_affine_lemma] proves the composition
+equals [bn_step].  Row extraction / restoration uses the verified
+[Array2.{extract,restore}_row_on_gpu_loc] ghost wrappers landed in
+this same series.
+
+Inherited debt
+--------------
+Same map_gpu2 / kernel_desc legacy [magic ()] in
+Kuiper.Kernel.{Map,HReduce,Affine,...} sendability fields as every
+other in-tree plain-[kernel_desc] kernel.  BatchNorm.fst itself adds
+zero new [magic ()] / [admit ()] / [assume pure].
+
+Edge cases
+----------
+- Constant channel: var = 0; var_eps = eps; inv = rsqrt(eps).  Finite
+  for any eps > 0.  Output = β[ci].  Matches PyTorch.
+- eps == 0 + constant channel: inv = +inf, output = NaN.  Spec still
+  satisfied (existential inv is whatever rsqrt yields).
+- N = 0 / C = 0 / H·W = 0: ruled out at the type level via [szp]
+  preconditions on c, hw, nhw and a positive-product bridge check.
+- No running stats: this is training-mode forward only; running mean /
+  running var are not updated.  The KernelBench harness compares the
+  forward output of a fresh nn.BatchNorm2d on each call, which uses
+  batch statistics, so this matches.
+
+Performance
+-----------
+~6 GPU launches per channel × C channels (2 reductions, 2 affines, 2
+ghost extract/restore launchless ops).  For the harness (N=64, C=64,
+H=W=512, total ≈ 1 Gi elements) this is 384 launches and a few seconds
+end-to-end.  A future fused per-channel block kernel would cut this
+~10×; not done for the same reasons as LayerNorm (#40).
+
+Follow-ups
+----------
+- Fuse the four per-channel kernels into one block kernel per channel.
+- Once map_gpu* sendability discharge is generalised the inherited
+  [magic ()] disappears for free.

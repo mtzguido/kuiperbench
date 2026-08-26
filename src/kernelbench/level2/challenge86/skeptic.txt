@@ -1,0 +1,90 @@
+SKEPTIC REVIEW — L2 #86 Matmul_Divide_GELU
+==========================================
+Verdict: Solid, genuinely verified kernel. Test passes at 1e-4. The one honest
+caveat is empirical (float-transcendental equivalence to torch), not a hole in
+the proof. Details below.
+
+(a) GENUINELY VERIFIED vs ASSUMED
+---------------------------------
+VERIFIED (machine-checked, no real-number approximation):
+  - The output sequence sy' EXACTLY equals, element-by-element at flat index
+    i*out+j:
+        div_gelu divisor (add (macc (matmul sx swt) i j) (bias@!j))
+    i.e. gelu( (matmul + bias) / divisor ), at the FLOAT level. This is a true
+    Pulse separation-logic postcondition (matmul_div_gelu_post), discharged
+    via mdg_row_aux + bias_add_at_ij. GEMM result is pinned exactly to
+    MS.matmul (comb2 overwrites, asserted reveal eC' == matmul). Memory safety,
+    layouts, and ABI bounds are all verified.
+  - gelu/div_gelu are shared symbols between spec and impl (no anon-lambda
+    mismatch), so the thing proved is literally the thing computed.
+
+NOT VERIFIED (the real skeptic point — state plainly):
+  - The proof says output == f(erf, sqrt, div, mul, add) where erf/sqrt are
+    ABSTRACT floating-typeclass ops. At extraction these become CUDA erff /
+    sqrtf (include/kuiper/math.h maps erf->erff, sqrt->sqrtf). The proof does
+    NOT establish that CUDA erff numerically equals torch's gelu erf
+    implementation. That equality is EMPIRICAL — supported only by the test
+    passing at atol=rtol=1e-4, not by any theorem.
+  - ASSOCIATION DIFFERENCE worth flagging: Kuiper computes erf(div v sqrt2)
+    with sqrt2 = sqrtf(2.0f) — i.e. a DIVISION by sqrtf(2). torch's exact-erf
+    CUDA gelu computes erf(v * M_SQRT1_2) — a MULTIPLICATION by the precomputed
+    constant 1/sqrt2. 1/sqrtf(2) != M_SQRT1_2 bit-for-bit in general, and
+    div-vs-mul round differently. sqrtf(2.0f) is itself a rounded single-prec
+    approximation of an irrational; it is NOT exact. So the two pipelines are
+    NOT guaranteed bit-identical. They agree only to ~1 ulp, comfortably inside
+    1e-4. The 1e-4 pass is the ONLY evidence this divergence is harmless.
+  - Exact constants (these ARE exact): of_int 2L = 2.0f exact; half =
+    div one (of_int 2L) = 1.0f/2.0f = 0.5f exact. Only sqrt2 is inexact.
+
+Net: "verified" here means "provably computes this specific float expression,"
+NOT "provably equals torch." The match to torch rests on the test.
+
+(b) assume / magic / admit / sorry
+----------------------------------
+None. grep over the .fst/.fsti finds only the word "assume" inside a comment
+("No assume / magic / admit"). No assume pure, no magic(), no admit, no sorry,
+no ADMIT. The proof is real.
+
+(c) BRIDGE CORRECTNESS (kuiper_mdg_bridge.cu)
+---------------------------------------------
+  - W transpose: W is (out,input) per nn.Linear; Wt = W.transpose(0,1)
+    .contiguous() -> (input,out) = the wt the spec expects (x @ wt). Correct.
+  - bias length: TORCH_CHECK B.size(0)==out. Correct.
+  - dtype/device/dim guards present for X, W, B; same-device check present.
+  - ABI bounds: guards batch,input,out > 0, each <= UINT32_MAX, and all three
+    products <= UINT32_MAX, plus batch*out <= MAX_BLOCKS*MAX_THREADS. Matches
+    the kernel's SZ.fits / max_blocks*max_threads refinements. Good — prevents
+    uint32 overflow before casting. (For the benchmark shape batch*out=
+    8,388,608, well under 2^31; products fit.)
+  - reshape: kernel writes flat (batch*out); Y.reshape({batch,out}) correct.
+  - Xc/Bc made contiguous; Wt contiguous. Correct.
+  - divisor cast: (float)divisor; 10.0 -> 10.0f exact. Fine.
+  - divisor == 0 is UNGUARDED: would produce inf/nan (div then erf). BENIGN
+    here because divisor is fixed at 10.0 by the benchmark and never user-fed
+    at zero. Not a bug for this challenge, but it is an unchecked precondition —
+    note it if this bridge is ever reused with arbitrary divisors.
+
+(d) ModelNew (86_kuiper_matmul_div_gelu.py)
+-------------------------------------------
+  - Builds self.linear = nn.Linear(input_size, output_size) identically to the
+    reference Model, so under KernelBench's fixed-seed init the weight/bias
+    draws match. Correct.
+  - Fast path guards dim==2, float32, cuda, bias present 1-D float32, then
+    calls the Kuiper op. Otherwise falls back to nn.Linear + /divisor +
+    torch.nn.functional.gelu — the exact reference path (correct erf-form
+    default). Fallback is faithful.
+
+(e) OP ORDERING
+---------------
+torch: linear -> /divisor -> gelu. Spec postcondition is
+  div_gelu divisor (add (macc matmul i j) (bias@!j))
+= gelu( (matmul_entry + bias) / divisor ). Bias is added BEFORE the divide, and
+the divide happens BEFORE gelu. Matches torch exactly. Correct.
+
+BOTTOM LINE
+-----------
+Real verified kernel, no proof holes, bridge and Python wrapper are faithful,
+op ordering correct. The single caveat to keep visible: float-level correctness
+vs torch's gelu (erff/sqrtf, div-by-sqrtf(2) vs mul-by-M_SQRT1_2) is validated
+empirically at 1e-4, not proven. Also the divisor==0 path is unguarded but
+irrelevant at the fixed divisor=10.0.

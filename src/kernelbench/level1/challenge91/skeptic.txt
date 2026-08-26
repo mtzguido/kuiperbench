@@ -1,0 +1,18 @@
+L1 #91 cumsum_reverse — Skeptic review
+======================================
+
+PyTorch semantics: `torch.cumsum(x.flip(dim), dim).flip(dim)`.
+
+Approach: the *flips* are pure index permutations (no arithmetic /
+no reductions); only the scan needs verification.  We flip the input
+(PyTorch op), feed into the verified `Kuiper_KB_CumSum_cumsum_fw_f32`,
+then flip the result back.
+
+Core compute (the O(D) prefix-sum loop) runs entirely in the verified
+Kuiper kernel — same as L1 #89.  The host-side flips are pointwise
+PyTorch operations with no race-prone arithmetic.
+
+No new Kuiper modules / no new admits / no new lemmas. The Python
+fallback uses the canonical PyTorch implementation.
+
+Bridge correctness: 2-D row-major fp32, B ≤ 2^21, B*D ≤ UINT32_MAX.

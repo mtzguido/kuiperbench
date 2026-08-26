@@ -1,0 +1,55 @@
+Skeptic review — KB L1Norm (#38) functional spec
+================================================
+
+(a) Does the spec correspond to mathematical row-wise L1
+normalisation? YES, modulo a documented real-arithmetic choice.  The
+PyTorch reference is y = x / mean(|x|, dim=1) = x * D / sum(|x|,
+dim=1).  The input is modelled as an EM.chest2 t B D (the (B,D)
+row-major matrix, layout l2_row_major), NOT a flattened sequence.
+The post [l1norm_post b d dim_f sx sx'] expands to: for every row
+r < b there exist scale_r, sum_abs_r with
+  * sum_abs_r %~ l1_sum_r (ematrix_row sx r)
+        = rsum (to_real_seq (lseq_map fabs row)), and
+  * scale_r == div dim_f sum_abs_r, and
+  * forall j < d. macc sx' r j == mul scale_r (macc sx r j).
+So every output row is a uniform per-element scaling of the input row
+by scale_r, and scale_r approximates D / ||row||_1.  The
+postcondition is stated over matrix entries macc, not a flattening.
+
+Caveat: we do NOT push fabs through to a real-arithmetic [rabs]
+because [Kuiper.Real] does not axiomatise a real abs.  Instead the
+inner sum is the sum of the *real images* of the elementwise absolute
+values (to_real (fabs x)), which is exactly the L1 norm for finite
+floats.  This is the standard pattern and needs only [to_real_ok]
+(no abs axiom).  Documented in the spec module's docstring.
+
+(b) Is the proof genuine? YES.  No assume/admit/magic in
+Kuiper.Spec.L1Norm.{fst,fsti} or Kuiper.KB.L1Norm.{fst,fsti}.  The
+kernel is now a clean 3-launch composition (identical in structure to
+RMSNorm #36), with NO per-row host loop and NO scratch matrix:
+  1. HReduce.reduce_batched fabs       -> sum_abs[r] = row_reduce_partial fabs sx r d
+  2. Map.map_gpu (l1_scale_fn dim_f)    -> sum_abs[r] = div dim_f sum_abs[r]
+  3. RowScale.row_scale sum_abs x       -> macc x' r j = mul sum_abs[r] (macc x r j)
+The bridge lemma [row_reduce_partial_fabs_approx] (proved in
+Kuiper.Spec.L1Norm.fst) shows the device-side deterministic left-fold
+of absolutes %~ l1_sum_r, via row_reduce_partial_eq_fold (induction
+using the row_reduce_partial_succ SMTPat) + to_real_seq_is_approx +
+sum_is_approx.  This mirrors RMSNorm's row_reduce_partial_sq_approx
+but with fabs in place of sq_step and only to_real_ok pointwise (no
+a_mul, no abs axiom).
+
+(c) dim_f.  D / s now uses dim_f = l1_dim_f d = of_int (int64 d),
+computed INSIDE the verification boundary (extracts to
+(float)(int64_t)(uint64_t)D).  No unverified float arithmetic in the
+C bridge (the bridge passes only B, D, ptr).
+
+(d) Edge cases.  b = 0: forall is vacuous.  d = 0: ruled out by the
+0 < SZ.v d refinement.  All-zero row: sum_abs == 0, scale = D/0 =
++inf (IEEE-754), output is NaN-filled.  Spec is satisfied by the
+existential witnesses; matches PyTorch.  Per-row scale factors are
+existentially bound *per row* inside row_l1_normalized, so different
+rows can have unrelated scales.
+
+(e) FAbs removed.  The trivial Kuiper.KB.FAbs wrapper (fabs_step =
+fabs, plus two unused fabs_fw kernels) is deleted: fabs is now passed
+directly as the reduce_batched pre-map.

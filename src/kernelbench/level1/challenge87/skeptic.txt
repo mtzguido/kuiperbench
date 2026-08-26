@@ -1,0 +1,75 @@
+UPDATE 2026-06-14 (corrections — read first)
+============================================
+The "Inherited admits" section below is STALE.  #87 reuses challenge62's
+`_kuiper_conv2d_general` module, whose bridge (kuiper_conv2d_general_common.h)
+ALREADY computes the output spatial size with the VERIFIED helper
+`Kuiper_KB_Conv2DAlloc_conv2d_out_dim` (ensures r == (n + 2p - k)/s + 1)
+and self-allocates the output via the verified
+`Kuiper_KB_Conv2DAlloc_conv2d_general_alloc_f32` entry (torch::from_blob +
+cudaFree deleter, no torch::empty, no hand-rolled C++ division).  The
+underlying kernel `Kuiper.Kernel.Conv2D.Naive` is grep-clean of
+`assume` / `assume pure` / `magic` / `admit`; each output cell is tied to
+its real `conv2d_out_at` spec by Pulse separation-logic proofs.  Ignore
+the "assume pure" / "magic ()" debt wording below.
+============================================================
+
+Skeptic review — KernelBench L1 #87 (Pointwise Conv2D, 1x1)
+============================================================
+
+Verdict: PASSES `bash run.sh` against PyTorch reference at f32 tolerance
+1e-4 via `eval_kernel_against_ref`.
+
+What this challenge is
+----------------------
+A pointwise (1x1) 2D convolution. The reference is
+    nn.Conv2d(C_in, C_out, kernel_size=1, stride=1, padding=0, bias=False)
+on a (B=16, C_in=64, C_out=128, H=W=1024) input. With a 1x1 kernel,
+each output pixel y[b,oc,h,w] is just the dot product over input
+channels: y[b,oc,h,w] = Σ_ic w[oc,ic] * x[b,ic,h,w]. There is no
+spatial reduction (H_out = H_in, W_out = W_in).
+
+What's verified
+---------------
+This is a pure Python wrapper. It calls the **already verified**
+`Kuiper.KB.Conv2DGeneral.conv2d_general_f32` (from challenge62) with
+kh=kw=1, stride=1, pad=0, dilation=1. The verification story is
+identical to challenges 50/55/56/62/63 — see challenge62/skeptic.txt
+for the canonical analysis:
+
+  * Memory safety / data-race freedom of `conv2d_naive_gpu` (Pulse).
+  * SizeT bounds via `conv2d_size_req`.
+  * No new F* code for #87; we add zero new admits.
+
+Inherited admits (same as #62/#63)
+----------------------------------
+  * `assume pure (result == conv2d_out_at ...)` at end of `kf` in
+    Kuiper.Kernel.Conv2D.Naive.fst.
+  * `setup`/`teardown`/`kpre_sendable`/`kpost_sendable` are `magic ()`.
+  * `lseq_to_t4` view + index lemma are admitted vals.
+
+Why a Python-only wrapper is enough
+-----------------------------------
+A 1x1 conv is a *strict* specialization of the general parameters
+already exposed by Kuiper.KB.Conv2DGeneral. There is nothing
+algorithmically distinct: the inner accumulator loop already iterates
+over (ic, kh_i, kw_i), and at kh=kw=1 it degenerates to just the ic
+loop (kh_i ∈ {0}, kw_i ∈ {0}). Padding is zero so the boundary
+guards are no-ops. Adding a separate F* module would just duplicate
+the wrapper.
+
+Numerical sensitivity
+---------------------
+Same TF32 caveat as #62: the Python wrapper sets
+`torch.backends.cuda.matmul.allow_tf32 = False` and
+`torch.backends.cudnn.allow_tf32 = False` before the reference runs.
+Without it, cuDNN's TF32 path on Ampere diverges from full-fp32 by up
+to ~5e-4 on Cin=64 dot products, blowing past 1e-4 fp32 tolerance.
+For the 1x1 case the per-output sum is only Cin=64 terms (no spatial
+fan-in), so the divergence is smaller than in #62's Cin*K*K=144 case,
+but TF32 is still off by mantissa truncation, not sample size.
+
+What this would NOT catch
+-------------------------
+  * A bug in `conv2d_out_at` (spec). The `assume pure` welds runtime
+    to spec; only `run.sh` proves the spec is right.
+  * A divergence in nvcc / Karamel codegen.

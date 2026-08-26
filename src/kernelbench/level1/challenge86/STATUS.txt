@@ -1,0 +1,83 @@
+UPDATED 2026-06-14: #86 now routes through a VERIFIED COMPOSED Pulse
+entry, Kuiper.KB.SeparableConv2D.separable_alloc_f32 (new module in this
+dir; verifies with ./fstar.sh, ADMIT-free, no admit/assume/magic,
+z3rlimit default).  Its post-condition proves each output cell equals
+separable_out_at = the per-pixel evaluation of the WHOLE
+Kuiper.Spec.SeparableConv2D.separable_conv2d spec applied to the original
+inputs (both weights + both biases) — NOT just two independent per-stage
+posts.  The entry self-allocates the depthwise scratch + final output;
+the bridge is a single verified call + dim checks + verified out-dim
+(separable_out_dim, no C++ division) + from_blob.  See skeptic.txt for
+the full audit.  The PHASE-1 "two-call empirical chain" wording below is
+now OBSOLETE.
+========================================================================
+
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 86 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+KernelBench L1 #86 — Depthwise-Separable 2D Convolution
+========================================================
+
+Reference (from KernelBench/level1/86_conv_depthwise_separable_2D.py):
+
+    self.depthwise = nn.Conv2d(in_channels=64, out_channels=64,
+                               kernel_size=3, stride=1, padding=1,
+                               dilation=1, groups=64, bias=False)
+    self.pointwise = nn.Conv2d(in_channels=64, out_channels=128,
+                               kernel_size=1, bias=False)
+
+    input  : (B=16, 64, 512, 512)
+    after dw : (16, 64, 512, 512)        ← P=1 preserves spatial
+    output : (16, 128, 512, 512)         ← pw 1×1 preserves spatial
+
+Reduction depth per output pixel: 3*3 (dw) + 64*1 (pw) = 9 + 64 = 73 fmadds.
+Total fmadds: 16 * 64 * 512 * 512 * 9   (depthwise stage)
+            + 16 * 128 * 512 * 512 * 64 (pointwise stage)
+            ≈ 2.5e9 + 2.1e10 = 2.4e10 (~24 GFLOPs).
+
+
+Status
+------
+
+PHASE 0 (functional spec) :: SHIPPED, verified ADMIT=0.
+
+   src/lib/spec/Kuiper.Spec.SeparableConv2D.fst
+       (pure F*, no .fsti; one definition + one index lemma)
+
+   The spec is the obvious composition
+
+       separable_conv2d ... x dw_w dw_b pw_w pw_b
+         = pwconv2d (dwconv2d ... x dw_w dw_b) pw_w pw_b
+
+   with no new primitives.
+
+PHASE 1 (kernel chain + bridge) :: DEFERRED.
+
+Blocked on BOTH:
+
+  - the depthwise kernel for #82 (which itself blocks on
+    `Kuiper.Kernel.Conv2D.Naive`), AND
+  - the pointwise orchestrator for #87 (Phase-1-ready, see
+    src/kernelbench/level1/challenge87/STATUS.txt).
+
+Once both ship, #86 is a 100-LOC orchestrator that runs the
+depthwise kernel into a temp buffer and feeds it into the pointwise
+kernel, plus an ~80 LOC bridge.  No new verification work is needed
+beyond chaining the two postconditions through
+`Kuiper.Spec.SeparableConv2D.separable_conv2d`.
+
+See src/kernelbench/level1/CONV_DEPTHWISE_DESIGN.md.
+
+
+-----------------------------------------------------------------
+PHASE 1 (kernel + bridge + run.sh) :: SHIPPED, run.sh PASS.
+
+  Result: PASS (eval_kernel_against_ref, 1e-4 fp32 tolerance).
+  Kernel: src/lib/kernel/Kuiper.Kernel.Conv2D.Depthwise.fst (verifies)
+  Wrapper: src/kernelbench/level1/challenge82/Kuiper.KB.DepthwiseConv2D.fst
+  See skeptic.txt for the verification audit.

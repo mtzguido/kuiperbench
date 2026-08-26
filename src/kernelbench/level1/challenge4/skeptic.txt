@@ -1,0 +1,25 @@
+Skeptic review — KB L1 challenge 4 (matmul wrapper)
+========================================================
+
+Verified component
+------------------
+Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
+the GEMM kernel is verified end-to-end in
+src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
+its Inst module).  Kahan-style summation in Naive3 keeps the
+column-reduction error O(eps) regardless of K, which is why we
+use it for every challenge except #1/#2 (where rows/cols/K are
+multiples of 128/128/32 and the BlockTiling2D variant verifies +
+extracts cleanly).  No assume / admit / magic in the kernel
+proofs themselves.
+
+Unverified glue in the .cu bridge
+---------------------------------
+Matrix-vector multiplication treated as GEMM with N=1.  PyTorch reference is A @ B where B has shape (K, 1).  Bridge calls Klas_GEMM_Naive3_g_matmul_f32_rrr(M, 1, K, ...) — the kernel does not specialise for N=1 but is still correct (and the Kahan accumulator keeps the long-K reductions accurate).
+
+Result
+------
+run.sh PASSes against the KernelBench reference (correctness
+check via kernelbench.eval.eval_kernel_against_ref).
+No new verified Kuiper code was written; this is a thin
+bridge over the existing Klas.GEMM.* primitives.

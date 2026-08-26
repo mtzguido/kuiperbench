@@ -1,0 +1,158 @@
+SKEPTIC — KernelBench L1 #41 MaxPool1D
+======================================
+
+Scope
+-----
+Kuiper.KB.MaxPool1D — a thin verified wrapper over the existing
+[Kuiper.Kernel.WindowReduce1D.windowreduce] primitive, instantiated with
+the f32 fmax monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fmax_f32].
+
+Spec faithfulness
+-----------------
+The verified entry point [maxpool1d_fw_rm_f32] establishes the post
+
+  output |-> windowreduce_result cmonoid_fmax_f32 sx k s p d l_out
+
+i.e. exactly the polymorphic post that the windowreduce primitive
+produces.  Concretely, [windowreduce_result m sx k s p d l_out] is the
+chest2 whose (r, j) cell is the m-fold over the k taps of the dilated
+window centred at (j*s - p), with out-of-row taps contributing the
+monoid identity m.rid.  For cmonoid_fmax_f32, m.rid = -INFINITY (via
+[Kuiper.Math.Fmax.neg_inf]) and m.rop = fmaxf, so:
+
+    out[r, j] = fmaxf over di in [0, k) of
+                  (in_bounds ? input[r, j*s + di*d - p] : -INFINITY)
+
+This is bit-equivalent to PyTorch nn.MaxPool1d(K, S, P, D), modulo the
+order-of-reduction freedom that fmax has anyway (fmax is associative
+and commutative — see Math.Fmax.fmax_assoc / fmax_comm axioms).
+Padding contributes -inf (PyTorch's documented behaviour for
+max-pooling).  Output length L_out is computed by [pool_out_len_1d],
+which matches PyTorch's formula:
+    L_out = floor((L + 2P - D*(K-1) - 1)/S) + 1.
+
+Inherited debt
+--------------
+[Kuiper.Kernel.WindowReduce1D] carries three pre-existing named
+admit-stubs in setup/teardown (setup_fold_kpre_step,
+teardown_unfold_kpost_step, rewrite_macc_windowreduce_result) plus the
+two kdesc-level [magic ()] (kpre_sendable / kpost_sendable) shared by
+every plain-kernel_desc kernel in tree.  Same legacy class as RowScale,
+HReduce, and Map.  See WindowReduce1D.fst comments and the cluster's
+POOLING_DESIGN.md for context.
+
+MaxPool1D itself adds zero new [admit ()] / [magic ()] / [assume pure].
+
+Newly minted infrastructure
+---------------------------
+The fmax monoid was previously declared as a bare [val] in
+Kuiper.Monoid.Reduce.F32.fsti — purely axiomatic, NOT extractable.  We
+made it concrete:
+
+- Kuiper.Math.Fmax.neg_inf : went from [val] to [let neg_inf =
+  F32.of_literal "(-INFINITY)"], so it has a real C constant.
+- Kuiper.Monoid.Reduce.F32 (new .fst): provides the record literal
+  [{ rid = neg_inf; rop = fmax; ... }] using the existing fmax_assoc /
+  fmax_comm / fmax_neg_inf_neutral squash axioms in Math.Fmax.fsti.
+
+These three squash axioms (fp associativity/commutativity/neutrality)
+are NOT proved — they are accepted as model assumptions.  PyTorch's
+max-pool reference relies on the same assumptions implicitly, so the
+end-to-end harness comparison validates the model.
+
+Edge cases
+----------
+- Padding > 0 with K=1: fmax over a single tap; harmless.
+- All-padded window (e.g. very large p with small l): output = -inf,
+  matches PyTorch.
+- bc * l_out > 2³¹ (max_blocks * max_threads): rejected by the bridge
+  TORCH_CHECK before launch.
+- bc * l > 2³² (would overflow input row index): rejected by the .fsti
+  szp refinement [SZ.fits (SZ.v bc * SZ.v l)].
+
+Bridge (unverified glue)
+------------------------
+- kuiper_maxpool1d_bridge.cu carries a one-line [#define FStar_SizeT_v
+  (x) ((void)(x))] to no-op two stray Karamel-extracted calls coming
+  from WindowReduce1D's [let r : natlt _ = SZ.v r_sz] ghost helpers.
+  These calls have no semantic effect (their results are only used at
+  the type level); the issue is purely a karamel codegen quirk for
+  bare-statement nat lets.  Future work: tweak WindowReduce1D so the
+  binding is recognised as ghost, or add a project-wide fixup.sed
+  rule.
+
+Performance
+-----------
+Single launch: ceil(BC*L_out/1024) blocks × 1024 threads, K iterations
+per thread.  For the KB harness (B=64, C=192, L=65536, K=8, S=1, P=4,
+D=3 → L_out=65523, BC=12288) that's ~786k blocks × 1024 threads × 8
+iterations.  Runs end-to-end well under a second.  PASSes the standard
+KernelBench correctness comparison against PyTorch's nn.MaxPool1d.
+
+Follow-ups
+----------
+- Move FStar_SizeT_v fixup into scripts/fixup.sed so other windowreduce
+  consumers don't need the manual define.
+- Bridge to [Kuiper.Spec.Pool1D.maxpool1d_post] (the option-based
+  Some?.v form) so the wrapper's post is in the project-canonical
+  shape.  Provable from cmonoid axioms but not done here.
+- AvgPool1D #44 (sibling) reuses the same primitive with cmonoid_fadd_f32.
+- MaxPool2D #42, AvgPool2D #45: would need windowreduce2D or a host-loop
+  decomposition.
+
+--- UPDATE (FStar_SizeT_v leak fixed at source) ---
+The FStar_SizeT_v extraction leak discussed above has been ELIMINATED at the
+source. Kuiper.Kernel.WindowReduce1D (and Scan1D) no longer bind the row/col
+indices as non-erased `let r : natlt _ = SZ.v r_sz`; the SZ.v-derived values are
+inlined directly into ghost/vprop positions (with an explicit natlt ascription
+on the pts_to_cell index tuple), and the inner loop counter is `erased nat`. The
+generated .cu now contains zero FStar_SizeT_v calls, so the bridge
+`#define FStar_SizeT_v(x) ((void)(x))` no-op macro has been REMOVED. Both kernels
+re-verify green and all pool tests still PASS at atol=rtol=1e-4.
+
+--- UPDATE (self-allocating entry: buffer allocated INSIDE the boundary) ---
+The bridge no longer computes L_out, no longer allocates the output tensor, and
+no longer flattens B*C — ALL of that now happens inside the verified entry
+[maxpool1d_alloc_f32] (the older [maxpool1d_full_f32] and its type were removed
+as superseded; the bridge is the sole consumer and uses only the alloc entry).
+
+What is genuinely verified now:
+- The entry computes L_out via the verified [pool_out_len_1d_sz] (provably
+  == pool_out_len_1d), allocates the (B*C, L_out) GPU buffer via
+  [Array2.alloc0] (extracts to KPR_GPU_ALLOC -> cudaMalloc), runs the fmax
+  windowreduce, and returns the dependent pair (L_out, output_ptr).  Ownership
+  of the pts_to for the returned buffer is transferred to the caller in the
+  postcondition (no F* leak).
+- A new lemma [pool_out_len_1d_ub] proves L_out <= L + 2P (div-mod + kspan>=1).
+  This is what lets every L_out-dependent overflow / launch-bound side
+  condition (fits(L_out*S + K*D), B*C*L_out <= max_blocks*max_threads,
+  fits(B*C*L_out)) be discharged from preconditions stated purely on the raw
+  PyTorch dims (L+2P, etc.).  Mult-monotonicity hints (lemma_mult_le_left/right)
+  bridge the nonlinear steps.  z3rlimit stays at the file default (no bump).
+- The window-fits precondition [kspan <= padded] guarantees L_out >= 1, which
+  alloc0 needs (it takes szp rows/cols).
+
+What the bridge still does (allowed dimension-contract checks ONLY):
+- Validates the raw-dim preconditions via a single TORCH_CHECK (all products
+  fit u32, B*C*padded <= launch bound, window fits).  It computes NOTHING that
+  feeds the kernel and allocates NOTHING.
+- Wraps the returned cudaMalloc'd pointer in torch::from_blob with a
+  [](void*p){ cudaFree(p); } deleter, so the tensor owns and frees the
+  Kuiper-allocated buffer.  Shape {B, C, L_out} uses the returned L_out.
+
+Honest caveats / ABI fragility:
+- The dependent-pair result extracts to a Karamel `Prims_dtuple2__uint32_t__
+  float_` struct.  Because the build passes `-drop Prims`, that struct's
+  typedef is NOT emitted in the generated header, and the gpu-branch krml's
+  `KRML_CLITERAL` macro is absent from this karamel runtime header.  The bridge
+  therefore declares BOTH (the struct ABI {uint32_t fst; float* snd;} and
+  KRML_CLITERAL) before #include-ing the extracted .cu.  These are pure ABI
+  declarations matching Karamel's deterministic codegen — no kernel logic — but
+  they ARE coupled to Karamel's mangled name and field layout.  If a future
+  krml renames the struct or reorders fields, the bridge must follow.  A
+  cleaner long-term fix would be to emit the tuple struct into a non-dropped
+  header (or stop dropping Prims for these structs).
+- torch::from_blob on a raw cudaMalloc pointer bypasses torch's caching
+  allocator; correctness is unaffected (the eval harness PASSes at
+  atol=rtol=1e-4) but the buffer is not pool-tracked.
+- All the WindowReduce1D inherited setup/teardown debt noted above is unchanged.

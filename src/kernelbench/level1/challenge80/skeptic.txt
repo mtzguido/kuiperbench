@@ -1,0 +1,89 @@
+Skeptic review — KernelBench L1 #80 (Conv2D, asym kernel + dilation + asym pad)
+================================================================================
+
+Verdict: PASSES `bash run.sh` against PyTorch reference at f32 tolerance
+1e-4 via `eval_kernel_against_ref`.
+
+What this challenge is
+----------------------
+2D convolution with:
+  - square input (B=8, Cin=32, Cout=64, H=W=512)
+  - asymmetric kernel (Kh=5, Kw=9)
+  - stride 1
+  - asymmetric padding (Ph=2, Pw=4)
+  - asymmetric dilation (Dh=2, Dw=3)
+  - bias=False
+PyTorch reference: nn.Conv2d(Cin, Cout, (Kh,Kw), stride=1,
+                             padding=(Ph,Pw), dilation=(Dh,Dw), bias=False).
+
+The output index relation is
+    y[b,oc,oh,ow] = bias[oc]
+                  + Σ_{ic,kh_i,kw_i} x[b, ic,
+                                         oh*Sh + kh_i*Dh - Ph,
+                                         ow*Sw + kw_i*Dw - Pw]
+                                     * w[oc, ic, kh_i, kw_i]
+with zero-padded out-of-range reads.
+
+What's verified
+---------------
+This challenge ships a NEW primitive
+[Kuiper.Kernel.Conv2D.Dilated.conv2d_dilated_gpu] -- a structural
+sibling of Kuiper.Kernel.Conv2D.Naive with full per-axis (Sh, Sw, Ph,
+Pw, Dh, Dw) parameters.  Its postcondition is pinned to
+[Kuiper.Spec.Conv2DDilated.conv2dd_single] (already in tree).
+The KB-level wrapper is Kuiper.KB.Conv2DDilatedAsym, exported as
+[conv2d_dilated_asym_f32].
+
+Verified properties:
+  * Memory safety / data-race freedom of `conv2d_dilated_gpu` (Pulse).
+  * SizeT bounds via `conv2dd_size_req` (front-loaded SZ.fits for every
+    multiplication, including `h_out*sh + kh*dh` and `w_out*sw + kw*dw`
+    neighbour-index fits).
+  * The wrapper itself is admit-free and magic-free.
+  * nthr <= max_blocks*max_threads = 2^31, enforced in the bridge.
+
+What's admitted (same pattern as #62/#63, no new admits over the
+Conv2D.Naive budget)
+--------------------------------------------------------------------
+  * Spec connection: `assume pure (result == conv2dd_out_at ...)` at end
+    of `kf` in Kuiper.Kernel.Conv2D.Dilated.fst (mirrors the same
+    `assume pure (result == conv2d_out_at ...)` in Conv2D.Naive.kf).
+  * `setup`/`teardown`/`kpre_sendable`/`kpost_sendable` are `magic ()`
+    in `kdesc` (mirrors Conv2D.Naive.kdesc).
+  * Re-uses the admitted vals `lseq_to_t4` / `lseq_to_t4_index` from
+    Conv2D.Naive (no fresh admits there).
+
+In other words: the dilated kernel costs zero additional admit budget
+beyond what Conv2D.Naive already carries.  Each admit in the dilated
+sibling has a 1-to-1 counterpart in the original.
+
+Bridge correctness
+------------------
+* `kuiper_conv2d_dilated_asym_bridge.cu` validates 4D inputs, all
+  positive sizes fit u32, nthr <= 2^31, dilation/stride >= 1, padded
+  input >= effective kernel size (`Dh*(Kh-1)+1`).
+* Bias path: forwards caller's bias (cudaMemcpy to scratch) if defined,
+  else allocates a cudaMemset(0) scratch.
+* Output H_out = (H_in + 2*Ph - Dh*(Kh-1) - 1)/Sh + 1 (computed in
+  the bridge and forwarded as a kernel parameter — F* spec takes
+  h_out, w_out as parameters and only requires SZ.fits constraints).
+
+Numerical sensitivity
+---------------------
+* The Python wrapper sets `torch.backends.cudnn.allow_tf32 = False` and
+  `torch.backends.cuda.matmul.allow_tf32 = False` BEFORE invoking the
+  reference.  Without this, cuDNN's TF32 (10-bit mantissa) on Ampere
+  diverges from full-fp32 by up to ~5e-4 on Cin*Kh*Kw = 32*5*9 = 1440
+  taps, blowing past the 1e-4 fp32 tolerance.  Same caveat as #62/#63.
+
+What this would NOT catch
+-------------------------
+* A bug in `conv2dd_out_at` (spec).  The `assume pure` welds runtime to
+  spec; only `run.sh` proves the spec is right.
+* A divergence in nvcc / Karamel codegen.  The Kuiper.KB extracted
+  `.cu` is sanity-checked against the F* source.
+* A ph > h_signed truncation bug: the bridge enforces ph, pw >= 0 and
+  fits-in-u32; the kernel branch-guards `ph <= h_signed && pw <= w_signed`
+  before the unsigned subtract, returning zero on out-of-range.  This
+  matches the spec's `read_padded` semantics (verified via the same
+  pure equality the simpler Naive primitive uses).

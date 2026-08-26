@@ -1,0 +1,79 @@
+SKEPTIC — KernelBench L1 #23: Softmax (dim=1)
+==============================================
+
+Verdict: a single verified Kuiper entry point processes the entire
+(B, D) tensor in TWO GPU kernel launches, independent of B.  No
+per-row host loop, no per-row H2D/D2H, no Python loop.
+
+Verified component
+------------------
+`Klas_RowSoftmax_row_softmax_rm_f32` (src/klas/Klas.RowSoftmax.fst),
+the monomorphisation of `Kuiper.Kernel.RowSoftmax.row_softmax_gpu`
+(src/lib/kernel/Kuiper.Kernel.RowSoftmax.{fst,fsti}).
+
+Implementation: two batched GPU kernels.
+  1. `Kuiper.Kernel.HReduce.Block.reduce_batched_block exp rexp`
+     — one block per row, tree-reduces row sums of `exp(x)` in
+     shared memory into a temporary `Array1 et m` of per-row
+     denominators.
+  2. `Kuiper.Kernel.RowDivExp.row_div_exp` (NEW, this PR)
+     — one thread per cell (i, j); writes
+       `a[i, j] := exp(a_old[i, j]) / sums[i]`
+     in place over the entire matrix.
+
+The temp sums vector is allocated on the GPU and freed inside the
+verified entry point; the only host work is the (constant) two
+kernel launches and one allocation/free.
+
+Cell-wise approximation closure
+-------------------------------
+`s_row_div_exp_approx_softmax` is the explicit lemma that closes
+the proof.  Given
+  - `sa %~ ra` (input matrix approximates the real-side spec)
+  - for every row i, `sums[i] %~ rsum (lseq_map rexp (row i ra))`
+    (delivered by `reduce_batched_block`'s post-condition),
+the lemma concludes `s_row_div_exp sums sa %~ row_softmax_real ra`
+by lifting `exp_approx` and `div_approx` cell-wise.  The non-zero
+denominator side condition for `div_approx` is discharged by
+`sum_non_zero` since `rexp x > 0` always.
+
+Trust budget
+------------
+- No `assume` / `admit` / `magic` in `Kuiper.Kernel.RowSoftmax`,
+  `Kuiper.Kernel.RowDivExp`, or `Klas.RowSoftmax`.  The
+  `kpre_sendable` / `kpost_sendable` for `RowDivExp` are `solve`d.
+- `Kuiper.Kernel.HReduce.Block.reduce_batched_block` itself
+  carries `magic ()` in its sendable bridges (shared-memory
+  bookkeeping that the codebase rule explicitly accepts for shmem
+  kernels).  This was already in the trust base before this PR.
+- Standard `Kuiper.Float32`/`floating_real_like` axioms underwrite
+  `%~` for `exp` and `div`.
+
+Bridge
+------
+Single-call dispatch.  The bridge clones the input on the GPU, calls
+the verified entry point once, returns the clone.  No CPU staging,
+no Python loop, no C++ row loop in the bridge.
+
+Defensive `TORCH_CHECK`s validate dim==2, CUDA placement, positive
+dimensions, and uint32 ABI bounds.
+
+Float64 path is also wired (`row_softmax_rm_f64`); KernelBench
+inputs use fp32.
+
+Future work — a single fused launch
+-----------------------------------
+A truly single-launch kernel that fuses the row reduction and the
+exp/divide pass in one block-per-row body using shared memory would
+save one kernel launch, one trip over the input data, and one
+`exp` evaluation per element.  That kernel would be a sibling of
+`HReduce.Block` and would inherit the same shared-memory sendable
+bridges (i.e., the same trust budget as today).  Several hundred
+lines of Pulse to write; punted for now since the two-launch
+version eliminates the algorithmic blowup (was Θ(m) launches,
+now Θ(1)).
+
+Test result
+-----------
+`bash src/kernelbench/level1/challenge23/run.sh` → PASS on Sm 86.
+`make verify` clean.

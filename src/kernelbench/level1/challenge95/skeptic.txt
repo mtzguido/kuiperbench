@@ -1,0 +1,77 @@
+# Skeptic review — KernelBench L1 #95 (CrossEntropyLoss)
+
+Reviewer: agent-self-review
+Verification: GREEN (./fstar.sh succeeds on the spec .fsti and on the
+              kernel .fsti and .fst; no assume / admit / magic /
+              `assume pure` anywhere in spec or challenge code).
+End-to-end:   bash run.sh -> PASS vs torch.nn.functional.cross_entropy
+              (fp32, KernelBench default 1e-4 tolerance, RTX A6000).
+
+## What is actually verified (the whole loss, as a function of all inputs)
+
+The single verified entry `Kuiper.KB.CrossEntropyLoss.ce_loss_fw_f32`
+carries an honest Pulse separation-logic contract whose post is exactly
+`Kuiper.Spec.CrossEntropyLoss.cross_entropy_post (SZ.v b) (SZ.v c) inv_b
+sp st res`:
+
+    exists per_batch s.
+      (forall r < B. per_batch[r] %~ ce_term_r C sp r (st[r])) /\
+      s %~ rsum (to_real_seq per_batch) /\
+      res == mul s inv_b
+
+with `ce_term_r C sp r t = - (log_softmax(crow sp C r))[t]`, pinned via
+`%~` to the verified `Kuiper.Kernel.LogSoftmax.log_softmax_real` value
+(the numerically-stable subtract-max log-softmax the kernel computes).
+This is mathematically `logsumexp(row) - row[target]`, i.e. the PyTorch
+per-sample cross entropy.
+
+Crucially, BOTH the per-row terms AND the cross-batch reduction are now
+inside the boundary:
+  * the device-to-device row copy is pinned to the true input row
+    (`crow sp C r`) by a `seq_blit`/`Seq.lemma_eq_intro` step;
+  * the on-device `HReduce.reduce` pins `s %~ rsum (to_real_seq per_batch)`;
+  * the `mul s inv_b` multiplies by the verified reciprocal `1/B`.
+So the returned scalar is verified as a function of ALL B*C predictions
+and ALL B targets — not of a single row.
+
+Proof structure mirrors the verified L1 #99 TripletMarginLoss:
+`ce_carried` carried-prefix loop invariant, `ce_inv_init` /
+`ce_prefix_extend` extension lemmas, `ce_final_lemma` discharge.  Two
+small standalone lemmas (`neg_approx_f32`, `ce_term_fold`) keep the
+negation/`%~`-fold off the large loop context.  z3rlimit 40.
+
+## What changed vs the previous review (the gap that is now CLOSED)
+
+Previously this kernel verified only a PER-ROW primitive and the bridge
+summed the B per-row scalars in an UNVERIFIED host `double` loop, then
+divided by B.  That host reduction is GONE: the bridge now makes a single
+verified call.  The only remaining host loop is a pure bounds-check that
+establishes the kernel precondition (every target index in [0, C)); it
+performs no loss arithmetic.
+
+The old `Kuiper.Spec.CrossEntropyLoss` stub was dead (imported by
+nothing) and mathematically wrong (`logsumexp_real` was defined as the
+sum-of-exp with no `log`, and the target logit was never subtracted).
+It has been replaced by a correct spec that the verified kernel `.fsti`
+imports and whose `cross_entropy_post` is the kernel's actual post.
+
+## What we trust without proof (unchanged, disclosed)
+
+- `Kuiper.Kernel.LogSoftmax.log_softmax_gpu` and
+  `Kuiper.Kernel.HReduce.reduce` / `Kuiper.Kernel.Map` are reused as
+  verified black boxes via their contracts.  The HReduce block kernels
+  carry the project-wide, already-disclosed kpre/kpost sendability debt
+  (framework-level, not functional).  NO new assume/magic is introduced.
+- The C bridge composition (shape checks, dtype/device marshalling,
+  the single verified call, `from_blob`/`torch::tensor` of the result)
+  is conventional glue, not Pulse-verified, but contains no algorithmic
+  reduction.
+- The PyTorch reference is ground truth; we compare at KernelBench's
+  default fp32 tolerance (1e-4).
+
+## Bottom line
+
+GREEN.  The publication-blocking unverified-reduction hole is closed:
+the final mean-loss scalar is verified as a function of all inputs, and
+the spec is correct-and-used.  Usable as a Kuiper-blessed reference for
+KB L1 #95.

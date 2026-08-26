@@ -1,0 +1,34 @@
+RMSNorm skeptic notes (post spec strengthening)
+================================================
+
+(a) Math correspondence
+-----------------------
+The (B*HW, C) chest2 view of `l2_bcm_pages B HW C` has imap
+    (r, ci) ↦ (r/HW)*C*HW + ci*HW + (r%HW)
+which is exactly the row-major (B,C,H,W) byte offset for
+b=r/HW, hw=r%HW, c=ci.  So spec rows are spatial positions, columns channels: `rmsnorm_post` genuinely pins per
+(b,h,w) RMS normalisation along the channel axis.  The spec uses
+`inv_c : t` as a host-precomputed stand-in for 1/C; bridging
+`inv_c %~ 1/C` is the caller's responsibility (uncalibrated
+callers could feed garbage and still satisfy the spec — see
+.fsti header).
+
+(b) Proof is genuine
+--------------------
+The .fst chains three verified primitives:
+  reduce_batched sq_step → seq_reduce_rows sq_step sx
+  map_gpu inv_rms_fn     → lseq_map (inv_rms_fn …) …
+  row_scale              → s_row_scale … sx
+The only non-trivial step is `row_reduce_partial_sq_approx`
+(Kuiper.Spec.RMSNorm.fst), which inducts on `row_reduce_partial`
+to re-express it as `seq_fold_left add zero (seq_map sq_step
+row)` and discharges the approx via `sum_is_approx`.  No
+`admit`, `magic`, `assume pure`, or new axioms.
+
+(c) Edge cases
+--------------
+Zero row: sumsq=0, inv=rsqrt(eps); finite iff eps>0.  C=0 and
+HW=0 ruled out by the kernel preconditions.  inv_c=0 yields
+inv=rsqrt(eps) for every row (well-typed, mathematically
+meaningless) — not constrained by the spec.  Array2 `is_global`
+admission unchanged.

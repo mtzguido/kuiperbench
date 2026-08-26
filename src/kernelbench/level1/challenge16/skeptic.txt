@@ -1,0 +1,57 @@
+Skeptic review — KB L1 challenge 16 (matmul wrapper)
+========================================================
+
+Verified component
+------------------
+Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
+the GEMM kernel is verified end-to-end in
+src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
+its Inst module).  Kahan-style summation in Naive3 keeps the
+column-reduction error O(eps) regardless of K, which is why we
+use it for every challenge except #1/#2 (where rows/cols/K are
+multiples of 128/128/32 and the BlockTiling2D variant verifies +
+extracts cleanly).  No assume / admit / magic in the kernel
+proofs themselves.
+
+Unverified glue in the .cu bridge
+---------------------------------
+Transposed-A: C = A.T @ B.  Bridge materialises A.T via .t().contiguous() and feeds the row-major copy into Naive3.  PyTorch transpose+contiguous is unverified C++ glue; the resulting buffer is then consumed by the verified GEMM exactly like any other row-major (M,K) input.
+
+Result
+------
+run.sh PASSes against the KernelBench reference (correctness
+check via kernelbench.eval.eval_kernel_against_ref).
+No new verified Kuiper code was written; this is a thin
+bridge over the existing Klas.GEMM.* primitives.
+
+========================================================
+UPDATE 2026-06-08 — removed physical transpose
+--------------------------------------------------------
+Previously the bridge materialized A.T via torch .t().contiguous()
+(unverified data movement OUTSIDE the verified kernel). Fixed: the original
+row-major (K,M) buffer is fed DIRECTLY to the verified layout-polymorphic GEMM
+(Klas.GEMM.Naive3.spec) under a col-major (M,K) view = the GhostTranspose
+row2col reinterpretation = logical A.T. No transpose/extra copy; C = A.T @ B
+in a single verified launch via g_matmul_f32_crr (col,row,row). The kernel
+computes MS.matmul of the LOGICAL operands, so functional correctness (approx
+spec, %~) carries over. Verified clean; test PASS at atol=rtol=1e-4.
+
+========================================================
+UPDATE 2026-06-12 — transpose now INSIDE the verification boundary
+--------------------------------------------------------
+The previous "col-major view = transpose" trick was still an UNVERIFIED leap:
+the spec g_matmul_f32_crr took a col-major operand, and only this comment (not
+F*) asserted that a col-major view of the row-major buffer equals A.T. Now the
+transpose is captured IN the proof:
+
+  Klas.GEMM.Naive3.spec_atb takes ALL operands ROW-MAJOR and internally calls
+  Kuiper.Ghost.TensorTranspose.ghost_transpose1 (a verified ghost reindexing:
+  row-major (k,m) handle <-> col-major (m,k) handle holding `mtranspose`),
+  runs the verified GEMM, then ghost_transpose1_back to restore ownership.
+
+The postcondition is now stated explicitly as
+  eC' %~ MS.matmul (mtranspose rA) rB
+i.e. F* itself proves the result approximates A.T @ B. The bridge passes the
+plain row-major (K,M)/(K,N) buffers and the function name is
+g_matmul_f32_atb (m,n,k, gA,gB,gC) — same ABI, no col-major reinterpretation,
+no comment-level hand-wave. No assume/admit/magic. Test PASS at atol=rtol=1e-4.

@@ -1,0 +1,53 @@
+L1 #92 cumsum_exclusive — Skeptic review
+========================================
+
+PyTorch semantics:
+  cumsum = torch.cumsum(x[:, :-1], dim=1)
+  y = cat(zeros[:, 0:1], cumsum, dim=1)
+Equivalently:  y[b, j] = sum_{i < j} x[b, i],  with y[b, 0] = 0.
+
+Approach (VERIFIED exclusive scan — no host arithmetic):
+  The exclusive prefix scan is computed directly by a verified Kuiper
+  kernel, [Kuiper.Kernel.Scan1D.RowBlockExcl.scan1d_exclusive_rowblock],
+  invoked through the verified entry [Kuiper.KB.CumSumExclusive.
+  cumsum_exclusive_fw_f32].  One block per row, single thread, performs
+  the sequential row scan and writes the running accumulator into each
+  output cell BEFORE folding the cell's own input element in — so cell
+  (b, j) holds the fold of the strictly-earlier elements x[b, 0..j),
+  i.e. the exclusive prefix sum, with cell 0 equal to the monoid
+  identity (0.0).
+
+  The bridge (kuiper_cumsum_exclusive_bridge.cu) does ONLY the
+  dimension-contract checks (2-D, fp32, CUDA, shape in range) and
+  plumbing (contiguous + empty_like + the single kernel call).  There
+  is NO host-side subtraction or shift.  The previous `Inc - X`
+  elementwise subtraction has been removed entirely; there is zero
+  data arithmetic outside the verification boundary.
+
+Specification tie:
+  The verified postcondition [cumsum_exclusive_post] states, for every
+  cell (r, i):
+     macc sy r i  %~  rsum (slice (to_real_seq (row sx r)) 0 i)
+  i.e. each output cell is pinned (up to the fp32 [%~] approximation
+  relation against the real-arithmetic ideal) to the exclusive prefix
+  sum of the real-lifted inputs over the strictly-earlier slice [0, i).
+  This is a genuine function of the inputs and matches the PyTorch
+  reference exactly.
+
+Floating-point note:
+  Kuiper's f32 [+] is axiomatised as a commutative monoid; bit-exact
+  IEEE-754 associativity is not assumed, so each output cell is pinned
+  only up to the [%~] relation against its real-arithmetic ideal,
+  mirroring [Kuiper.Spec.SumReduceDim] / [Kuiper.Spec.Frobenius].  The
+  sequential single-thread scan does not reorder partial sums, so this
+  is a sound and tight specification.  KernelBench's
+  eval_kernel_against_ref uses atol = rtol = 1e-4 for fp32.
+
+Verification hygiene:
+  No assume / assume pure / magic / admit / --admit_smt_queries.
+  z3rlimit <= 100 only on the top-level coercion (60 elsewhere).
+  New verified modules:
+    - src/lib/kernel/Kuiper.Kernel.Scan1D.RowBlockExcl.{fst,fsti}
+        (exclusive row-per-block scan primitive)
+    - src/kernelbench/level1/challenge92/Kuiper.KB.CumSumExclusive.{fst,fsti}
+        (verified entry + exclusive-prefix-sum postcondition)

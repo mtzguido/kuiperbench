@@ -1,0 +1,93 @@
+Skeptic review — KernelBench L1 #63 (Kuiper.KB.Conv2DSquare)
+============================================================
+
+Verdict: PASSES `bash run.sh` (matches PyTorch reference at f32 tolerance
+atol=rtol=1e-4 via `eval_kernel_against_ref`).  But the verification story
+has real holes; this is NOT "fully verified Conv2D" in any deep sense.
+
+What is genuinely verified
+--------------------------
+* Memory safety / data-race freedom of the kernel `conv2d_naive_gpu` in
+  `src/lib/kernel/Kuiper.Kernel.Conv2D.Naive.fst`.  Pulse's separation logic
+  ensures each thread writes a unique cell of `gy` (decoded from `tid` via
+  `kernel_desc_n`'s injection proof), and reads only fractional permission
+  on `gx`/`gw`/`gbias`.
+* SizeT bounds.  The `conv2d_size_req` predicate front-loads SZ.fits
+  obligations for every multiplication in addressing, including the nested
+  `(oc*cin+ic)*kh + kh_i` term and the `oh_s+kh_i`, `ow_s+kw_i` neighbour
+  indices.  Those `Math.lemma_mult_*` calls in `read_w_tap` are real, not
+  decorative.
+* The wrapper `Kuiper.KB.Conv2DSquare.conv2d_square_f32` is admit-free and
+  magic-free — it just specialises the primitive to f32, square kernel,
+  stride=1, pad=0, dilation=1, and re-exports the contract.
+* Every nthr ≤ max_blocks*max_threads = 2^31; the bridge enforces this.
+
+What is admitted / handwaved (inherited tree-wide debt)
+--------------------------------------------------------
+* Spec connection: the per-thread accumulator is tied to
+  `Kuiper.Spec.Conv2D.conv2d_out_at` via a single `assume pure` at the end
+  of `kf` (Kuiper.Kernel.Conv2D.Naive.fst, ~line 306).  This is the same
+  pattern used by `GEMM.BlockTiling1D` and `HReduce.Block` and is the
+  reason this kernel could be landed in a few iterations rather than days
+  of nonlinear-arithmetic Z3 wrestling.  In a stricter regime this would
+  be a separate while-loop invariant + index lemma in
+  `Kuiper.Spec.Conv2D`.  *If the C accumulation order or padding logic
+  diverges from `__conv2d_single`'s definition, runtime values silently
+  agree (or silently disagree within 1e-4) without F* catching it.*  Run
+  `run.sh` after every change to this module.
+* `setup` / `teardown` / `kpre_sendable` / `kpost_sendable` in the
+  `kdesc` record are all `magic ()`.  They discharge sendability /
+  ghost-state-shuffling obligations that are tree-wide debt across
+  every existing Kuiper kernel.  No new debt was introduced here.
+* `lseq_to_t4` (the `t4 ↔ lseq` view used in postconditions) is a `val`
+  with an admitted `lseq_to_t4_index` lemma in the .fsti.  This shows up
+  only in the spec connection above and is a structural admit, not a
+  computational one.
+
+Bridge correctness
+------------------
+* `kuiper_conv2d_square_bridge.cu` uses `cudaMalloc` + `cudaMemset`(0) to
+  produce a zeroed `cout`-sized bias buffer before invoking the verified
+  entry point.  This is allocation, not a kernel — `varray_alloc0` in the
+  Kuiper library does NOT actually zero its memory (despite the name; it
+  extracts to plain `KPR_GPU_ALLOC` = `cudaMalloc`).  Doing the memset
+  client-side avoids depending on that misnamed primitive.
+* Shape checks: 4D inputs, square spatial, square kernel, Cin matches,
+  H_in ≥ K, all sizes fit u32, nthr ≤ 2^31.  No groups, stride, padding,
+  or dilation parameters are accepted (the Python wrapper asserts the
+  defaults).
+* Bridge does NOT reimplement the conv: it forwards to the extracted
+  `Kuiper_KB_Conv2DSquare_conv2d_square_f32`.  No raw CUDA kernel logic.
+
+What this would NOT catch
+-------------------------
+* A bug in `conv2d_out_at` (spec) — the `assume pure` ties the runtime to
+  the spec, but doesn't verify the spec matches PyTorch.  The fact that
+  `run.sh` passes is the entire empirical signal that the spec is right.
+* A divergence between the F* loop body and Karamel's `for`-loop emission
+  (e.g., an off-by-one in unsigned wraparound).  Looking at the extracted
+  `.cu`: the loop is straightforward and the boundary check `if (... <
+  b*cout*h_out*h_out)` matches `kernel_desc_n` exactly.
+* Numerics for very small outputs (zero-padding edge cases).  This kernel
+  has pad=0, so the `0U <= h_signed` guards are vacuously true (and nvcc
+  warns about it); the only "padding" path is `hi >= h_in` which can't
+  happen given `h_out = h_in - k + 1`.  For pad>0 (currently unreachable
+  via the wrapper) the same code path would be exercised but is not
+  tested.
+
+Stride / pad / dilation generality
+----------------------------------
+The underlying `conv2d_naive_gpu` accepts `stride`, `pad`, and
+`dilation=1` (dilation isn't even a parameter — taps are contiguous).
+The KB.Conv2DSquare wrapper hard-codes `stride=1`, `pad=0sz`, `dil=1`
+and asserts that in Python.  Generalising to other strides/pads is one
+small refactor away; we just don't exercise it.
+
+Bottom line
+-----------
+The bridge is honest: no raw CUDA, no torch fallback.  The kernel is
+memory-safe and bound-safe by construction.  The functional answer
+matches PyTorch.  The price is one `assume pure` for the spec
+connection, inherited by the same fault as several existing GEMM/reduce
+kernels.  Treat any change to the kernel body as untrusted until
+`run.sh` re-passes.

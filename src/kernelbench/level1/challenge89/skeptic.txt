@@ -1,0 +1,61 @@
+L1 #89 CumSum — Skeptic review
+=================================
+
+What's genuinely verified
+-------------------------
+
+* `Kuiper.Kernel.Scan1D.RowBlock.scan1d_inclusive_rowblock` is the
+  underlying primitive. It is fully verified: data-race-free,
+  memory-safe, and the postcondition `output |-> scan2d_inclusive_result
+  m sx` holds for every cell. No `admit`, no `magic`, no `assume pure`.
+* The `Kuiper.KB.CumSum` wrapper proves the per-element functional
+  spec `Seq.index sy (r * d + c) %~ rsum (slice (to_real_seq (row sx r))
+  0 (c+1))` for every (r, c) by composing the monoid postcondition
+  (`scan2d_inclusive_result cmonoid_fadd_f32 sx`) with:
+    1. `macc_scan2d_inclusive_result_f32`   (definitional reduction)
+    2. `cmonoid_fadd_f32_proj`              (record component eq;
+       a real lemma in `Kuiper.Monoid.Reduce.F32`, body `= ()`)
+    3. `slice_to_real_seq` + `slice_is_approx` (slice/to_real_seq
+       commute; provable by `Seq.equal` extensionality)
+    4. `Pulse.Lib.Forall.intro_2` over `cell_post_eq`.
+* The bridge `kuiper_cumsum_bridge.cu` does NOT contain any handwritten
+  CUDA compute — it just `#include`s the Karamel-extracted `.cu` and
+  calls `Kuiper_KB_CumSum_cumsum_fw_f32` with bounds checks (B, D ≤
+  UINT32_MAX; B*D ≤ UINT32_MAX; B ≤ max_blocks = 2^21).
+
+What could hide bugs
+--------------------
+
+* `cmonoid_fadd_f32_proj` is `= ()`. It works only because in the
+  matching `.fst`, `cmonoid_fadd_f32.rop == add /\ rid == zero` reduces
+  definitionally. If someone later swaps the body to a different
+  monoid representation, the proof silently breaks AT the definition
+  site (not here). This is the standard abstraction-barrier pattern.
+* The full Kuiper float-real abstraction layer (`%~`,
+  `sum_is_approx`) is axiomatic — it asserts that floating-point sum
+  approximates the real-number sum within `real_like` bounds. This is
+  inherited project-wide (see `Kuiper.Float32`, `Kuiper.Approximates`),
+  not new to this kernel.
+
+Bridge correctness
+------------------
+
+* Layout: 2-D row-major contiguous tensor of shape (B, D), float32.
+  The Karamel-extracted entry point `Kuiper_KB_CumSum_cumsum_fw_f32`
+  takes uint32 B, D and float* in/out — matches.
+* The Python wrapper (`89_kuiper_cumsum.py`) gates on `dim == 1`,
+  fp32, CUDA, and 2-D. It falls back to `torch.cumsum` on any other
+  shape/dtype. Edge cases (B=0, D=0) are rejected by the bridge
+  TORCH_CHECK.
+
+Notes
+-----
+
+* Functional spec uses the "rsum/slice/to_real_seq" form rather than
+  the canonical `scan_inclusive_at m_radd`. Functionally equivalent;
+  this form avoids constructing a `cmonoid real`.
+* CumSum performs sequential work O(B*D) — every row is one block
+  with one thread doing the prefix sum. This is correct but not
+  performant; a fan-in (Hillis-Steele / Blelloch) scan would be a
+  natural future optimization once the verification infrastructure
+  is in place for multi-block scans.

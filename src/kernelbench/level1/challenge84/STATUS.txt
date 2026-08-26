@@ -1,0 +1,56 @@
+UPDATED 2026-06-14: Output spatial size is now computed by the VERIFIED
+helper Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim (F* ensures
+r == (n + 2p - k)/s + 1), and the output buffer is self-allocated by the
+verified entry dwconv2d_alloc_f32 (returns the device pointer, wrapped
+with torch::from_blob + cudaFree deleter).  The bridge no longer contains
+any unverified C++ output-size division or torch::empty.  The kernel and
+its wrappers are admit/assume/magic-free (grep-clean).  See skeptic.txt.
+========================================================================
+
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 84 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+KernelBench L1 #84 — Depthwise 2D Convolution (asymmetric input, square kernel)
+================================================================================
+
+Reference (from KernelBench/level1/84_conv_depthwise_2D_asymmetric_input_square_kernel.py):
+
+    nn.Conv2d(in_channels=128, out_channels=128,
+              kernel_size=(3, 3), stride=1, padding=0,
+              groups=128, bias=False)
+
+    input  : (B=64, 128, 256, 512)
+    output : (64, 128, 254, 510)
+        H_out = (256 + 0 - 3)/1 + 1 = 254
+        W_out = (512 + 0 - 3)/1 + 1 = 510
+
+Reduction depth per output pixel: 3 * 3 = 9 muls/adds.
+Total fmadds: 64 * 128 * 254 * 510 * 9 ≈ 9.5e9 (~9.5 GFLOPs).
+
+`out_channels=128, in_channels=128, groups=128` → channel-multiplier 1
+(vanilla depthwise — same regime as #82 / #83 / #85).  Asymmetric
+input (256×512) is a no-op for the spec; H_in ≠ W_in is allowed
+naturally.
+
+
+Status
+------
+
+PHASE 0 :: SHIPPED via Kuiper.Spec.DepthwiseConv2D (shared spec).
+PHASE 1 :: DEFERRED, BLOCKED on Conv2D.Naive — see
+            src/kernelbench/level1/challenge82/STATUS.txt and
+            src/kernelbench/level1/CONV_DEPTHWISE_DESIGN.md.
+
+
+-----------------------------------------------------------------
+PHASE 1 (kernel + bridge + run.sh) :: SHIPPED, run.sh PASS.
+
+  Result: PASS (eval_kernel_against_ref, 1e-4 fp32 tolerance).
+  Kernel: src/lib/kernel/Kuiper.Kernel.Conv2D.Depthwise.fst (verifies)
+  Wrapper: src/kernelbench/level1/challenge82/Kuiper.KB.DepthwiseConv2D.fst
+  See skeptic.txt for the verification audit.

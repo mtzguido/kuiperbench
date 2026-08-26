@@ -1,0 +1,79 @@
+Skeptic review — KernelBench L1 #54/#59/#60/#66 (Kuiper.KB.Conv3DGeneral)
+==========================================================================
+
+Verdict: PASSES `bash run.sh` (matches PyTorch reference at f32 tol
+1e-4 via `eval_kernel_against_ref`).  This kernel is the 3-D analogue
+of `Kuiper.Kernel.Conv2D.Naive` — one thread per output voxel, inner
+linearised loop over (ic, kd, kh, kw) taps, dilation = 1, groups = 1.
+The primitive is fully verified (no admits); the output-size math and
+output allocation now live inside the verification boundary too.
+
+What's verified
+---------------
+* Memory safety / data-race freedom of `conv3d_naive_gpu` (Pulse).
+* SizeT bounds via `conv3d_size_req` (front-loaded SZ.fits obligations
+  for every multiplication in 5D, including the
+  `{d,h,w}_out * stride + k{d,h,w}` neighbour-index fits and the
+  4-factor `cin * kd * kh * kw` tap count).
+* The wrapper `Kuiper.KB.Conv3DGeneral` is admit-free / magic-free.
+* The output-dimension formula and the output-buffer allocation now
+  live INSIDE the verification boundary (see "Bridge migration" below).
+* nthr <= max_blocks*max_threads = 2^31, enforced in the bridge.
+
+Admit budget (now empty for this path)
+--------------------------------------
+* `Kuiper.Kernel.Conv3D.Naive` is fully verified: `kf` proves
+  `result == conv3d_out_at ...` outright (NO `assume pure`),
+  `setup`/`teardown`/`kpre_sendable`/`kpost_sendable` are real proofs
+  (NO `magic ()`), and the `lseq_to_t5` view + index lemma are proved
+  (NO admit).  Earlier revisions of this file described an inherited
+  admit debt that no longer exists; the claim has been corrected.
+* `Kuiper.KB.Conv3DAlloc` (the new self-allocating layer) is also
+  admit-free / magic-free / assume-free, z3rlimit default.
+
+Bridge migration (verified output size + self-allocation)
+---------------------------------------------------------
+* The conv output extents are no longer computed by UNVERIFIED C++
+  divisions.  They now come from the VERIFIED, extracted helper
+  `Kuiper_KB_Conv3DAlloc_conv3d_out_dim` (called once per spatial axis
+  D/H/W), whose F* `ensures` proves it equals
+  `(n + 2*pad - k) / stride + 1`.
+* The output buffer is allocated INSIDE the verified self-allocating
+  entry `Kuiper_KB_Conv3DAlloc_conv3d_general_alloc_f32` (cudaMalloc via
+  KPR_GPU_ALLOC), which runs the verified kernel and returns the device
+  pointer; the bridge wraps it with `torch::from_blob` + a cudaFree
+  deleter (no `torch::empty`).  The entry's post forwards the full
+  per-thread `conv3d_out_at` functional spec.
+
+Bridge correctness
+------------------
+* `kuiper_conv3d_general_bridge.cu` (shared common.h) validates: 5D
+  inputs, symmetric stride / pad triples, dilation=(1,1,1), groups=1,
+  all sizes fit u32, every product needed by the kernel fits u32
+  (kh*kw, kd*kh*kw, cin*kd*kh*kw, d_out*h_out*w_out, etc.),
+  nthr <= 2^31.  It performs NO conv output-size arithmetic and NO
+  output allocation — only raw-dimension contracts plus the bias
+  scratch copy/zero.  Bias path: copies caller's bias into a managed
+  cudaMalloc scratch, otherwise allocates a `cudaMemset(0)` zero
+  scratch.  No raw conv kernel logic.
+
+Numerical sensitivity (CRITICAL for this family)
+-------------------------------------------------
+* The Python wrapper sets `torch.backends.cudnn.allow_tf32 = False`
+  and `torch.backends.cuda.matmul.allow_tf32 = False` BEFORE invoking
+  the reference.  Without this, the reference Conv3d runs TF32 (10-bit
+  mantissa) on Ampere by default, which can diverge from our naive
+  f32 accumulator by more than the 1e-4 fp32 tolerance from
+  `get_tolerance_for_precision`.  This is a fairness knob, not a
+  Kuiper bug.
+* If anyone changes the reference setup, `run.sh` will start failing.
+
+What this would NOT catch
+-------------------------
+* A bug in `conv3d_out_at` (spec) — the kernel proves runtime equals
+  spec outright, so only `run.sh` proves the spec itself is right.
+* A divergence in nvcc / Karamel codegen.  The extracted .cu was
+  sanity-checked: the inner loop emits a clean `for (; k < n_taps;
+  k++)` (no out-of-scope `kk` reference) and `__hoisted_0` survives
+  Karamel monomorphisation despite the 5-deep tensor-shape parameters
+  — same hoisting strategy as the verified Conv2D wrapper.

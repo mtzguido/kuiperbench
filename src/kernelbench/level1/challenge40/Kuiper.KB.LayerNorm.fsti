@@ -1,0 +1,71 @@
+module Kuiper.KB.LayerNorm
+
+(* KernelBench L1 #40: row-wise LayerNorm, in place.
+
+   Treats the input as a flat (b * n) array, viewed as [b] rows of [n].
+   For each row r, computes
+       mean_r = (1/n) * Σ_j  x[r,j]
+       var_r  = (1/n) * Σ_j  x[r,j]^2  - mean_r^2
+       inv_r  = 1 / sqrt(var_r + eps)
+       y[r,j] = ((x[r,j] - mean_r) * inv_r) * γ[j] + β[j]
+
+   Composes verified Kuiper primitives:
+     - Kuiper.Scalars.square          (pointwise square)
+     - Kuiper.Kernel.HReduce.reduce  (sum)
+     - Kuiper.Kernel.Map.map_gpu      (apply affine_step (inv, -mean*inv) per row)
+     - Kuiper.Kernel.Map.map_gpu2    (γ then β broadcast: scratch *= γ; scratch += β)
+
+   Per-row uses the device-to-device offset memcpy primitive to copy a
+   row in/out of a fixed-size scratch buffer.  γ and β are held with
+   fractional permission throughout (read-only across the row loop).
+   No assume / admit / new magic: the only [magic ()] reaches in via
+   [Kuiper.Kernel.Map.map_gpu2]'s [kpre/kpost_sendable], inheriting the
+   tree-wide debt every plain-[kernel_desc] kernel carries (documented
+   in the module's skeptic). *)
+
+#lang-pulse
+open Kuiper
+open Kuiper.Tensor
+open Kuiper.Tensor.Layout.Alg { l1_forward }
+open Kuiper.Spec.LayerNorm
+module SZ = Kuiper.SizeT
+
+(* The per-row reciprocal 1/n, built from the runtime [n] inside the
+   verification boundary (extracts to 1.0f / (float)(int64_t)(uint64_t)n)
+   so no unverified floating-point arithmetic happens in the C bridge. *)
+inline_for_extraction noextract
+let ln_inv_n (#t:Type0) {| floating t |} (n : SZ.t) : t =
+  div one (of_int (FStar.Int.Cast.uint64_to_int64
+                     (FStar.SizeT.sizet_to_uint64 n)))
+
+inline_for_extraction noextract
+type layernorm_fw_ty (t:Type0) {| floating t, real_like t |} =
+  fn (b : szp)
+     (n : szp { n <= max_blocks * max_threads /\
+                SZ.fits (b * n) /\
+                b * n <= max_blocks * max_threads })
+     (eps : t)
+     (x     : array1 t (l1_forward (b *^ n)) { is_global x     })
+     (gamma : array1 t (l1_forward n)        { is_global gamma })
+     (beta  : array1 t (l1_forward n)        { is_global beta  })
+     (#fg : perm)
+     (#fb : perm)
+     (#sx : erased (chest1 t (b *^ n)))
+     (#sg : erased (chest1 t n))
+     (#sb : erased (chest1 t n))
+     requires
+       cpu **
+       on gpu_loc (x |-> sx) **
+       on gpu_loc (gamma |-> Frac fg sg) **
+       on gpu_loc (beta  |-> Frac fb sb)
+     ensures
+       cpu **
+       on gpu_loc (gamma |-> Frac fg sg) **
+       on gpu_loc (beta  |-> Frac fb sb) **
+       (exists* (sx' : chest1 t (b *^ n)).
+          on gpu_loc (x |-> sx') **
+          pure (layernorm_post (SZ.v b) (SZ.v n) eps (ln_inv_n n)
+                  (chest1_to_seq sg) (chest1_to_seq sb)
+                  (chest1_to_seq sx) (chest1_to_seq sx')))
+
+val layernorm_fw_f32 : layernorm_fw_ty f32

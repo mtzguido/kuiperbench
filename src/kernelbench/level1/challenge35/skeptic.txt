@@ -1,0 +1,67 @@
+SKEPTIC — KernelBench L1 #35: GroupNorm (identity affine)
+==========================================================
+
+Verdict: reuses the verified `Kuiper.KB.MeanVarNorm` kernel built for
+#34 (InstanceNorm); the only #35-specific work is reshaping
+(B, C, H, W) → (B*G, (C/G)*H*W) in the bridge before calling it.
+That reshape is a pure view and matches PyTorch's GroupNorm semantics.
+
+What is actually proved
+-----------------------
+- `Kuiper.KB.MeanVarNorm.mean_var_norm_fw_f32` (challenge34) is the
+  composed primitive doing per-row mean/variance normalisation:
+    mean[r] = (1/d) Σ_j x[r,j]
+    var[r]  = (1/d) Σ_j x[r,j]^2 − mean[r]^2
+    inv[r]  = 1/sqrt(var[r] + eps)
+    x[r,:] := (x[r,:] − mean[r]) * inv[r]
+  via verified Kuiper.Scalars.square + Kuiper.Kernel.HReduce + Kuiper.Spec.Frobenius.affine_step (via Kuiper.Kernel.Map.map_gpu).
+- Per-row composition uses verified device-to-device offset memcpy.
+- Postcondition is `mean_var_post (SZ.v b) (SZ.v d) eps inv_d s s'`
+  from `Kuiper.Spec.MeanVarNorm`, which is the exact functional spec.
+
+Mapping #35 onto MeanVarNorm
+----------------------------
+PyTorch's `GroupNorm(C, G)` splits C into G groups, then per-(n,g)
+slice of shape (C/G, H, W) is mean/variance normalised. With identity
+affine (γ=1, β=0) — which is the KernelBench wrapper's behavior —
+this is identical to row-wise mean/variance over the flattened
+(B*G, (C/G)*H*W) tensor.
+
+The bridge:
+  - Takes (B, C, H, W) contiguous fp32 CUDA tensor.
+  - Asserts `C % G == 0` (necessary for GroupNorm).
+  - Calls the verified kernel with `b = B*G, d = (C/G)*H*W`,
+    `inv_d = 1/d`.
+  - The kernel works in place; we return Xc (which aliases the
+    contiguous input).
+
+The reshape is correctness-preserving because the input is contiguous
+in (B, C, H, W) row-major: per (n, g) the (C/G)*H*W elements are
+contiguous in memory, so they ARE row r=n*G+g of the flattened
+view.
+
+What is assumed
+---------------
+- `Kuiper.Float32` axioms; `Kuiper.Math.Real` for sqrt/division.
+- Range checks: bridge enforces `rows*d ≤ UINT32_MAX` and
+  `d + 1024 ≤ UINT32_MAX` to satisfy the kernel's szp preconditions.
+  KernelBench input (B=16, C=64, H=W=256, G=8) gives rows=128,
+  d=524288 — within range.
+
+What is NOT covered
+-------------------
+- KernelBench `ModelNew` ignores the `affine` parameter and always
+  uses identity affine. PyTorch's reference `nn.GroupNorm(num_features,
+  num_groups)` has trainable γ/β by default, but the test harness uses
+  fresh modules with random init — values drawn from a normal seed
+  applied identically to ref and ModelNew, so functional equivalence
+  must hold despite γ ≠ 1, β ≠ 0 in the reference. Yet the test PASSES.
+  Inspection: KernelBench's ModelNew constructor has `__init__(self,
+  num_features, num_groups, eps=1e-5)` with NO `nn.Parameter`s, so the
+  reference is also evaluated with `nn.GroupNorm(C, G).eval()` semantics
+  but its γ/β default to 1/0 at module init time, which matches our
+  identity-affine assumption. That's why the parity holds.
+
+Test result
+-----------
+`bash src/kernelbench/level1/challenge35/run.sh` → PASS.

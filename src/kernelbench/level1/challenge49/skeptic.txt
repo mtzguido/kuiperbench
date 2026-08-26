@@ -1,0 +1,77 @@
+Skeptic review — KernelBench L1 #49 (max reduction over dim=1)
+================================================================
+
+What is genuinely verified (no admits/assumes/magic in the new code)
+--------------------------------------------------------------------
+
+* Kuiper.Kernel.HReduce.Max  (new module, .fsti + .fst):
+  - One-thread-per-row kernel reduce_batched_max_f32 cloned verbatim
+    from the existing reduce_batched template (HReduce.fst).  Verified
+    end-to-end: kpre/kpost/kf/setup/teardown/kdesc + the entry point.
+  - Pure spec row_fmax_partial defined recursively (opaque), with
+    unfolding lemmas.  The bridge lemma row_fmax_eq_seq_fmax proves by
+    induction on k that the partial fold at length k equals
+    seq_fmax over the row prefix, using the existing
+    seq_fmax_append + seq_fmax_singleton + Seq.lemma_eq_intro from
+    Kuiper.Math.Fmax — no new assumes introduced.
+  - Uses kernel_desc_n (bounds-checked variant), so any rows up to
+    max_blocks * max_threads = 2^31 are accepted.
+
+* Kuiper.KB.MaxReduceDim  (challenge wrapper, .fsti + .fst):
+  - bridge_post lemma promotes the per-row fmax post produced by the
+    kernel (HRM.seq_reduce_rows_fmax) to maxreduce_post defined in
+    Kuiper.Spec.MaxReduceDim, via Classical.forall_intro of
+    row_fmax_eq_seq_fmax.  No admit/assume.
+  - Layout reuse: the (B, D, M) row-major buffer is re-viewed as a
+    rows=B*M, cols=D Array2 via l2_bcm_pages B M D, whose imap (r, ci)
+    -> (r/M)*D*M + ci*M + r%M is exactly the (B, D, M) row-major
+    address.  l2_bcm_pages itself was already verified.
+
+What is *axiomatized* (carried over from existing infrastructure, not
+introduced by this challenge)
+---------------------------------------------------------------------
+
+* Kuiper.Math.Fmax: the type-class-style boundary still axiomatizes
+  - val neg_inf : f32
+  - val fmax : f32 -> f32 -> f32
+  - val fmax_assoc / fmax_comm / fmax_neg_inf_neutral : Lemma ...
+  These are *axioms* in F* (val, not let) and discharge to fmaxf at
+  extraction.  The seq_fmax_stride_step lemma in Kuiper.Math.Fmax has
+  a fully-discharged proof body (no admit) — confirmed before reuse.
+
+* IEEE-754 rationale: on the modeled f32 carrier, fmaxf is genuinely
+  associative and commutative (as long as inputs are non-NaN), so
+  unlike sum-reduction we do NOT need the [%~] approximate-equality
+  relation; the kernel post and bridge_post both use ==.  PyTorch's
+  torch.max produces the same fold and admits the same ordering
+  freedom, so equality holds bit-exactly.
+
+What's potentially weak / worth flagging
+----------------------------------------
+
+* Performance: this clones the *one-thread-per-row* primitive, NOT
+  the more sophisticated block-per-row tree-reduction in
+  Kuiper.Kernel.HReduce.Block.  For typical KernelBench shapes
+  (B*M=4096, D=256) we launch 4 blocks of 1024 threads each; each
+  thread does a serial scan over D=256 — easily memory-bandwidth
+  bound but NOT optimal.  A future #49-fast variant could clone the
+  Block primitive once a magic()-free path through it exists.
+
+* NaN semantics: if x ever contains a NaN, fmaxf(NaN, y) = y on most
+  hardware, which differs from std::max but matches PyTorch
+  torch.max.  KernelBench's reference inputs are
+  torch.randn (no NaNs), so this is a non-issue for the harness.
+
+* Bridge build hack: nvcc rejects the extracted [extern float
+  Kuiper_Math_Fmax_neg_inf;] because it is read inside a __global__
+  kernel.  The Python wrapper rewrites the line out of the .cu and
+  the bridge supplies a __device__ float of an aliased name via a
+  preprocessor #define.  This is a build-system shim, not a proof
+  hole — the symbol still resolves to (-INFINITY) at runtime.  A
+  cleaner long-term fix is for Karamel/extraction to emit such
+  axioms with a __device__ qualifier when -cuda is set; tracked
+  outside this challenge.
+
+* run.sh exercises KernelBench's own eval_kernel_against_ref via
+  src/kernelbench/run_test.py — no hand-rolled tolerance.  Test
+  reports PASS for all 5 trials.

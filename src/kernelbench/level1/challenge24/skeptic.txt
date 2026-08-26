@@ -1,0 +1,45 @@
+SKEPTIC — KernelBench L1 #24: LogSoftmax (dim=1)
+=================================================
+
+Verdict: a single fused (B,D) kernel pair via
+`Klas_RowLogSoftmax_row_log_softmax_rm_f{32,64}` — no host-side
+per-row Python or CUDA loop. Honestly verified up to the documented
+real/float approximation (`%~`).
+
+What is actually proved
+-----------------------
+- Bridge calls `Klas_RowLogSoftmax_row_log_softmax_rm_f32` ONCE on
+  the full (B,D) row-major tensor. That entry point is the extracted
+  form of `Klas.RowLogSoftmax.row_log_softmax_rm_f32`, which wraps
+  `Kuiper.Kernel.RowLogSoftmax.row_log_softmax`.
+- `Kuiper.Kernel.RowLogSoftmax` runs two batched device kernels:
+    1. `Kuiper.KB.reduce_batched_block exp rexp` — fills a per-row
+       sum-of-exp scratch.
+    2. `Kuiper.Kernel.RowSubLog.row_sub_log` — `B[i,j] := x[i,j] - log(s[i])`
+       (a thin specialization of the new generic
+       `Kuiper.Kernel.RowBroadcast.row_broadcast`).
+- Postcondition: each output cell `%~`-relates to the ideal real
+  `log_softmax_real` row.
+- Race-freedom and permission accounting verified across both
+  launches and the temporary scratch alloc/free.
+
+What is assumed
+---------------
+- Standard Kuiper `Float32`/`Float64` axioms; `log` and `exp` axioms
+  from `Kuiper.Math.Real`.
+- The two-launch design is functionally equivalent to a fused
+  single-launch — they're separated only because the second launch
+  needs the per-row sums computed by the first.
+
+Bridge correctness
+------------------
+- Single call into Klas, no Python/CUDA loop. Defensive
+  `TORCH_CHECK`s on dtype, contiguity, dim==2, and dim==1 as the
+  reduction axis.
+- `dim != 1` would be a silent error otherwise; KernelBench's L1#24
+  reference always uses dim=1 so the harness exercises the verified
+  path.
+
+Test result
+-----------
+`bash src/kernelbench/level1/challenge24/run.sh` → PASS.

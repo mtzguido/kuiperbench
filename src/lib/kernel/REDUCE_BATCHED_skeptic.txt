@@ -1,0 +1,43 @@
+REDUCE_BATCHED skeptic notes
+============================
+
+Genuine vs assumed
+------------------
+The new `reduce_batched` primitive in Kuiper.Kernel.HReduce introduces
+ZERO new `assume`, `admit`, or `magic` markers (verified by `git diff`).
+The `kpre_sendable`/`kpost_sendable` typeclass instances resolve via
+`solve` because the per-thread predicates use `Cell output _ |-> _` and
+`x |-> Frac (1/rows) sx`, both of which have stock `is_send_across`
+instances for global Array views.  This is in contrast to the
+pre-existing `reduce` primitive in the same file, which still uses
+`magic()` for sendability and an `admit()` in `strided_sum_is_sum` —
+those are NOT touched by this change.
+
+Loop-invariant correctness
+--------------------------
+The inner per-thread `while` loop maintains the invariant
+  acc_v == row_reduce_partial pre_map sx (SZ.v gid) (SZ.v !ci_ref)
+which is unfolded via the `row_reduce_partial_succ` SMTPat lemma at
+each step.  Termination uses `decreases (cols - !ci_ref)`.  Bounds:
+the read `Array2.read x (gid, !ci_ref)` is gated by the loop
+condition `!ci_ref <^ cols`, so `(SZ.v gid, SZ.v !ci_ref)` is always
+in-bounds; F* discharges this from the invariant `!ci_ref <= cols`
+together with the condition.
+
+Layout polymorphism
+-------------------
+Real, not faked.  `lin : Array2.layout rows cols` and `lout :
+Array1.layout rows` are universally quantified; the proof never
+inspects the layout's `imap`, only uses `Array2.read`, `Cell`,
+`pts_to`, and explode/implode (which are layout-polymorphic).
+
+Caveats
+-------
+- The spec quantifies only over `rows <= max_blocks * max_threads`;
+  `cols` is unbounded except for `SZ.fits (rows*cols)` implicit in
+  the Array2 layout's ctlayout.  No coalescing or shared-memory use:
+  one thread per row, serial accumulation.  Acceptable for "small C"
+  workloads (RMSNorm with C=64) but will be slow for large C.
+- No functional spec for the pre_map function being approximate-real;
+  the spec is over `et` arithmetic directly, which means floating-
+  point order-of-summation is fixed (left-to-right).

@@ -1,0 +1,18 @@
+L1 #93 masked_cumsum — Skeptic review
+=====================================
+
+PyTorch semantics: `torch.cumsum(x * mask, dim=1)`.
+
+Approach: compute `x_masked = x * mask.float()` with a PyTorch
+elementwise op, then feed the result into the verified Kuiper
+cumsum kernel.
+
+The "core compute" — the prefix sum — is entirely the verified Kuiper
+kernel.  The masking step is a pure pointwise gate (no reductions,
+no race-prone arithmetic).  This is structurally the same as #91 / #92
+patterns: PyTorch handles the trivial map, Kuiper handles the scan.
+
+No new Kuiper modules / no new admits / no new lemmas.
+
+Bridge correctness: validates that mask shape matches X, that X is
+2-D fp32 CUDA, and that B ≤ 2^21.

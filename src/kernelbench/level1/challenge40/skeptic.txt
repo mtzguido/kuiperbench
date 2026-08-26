@@ -1,0 +1,62 @@
+SKEPTIC — KernelBench L1 #40 LayerNorm
+======================================
+
+Scope
+-----
+Kuiper.KB.LayerNorm and the new helper Kuiper.Kernel.Map.map_gpu2.
+
+Spec faithfulness
+-----------------
+The verified entry point [layernorm_fw_f32] establishes [layernorm_post]
+from Kuiper.Spec.LayerNorm: for every batch row r, the output row equals
+[ln_row_result inv neg_mean_inv γ β row], where (inv, neg_mean_inv) are
+existentially-bound floating-point witnesses approximating
+1/sqrt((1/n)Σx² - ((1/n)Σx)² + eps) and -mean*inv respectively.  Per-row
+sum and sum-of-squares are bound only via the [%~] approximation
+relation, mirroring MeanVarNorm.  The bridge passes inv_n = 1/n and eps
+verbatim from PyTorch (default 1e-5), and γ/β default to ones/zeros via
+nn.LayerNorm so the harness comparison is exact under PyTorch tolerance.
+
+Inherited debt
+--------------
+[Kuiper.Kernel.Map.map_gpu2] — the new 2-array elementwise primitive —
+uses [magic ()] in its [kernel_desc] [kpre_sendable]/[kpost_sendable]
+fields (Map.fst lines ≈170-171).  This is the same legacy pattern every
+plain-[kernel_desc] kernel in tree carries (HReduce, HReduce.Block,
+RowScale).  The setup/teardown ghost code is real (forevery_zip /
+share_n / explode / implode), so the only debt here is sendability of
+compound per-thread slprops.
+
+LayerNorm itself adds zero new [magic ()] / [admit ()] / [assume pure].
+The orchestrator copies the MeanVarNorm host-loop pattern verbatim and
+extends each row body with two extra [map_gpu2] calls (mul γ; add β)
+whose composition is bridged to [ln_row_result] by a one-page Seq.equal
+lemma [ln_row_result_via_affine_lemma] in LayerNorm.fst.
+
+Edge cases
+----------
+- Constant row: var = 0; var_eps = eps; inv = rsqrt(eps).  Finite for
+  any eps > 0.  Output row = (0)*γ + β = β.  Matches PyTorch.
+- eps == 0 + constant row: inv = +inf, output = NaN.  The spec is still
+  satisfied (the existentially-bound inv is whatever rsqrt yields).
+- B = 0: the [szp] precondition rules this out at the type level.
+- n = 0: ditto via [szp].
+- Large n: must satisfy n + 1024 ≤ 2³² (HReduce inner-block buffer)
+  AND B*n ≤ 2³¹ (max_blocks * max_threads).  Bridge enforces both.
+
+Performance
+-----------
+6 GPU launches per row × B rows.  For the KB harness (B=16,
+n=64*256*256 ≈ 4 Mi) this is 96 launches and runs end-to-end in well
+under a second.  A future fused per-row block kernel (single launch
+amortising the reductions and γ/β broadcast) would cut this by ~10×;
+not done because it requires either a col-broadcast 2D primitive or
+shared-memory reduction infrastructure that doesn't yet compose with
+RowScale-shaped helpers.
+
+Follow-ups
+----------
+- Generalise [map_gpu2] sendability discharge to remove the magic().
+- Write a fused per-row block kernel for higher throughput.
+- BatchNorm (#33) is its sibling problem: same pipeline up to the
+  per-channel layout (BCMChannels) — see challenge33/STATUS.txt.

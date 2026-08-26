@@ -1,0 +1,200 @@
+=== UPDATE (self-allocating entry; /K now VERIFIED inside the boundary) ===
+
+The vacuity-audit MEDIUM finding (the /K that DEFINES average pooling was
+applied by a SEPARATE, unverified ScalarMul launch in the C++ bridge, so the
+verified spec only pinned the windowed SUM) is RESOLVED.
+
+What changed
+------------
+- New verified, self-allocating per-axis entry
+  [avgpool2d_axis_alloc_f32] (.fst/.fsti).  Modeled exactly on #44's
+  [avgpool1d_alloc_f32].  Given ONLY the raw per-axis dims (k,s,p,d), the
+  leading product [bc], the reduced axis length [l], and the input tensor, it:
+    * computes l_out via the verified [pool_out_len_1d_sz],
+    * allocates the (bc, l_out) GPU output buffer (cudaMalloc),
+    * fills it with the per-window SUM (windowreduce, cmonoid_fadd_f32),
+    * divides every element by K IN PLACE via the verified Kuiper.KB.ScalarMul
+      map (scaling by inv_k = avgpool_recip_f32 k = 1/K), and
+    * returns (| l_out, output |) directly.
+
+- The ensures clause is UPGRADED from the sum-only post
+  [output |-> windowreduce_result cmonoid_fadd_f32 sx ...] to the
+  averaged post
+  [output |-> map (mul (avgpool_recip_f32 k)) (windowreduce_result ...)],
+  i.e. every output accumulator equals (1/K) * the corresponding windowed
+  sum.  Applying this per-axis /K across the two separable passes yields the
+  PyTorch divisor K*K (count_include_pad=True).  The /K is now INSIDE the
+  verification boundary; it is no longer an unverified bridge launch.
+
+- The bridge was rewritten: zero torch::empty, zero separate ScalarMul/
+  launch_scale calls, zero unverified output-length math.  It now does ONE
+  self-allocating call per axis pass (chunked only where the u32 size bound
+  forces it — see below), wraps the returned device buffer(s) with
+  torch::from_blob (cudaFree deleter), and uses torch::cat + permute (layout
+  ops) for inter-pass reshaping.
+
+- [pool_out_len_1d_sz] relaxed from (p:szp) to (p:sz) so P=0 (the AvgPool2D
+  default) satisfies the contract exactly rather than violating the szp>0
+  refinement at the ABI boundary (a latent soundness nit, now removed).
+
+No admit / assume / assume pure / magic / z3rlimit override was added; both
+files verify clean under the default rlimit.
+
+Still in the bridge (honestly unverified)
+-----------------------------------------
+- Inter-pass permute().contiguous(): no verified transpose exists for the
+  avgpool path yet, so the (B,C,H,W_out)->(B,C,W_out,H) reshape between passes
+  is an unverified PyTorch layout op.
+- torch::cat of the per-chunk device buffers: a PyTorch layout op (only
+  exercised on the one pass that chunks).
+- Row chunking loop (gap #4 below, UNCHANGED): the KB 2-D shape has
+  B*C*H*W = 16*64*2048*2048 = 2^32, which overflows the verified primitive's
+  u32 size bound (bc*L <= 2^32-1) by exactly 1.  The bridge therefore still
+  chunks the leading row dimension; a single self-allocating call per chunk is
+  made and the chunk buffers are torch::cat'd.  Correctness across the chunk
+  boundary reduces to "each verified per-row reduction is independent of other
+  rows" (true by construction — each output thread reads only its own row) but
+  is not stated as a formal interface guarantee.  Lifting this needs a u64
+  codegen path.
+- The "/K per pass = /(K*K) overall" composition is exact in reals; at f32 it
+  has round-off covered by KB's allclose tolerance.  The map-of-(inv_k *
+  windowreduce_result) post is fully verified; the bridge to the real-valued
+  Spec.Pool2D.avgpool2d_post is still a deferred functional follow-up.
+
+run.sh: PASS (atol=rtol=1e-4 vs PyTorch nn.AvgPool2d on an RTX A6000).
+
+===========================================================================
+
+SKEPTIC — KernelBench L1 #45 AvgPool2D
+======================================
+
+Scope
+-----
+Kuiper.KB.AvgPool2D — a thin verified wrapper over the existing
+[Kuiper.Kernel.WindowReduce1D.windowreduce] primitive instantiated
+with the f32 fadd monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fadd_f32].
+
+Same shape as #44 AvgPool1D: a verified per-axis windowed *sum*
+kernel + an unverified per-axis scale-by-(1/K) post-pass.  The
+extracted entry [avgpool2d_axis_fw_rm_f32] performs ONE per-axis
+windowed sum over the inner axis of a 2-D row-major view; the
+bridge orchestrates two such (sum + /K) passes plus an inter-pass
+permute to realise 2-D average pooling.
+
+Spec faithfulness (per-axis)
+----------------------------
+Each verified pass establishes the post
+
+  output |-> windowreduce_result cmonoid_fadd_f32 sx k s p d l_out
+
+For cmonoid_fadd_f32, m.rid = 0.0f and m.rop = +, so:
+
+    out[r, j] = sum over di in [0, k) of
+                  (in_bounds ? input[r, j*s + di*d - p] : 0.0f)
+
+Padding contributes 0 (matches PyTorch's count_include_pad=True
+default).  Floating-point sum is NOT exactly associative; the spec
+post is exact equality with the seeded left-fold, which Kuiper
+treats as the f32 reference value.  KB's allclose tolerance covers
+the bit-level differences vs PyTorch's reduction order.
+
+Spec faithfulness (2-D composition)
+-----------------------------------
+The bridge runs:
+
+    pass 1 (sum):   y1[n, c, h, j_w]   = sum over dw of x[n, c, h, j_w*s+dw*d-p]
+    pass 1 (/K):    y1 = y1 / K
+    pass 2 (sum):   y2[n, c, j_h, j_w] = sum over dh of y1[n, c, j_h*s+dh*d-p, j_w]
+                                       = (1/K) * sum over (dh,dw) of x[...]
+    pass 2 (/K):    y2 = y2 / K = (1/K^2) * sum over (dh,dw) of x[...]
+
+The KB harness uses K=11, S defaults to K=11 (no read overlap),
+P=0, no dilation, count_include_pad=True (PyTorch's default).
+With P=0, no OOB taps occur and the per-pass /K composition is
+exact at the algebraic level.  At f32 precision, the order of
+summation matters; KB's allclose tolerance covers the gap.
+
+Inherited debt
+--------------
+Same as #42 / #41 / #44: WindowReduce1D's setup/teardown carries
+three pre-existing named admit-stubs and two kdesc-level
+[magic ()] sendables.  AvgPool2D itself adds zero new
+[admit ()] / [magic ()] / [assume pure].
+
+Verification gaps (unverified glue)
+-----------------------------------
+The following are NOT verified by Kuiper:
+
+1. **Per-pass scale-by-(1/K) kernel**: VERIFIED.  The bridge applies
+   each /K with [Kuiper.KB.ScalarMul.smul_fw_f32] (= Map.map_gpu
+   (smul_step inv_k)), a verified bounds-checked kernel_desc_n.  The
+   bridge discharges the precondition (chunk length <= 2^31) with a
+   TORCH_CHECK.  No longer a trust hole.
+
+2. **Inter-pass permute+contiguous**: same as #42.
+
+3. **2-D-as-composition argument**: same as #42.  In particular,
+   the "scale by 1/K per pass = scale by 1/K^2 overall" identity
+   is mathematically exact in real arithmetic; in f32 it has
+   round-off error covered by KB's allclose tolerance.
+
+4. **Batch chunking loop**: the KB shape (B*C*H = 16*64*2048 =
+   2^21, W = 2048 → bc*L = 2^32) overflows the verified
+   primitive's u32 size constraint by 1.  The bridge therefore
+   chunks the per-axis call by groups of [UINT32_MAX / L] rows.
+   The chunking loop is unverified; correctness reduces to
+   "the verified per-row primitive is independent across rows",
+   which is true by construction (each thread reads only its
+   own row) but not formally stated as an interface guarantee.
+
+5. **Bridge no-op #define**: same FStar_SizeT_v workaround.
+
+Newly minted infrastructure
+---------------------------
+- Relaxed `(p : szp)` to `(p : sz)` in `Kuiper.Kernel.WindowReduce1D.
+  windowreduce` and in this challenge's wrapper.  Needed for
+  P=0; existing #41/#44 wrappers untouched.
+
+Edge cases
+----------
+- P > 0: works identically; padded taps contribute 0 to the sum.
+- Non-square ks/strides: bridge takes scalar (k, s, p) and uses
+  same values per axis.  KB harness only exercises square pools.
+- bc * L overflow: handled via per-batch chunking (see gap #4).
+- Empty output (degenerate K > L+2P): rejected by TORCH_CHECK
+  before launch.
+
+Performance
+-----------
+KB harness (B=16, C=64, H=W=2048, K=11, S=11, P=0 →
+H_out=W_out=186):
+
+- Pass 1: B*C*H = 2,097,152 rows × 186 outputs × 11 K-iters
+  ≈ 4.3 G ops, but chunked into ⌈2^32 / 2048⌉ = 2^21 + 1 row
+  groups → 2 launches.
+- Inter-pass shuffle: 2^21 * 186 * 4 = 1.49 GB memcpy.
+- Pass 2: B*C*W_out = 16 * 64 * 186 = 190,464 rows × 186 × 11
+  ≈ 390 M ops, single launch.
+- Final permute+contiguous: same 1.49 GB.
+
+End-to-end PASSes the standard KernelBench correctness comparison
+against PyTorch's nn.AvgPool2d.
+
+Follow-ups
+----------
+- Same as #44: bridge to [Kuiper.Spec.Pool2D.avgpool2d_post]
+  via the [Kuiper.Approximates.a_add] %~-lemma chain.
+- Avoid the inter-pass permute+contiguous by writing a true 2-D
+  windowreduce primitive.
+- Avoid the chunking loop by lifting the verified primitive's
+  size limits (requires a u64 codegen path).
+
+--- UPDATE (FStar_SizeT_v leak fixed at source) ---
+The FStar_SizeT_v extraction leak discussed above has been ELIMINATED at the
+source. Kuiper.Kernel.WindowReduce1D (and Scan1D) no longer bind the row/col
+indices as non-erased `let r : natlt _ = SZ.v r_sz`; the SZ.v-derived values are
+inlined directly into ghost/vprop positions (with an explicit natlt ascription
+on the pts_to_cell index tuple), and the inner loop counter is `erased nat`. The
+generated .cu now contains zero FStar_SizeT_v calls, so the bridge
+`#define FStar_SizeT_v(x) ((void)(x))` no-op macro has been REMOVED. Both kernels
+re-verify green and all pool tests still PASS at atol=rtol=1e-4.

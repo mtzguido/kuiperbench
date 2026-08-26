@@ -1,0 +1,104 @@
+SKEPTIC REVIEW — L2 #9 Matmul_Subtract_Multiply_ReLU
+=====================================================
+Reviewer stance: brutally honest. Conclusion up front: this solution is
+genuinely verified end-to-end with NO proof holes, the spec matches torch
+semantics, and the bridge is correct. The only honest caveats are about the
+inherited trusted base (axioms), not about this kernel. Details below.
+
+(a) WHAT IS GENUINELY VERIFIED vs ASSUMED
+-----------------------------------------
+VERIFIED (real, no approximation, no holes):
+  * matmul_sub_mul_relu_post asserts each output element EXACTLY equals
+      relu( mul( sub( add(macc(matmul sx swt) i j)(bias@!j) ) sub_v ) mul_v )
+    at the float level. The proof discharges this for all (i,j) via
+    msmr_row_aux + Classical.forall_intro_2 from three composed facts:
+      1. GEMM launch: gC == matmul sx swt exactly (comb2 x y = y, so the
+         pre-existing gC value is ignored — confirmed in Spec.GEMM.fsti:11).
+      2. bias-add: y[i*out+j] == add(macc gC i j)(bias@!j) — bias indexed by
+         column j = out dimension (BiasAdd.fsti:47, bias_add_at_ij).
+      3. fused map: smr sub_v mul_v applied pointwise; smr s m v =
+         relu(mul (sub v s) m) = relu((v - s) * m).
+  * Ordering matches PyTorch exactly: reference is relu((linear - sub)*mul);
+    spec composes sub THEN mul THEN relu. Correct. No off-by-one in the
+    sub/mul order (a classic silent-wrong trap — here it is correct).
+  * relu = fmax x zero (Kuiper.Floating.fsti:28) = max(x,0), matching torch.
+
+IMPORTANT NUANCE — what "EXACT" means:
+  * "Exact" is exact w.r.t. KUIPER'S OWN left-fold matmul accumulation order
+    (matmul_single, a sequential fold over the shared dim), NOT bit-equal to
+    cuBLAS/torch's blocked/Tensor-Core reduction. So the GEMM result will
+    differ from torch in the low bits. The benchmark passes at atol=rtol=1e-4
+    ONLY because the epilogue (sub/mul/relu) is purely pointwise — no
+    cross-element cancellation that would amplify the accumulation-order
+    difference. This is a legitimate pass, but do not oversell "exact" as
+    "bit-identical to PyTorch"; it is not, and cannot be.
+
+TRUSTED BASE (assumed, but inherent to Kuiper — NOT holes in this kernel):
+  * Float32.Base add/mul/sub and the floating/scalar typeclass ops are
+    `assume val`s with no computational model; they are trusted to model the
+    real CUDA/IEEE float ops. Every Kuiper float kernel rests on this. The
+    correctness claim is "modulo the Float32 axioms faithfully describing the
+    hardware." Fine, but state it honestly.
+  * Kuiper.SizeT.fsti:47 `assume SizeTFitsU32` — library-level size axiom.
+  These are the standard Kuiper trust base, not introduced by challenge9.
+
+(b) assume pure / magic / admit / sorry
+---------------------------------------
+NONE. grep over the .fst and .fsti finds only the comment "No assume / magic
+/ admit." in the .fsti. The `assert pure (...)` lines in the .fst are SMT-
+discharged assertions (proof obligations the checker proves), NOT assumes —
+they are not holes. Verified clean.
+
+(c) BRIDGE CORRECTNESS (kuiper_msmr_bridge.cu)
+----------------------------------------------
+  * W transpose: nn.Linear.weight is (out, input). out = W.size(0); checks
+    W.size(1) == input; Wt = W.transpose(0,1).contiguous() => (input, out),
+    matching the kernel's wt : l2_row_major(input, out). CORRECT.
+  * bias length: checks B.size(0) == out. CORRECT.
+  * ABI bounds: KUIPER_MAX_BLOCKS=2097152, KUIPER_MAX_THREADS=1024 match
+    Kuiper.Base.fsti (max_blocks=2097152=pow2 21, max_threads=1024) EXACTLY.
+    The UINT32_MAX product checks match SZ.fits, which is my_fits =
+    (0 <= x < 2^32); `x <= UINT32_MAX` (<= 2^32-1) is exactly `x < 2^32`.
+    Bounds are computed in int64_t so the products don't overflow before the
+    comparison. CORRECT and tight (not loose).
+  * Output reshape: Y = empty({batch*out}); flat layout is i*out+j row-major,
+    reshape({batch,out}) is correct.
+  * dtype/device/contiguity guards: X/W/B checked is_cuda + float32 + dim;
+    device equality checked; Xc/Bc made contiguous; W contiguity handled via
+    .transpose().contiguous(). CORRECT.
+  * double->float param cast: constants taken as double then (float)sub_v /
+    (float)mul_v. Matches torch's wrapped-scalar semantics: a float32 tensor
+    minus a Python float stays float32 (the scalar is cast to float32, no
+    promotion to float64). So the cast reproduces torch's arithmetic. CORRECT.
+
+(d) ModelNew vs reference RNG / fallback
+----------------------------------------
+  * ModelNew builds self.linear = nn.Linear(in_features, out_features)
+    identically to the reference Model, so under KernelBench's fixed-seed init
+    the weight/bias draws match. CORRECT.
+  * Fallback path (linear; -sub; *mul; relu) is byte-for-byte the reference
+    forward. CORRECT.
+
+(e) EDGE CASES / SILENT-WRONG-ANSWER RISKS
+------------------------------------------
+  * No divide-by-zero style risk (no division in the epilogue).
+  * Zero/negative dims rejected (batch>0 && input>0 && out>0).
+  * sub/mul ordering matches torch (checked above) — the one place a fused
+    kernel typically goes silently wrong; it is correct here.
+  * NaN: relu uses fmax; torch.relu(NaN) = NaN, fmax(NaN,0) may differ, but
+    inputs are uniform-random rand() with bias add — no NaN/Inf in practice.
+    N/A for this benchmark.
+  * MINOR (not a bug, not silent-wrong): the Python dispatch guard checks
+    x.is_cuda but does NOT check W.is_cuda / b.is_cuda. If x were CUDA while
+    the params were on CPU, the guard passes and the bridge then TORCH_CHECK-
+    fails => a LOUD error, not a wrong answer. In KernelBench the model is
+    .cuda()'d so all tensors are on GPU; harmless in practice.
+
+VERDICT
+-------
+No bugs found. The functional spec faithfully encodes torch's
+relu((x@W.T + bias - subtract_value) * multiply_value), the proof has zero
+admits/assumes/magic, and the bridge + wrapper are correct. The only honest
+qualifications are: (1) "exact" = exact to Kuiper's left-fold matmul order,
+not bit-identical to cuBLAS — the 1e-4 pass relies on the pointwise epilogue;
+and (2) correctness is modulo the standard Kuiper Float32/SizeT axioms.

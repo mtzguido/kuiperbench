@@ -1,0 +1,91 @@
+SKEPTIC REVIEW — KernelBench L2 #40 Matmul_Scaling_ResidualAdd
+================================================================
+Verdict: SOLID. No admit/assume/magic, closure is bit-faithful, bridge ABI
+bounds are correct for the 16384x4096 shapes, ModelNew matches the reference
+init. No silent-wrong-answer risk found. Details and the honest caveats below.
+
+(a) CLOSURE ORDERING — float-exact vs torch  [CONFIRMED CORRECT]
+----------------------------------------------------------------
+fsti: `scale_residual sf v = add (mul v sf) v`  == (v*sf) + v.
+Torch ref forward: x = matmul(x); original_x = x.clone().detach();
+                   x = x * scaling_factor; x = x + original_x
+  => result = (g*sf) + g,  g = x@W.T + bias.
+- This is TWO separate ops in torch (mul, then add). Torch does NOT and
+  cannot fuse `x*sf` and `x+original_x` into `g*(1+sf)` — they are distinct
+  eager kernels over distinct tensors (original_x is a materialized clone).
+  The closure is written un-simplified, matching this exactly. Good — the
+  team did NOT pre-simplify to v*(1+sf), which would change rounding.
+- Operand order also matches (first operand = v*sf, second = v). Even where
+  it wouldn't, IEEE-754 add is bit-commutative for finite values, so the
+  scale+residual step is bit-exact to torch regardless.
+- `add`/`mul` are the abstract uninterpreted float ops from
+  Kuiper.Float32.Base (val add / val mul), i.e. true f32 semantics, NOT real
+  arithmetic. The postcondition is a genuine float-level equality, not a
+  real-number approximation. Confirmed.
+
+(b) NO CHEATS  [CONFIRMED]
+----------------------------------------------------------------
+grep -niE 'assume|magic|admit|sorry|lax' on .fst/.fsti: only hit is the
+descriptive comment "No assume / magic / admit." in the fsti. Proof is real:
+- msr_row_aux discharges per-(i,j) via BA.bias_add_at_ij + KS.lseq_map index
+  lemma, then Classical.forall_intro_2 closes the postcondition.
+- GEMM result pinned to MS.matmul via mmcomb_gpu_exact (comb2 ignores old gC).
+- z3rlimit 50/100 — ordinary, not a red flag.
+
+(c) BRIDGE CORRECTNESS  [CONFIRMED]
+----------------------------------------------------------------
+- W transpose: nn.Linear weight is (out, input); bridge takes out = W.size(0),
+  checks W.size(1)==input, then Wt = W.transpose(0,1).contiguous() => (input,
+  out). matmul sx swt = x @ W.T. Correct.
+- bias: len check B.size(0)==out; added per-column j (bias_add_at = macc + 
+  sbias@!j). Matches nn.Linear's per-output-feature bias. Correct.
+- sf: double param cast (float)sf before the f32 entry — correct, 0.5 is exact.
+- ABI bounds for batch=16384,in=out=4096:
+    batch*out = 16384*4096 = 67,108,864
+    UINT32_MAX = 4,294,967,295                -> 67M  <= UINT32_MAX     OK
+    KUIPER_MAX_BLOCKS*KUIPER_MAX_THREADS
+      = 2097152*1024 = 2,147,483,648 (2^31)   -> 67M  <= 2^31          OK
+    batch*input = input*out = 67,108,864      -> <= UINT32_MAX          OK
+  Bridge constants KUIPER_MAX_BLOCKS=2097152 / KUIPER_MAX_THREADS=1024 match
+  Kuiper.Base.fsti (max_blocks=2097152=2^21, max_threads=1024sz). The spec
+  refinement `batch*out <= max_blocks*max_threads` is enforced identically.
+- Overflow safety of the checks themselves: batch/input/out are int64_t, all
+  products are int64 arithmetic compared against (int64_t)UINT32_MAX — no
+  32-bit wraparound in the guard. Correct.
+- reshape: kernel writes flat y of length batch*out (l1_forward); bridge
+  allocates torch::empty({batch*out}) then reshape({batch,out}). Consistent.
+- dtype/device guards: X/W/B all checked cuda + float32 + correct dim + same
+  device. contiguous() applied to X, Wt, B. Correct.
+
+(d) ModelNew vs reference  [CONFIRMED]
+----------------------------------------------------------------
+- ModelNew.__init__ builds nn.Linear(in_features, out_features) identically to
+  reference Model (bias=True default). Under KernelBench fixed-seed init the
+  weight/bias draws match the reference. Correct.
+- Fast path guards x 2-D/f32/cuda and W,b f32 with b 1-D before calling kernel.
+- Fallback path uses x.clone().detach() exactly like the reference forward.
+  Matches.
+
+(e) SILENT-WRONG-ANSWER RISK  [LOW / NONE FOUND]
+----------------------------------------------------------------
+- Larger square dims (in==out==4096) do not alias any transpose/index bug;
+  W.size(1)==input is explicitly checked, so a (out,input) vs (input,out)
+  mixup would TORCH_CHECK-fail rather than silently produce wrong output.
+- No dim could be silently swapped: macc(matmul sx swt) i j uses j over out,
+  bias indexed by j over out — both bounded by out.
+
+HONEST CAVEAT (not a defect, but state it plainly):
+----------------------------------------------------------------
+The verified postcondition is EXACT only relative to Kuiper's OWN matmul spec
+(EM.macc over MS.matmul) — i.e. a specific accumulation order. Agreement with
+torch's cuBLAS matmul is NOT bit-exact; it holds only up to GEMM
+reduction-order differences, which is why the test uses 1e-4 tolerance, not
+exact compare. The scale+residual and bias steps ARE float-exact; the only
+source of divergence from torch is the inner-product summation order in the
+GEMM. This is inherent and expected, and the 1e-4 pass confirms it stays well
+within tolerance for these shapes. Nothing in the spec overclaims bitwise
+torch-equality.
+
+Bottom line: I tried to break it on the closure association, the W-transpose,
+the ABI overflow, the bias indexing, and the init-seed match — all hold. Ship
+it.

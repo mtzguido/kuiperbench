@@ -1,0 +1,60 @@
+UPDATED 2026-06-14: Output spatial size is now computed by the VERIFIED
+helper Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim (F* ensures
+r == (n + 2p - k)/s + 1), and the output buffer is self-allocated by the
+verified entry dwconv2d_alloc_f32 (returns the device pointer, wrapped
+with torch::from_blob + cudaFree deleter).  The bridge no longer contains
+any unverified C++ output-size division or torch::empty.  The kernel and
+its wrappers are admit/assume/magic-free (grep-clean).  See skeptic.txt.
+========================================================================
+
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 83 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+KernelBench L1 #83 — Depthwise 2D Convolution (square input, asymmetric kernel)
+================================================================================
+
+Reference (from KernelBench/level1/83_conv_depthwise_2D_square_input_asymmetric_kernel.py):
+
+    nn.Conv2d(in_channels=8, out_channels=8,
+              kernel_size=(3, 1), stride=1, padding=0,
+              dilation=1, groups=8, bias=False)
+
+    input  : (B=64, 8, 512, 512)
+    output : (64, 8, 510, 512)
+        H_out = (512 + 0 - 3)/1 + 1 = 510
+        W_out = (512 + 0 - 1)/1 + 1 = 512
+
+Reduction depth per output pixel: 3 * 1 = 3 muls/adds.
+Total fmadds: 64 * 8 * 510 * 512 * 3 ≈ 4.0e8 (~0.4 GFLOPs).
+
+Asymmetric kernel (3×1) — exercises K_h ≠ K_w but everything else
+matches #82.  PyTorch passes `kernel_size=(3, 1)` directly to Conv2d.
+
+
+Status
+------
+
+PHASE 0 :: SHIPPED via Kuiper.Spec.DepthwiseConv2D (shared with #82,
+#84, #85 and the depthwise stage of #86).  The spec is already
+general enough: K_h and K_w are independent `pos` parameters.
+
+PHASE 1 :: DEFERRED, BLOCKED on the same upstream as #82
+(`Kuiper.Kernel.Conv2D.Naive` not yet in tree).  Once #82 ships,
+#83 is a re-instantiation: same kernel, K_h=3, K_w=1.
+
+See src/kernelbench/level1/CONV_DEPTHWISE_DESIGN.md and
+src/kernelbench/level1/challenge82/STATUS.txt.
+
+
+-----------------------------------------------------------------
+PHASE 1 (kernel + bridge + run.sh) :: SHIPPED, run.sh PASS.
+
+  Result: PASS (eval_kernel_against_ref, 1e-4 fp32 tolerance).
+  Kernel: src/lib/kernel/Kuiper.Kernel.Conv2D.Depthwise.fst (verifies)
+  Wrapper: src/kernelbench/level1/challenge82/Kuiper.KB.DepthwiseConv2D.fst
+  See skeptic.txt for the verification audit.

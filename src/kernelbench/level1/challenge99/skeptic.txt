@@ -1,0 +1,325 @@
+# Skeptic review — KernelBench L1 #99 (TripletMarginLoss)
+
+Reviewer: Skeptic agent
+Date: 2025-01-23
+Verification: GREEN (./fstar.sh Kuiper.KB.TripletMarginLoss.fst succeeds)
+No assume/admit/magic: CONFIRMED
+
+## UPDATE (2026-06): SPEC TIGHTENED — the loosehole below is FIXED.
+
+The vacuity described in the historical sections of this file NO LONGER applies.
+`Kuiper.Spec.TripletMarginLoss.fsti` (current) pins, for each row r,
+`sumsq_ap @! r %~ real_sq_dist d (trow sa d r) (trow sp d r)` (and the `an`
+mirror) — i.e. the TRUE squared L2 distance of the ACTUAL input rows — with
+`(sout @! 0) == mul s inv_b`. The input sequences `sa`/`sp`/`sn` and `d` now
+appear in the post; there are no free user-supplied `d_ap_real`/`d_an_real`
+witnesses to pick. The module has zero assume/admit/magic. The sections below are
+retained for history but describe the PRE-FIX spec and are obsolete.
+
+## Executive Summary (HISTORICAL — pre-fix)
+
+VERIFIED but SPEC IS PHASE-0 LOOSE. Primary correctness gap: `triplet_post` does
+NOT constrain `d_ap_real`/`d_an_real` to be actual L2 distances of input rows.
+Spec only requires impl-supplied f32 sequences `d_ap`/`d_an` to %~-approximate
+*user-provided* reals `d_ap_real`/`d_an_real`. This means:
+
+  **As far as the spec is concerned, the impl could compute ANYTHING for
+  per-row distances and satisfy the post by picking the trivial witness
+  d_ap_real := to_real_seq d_ap.**
+
+Despite this gap, the *implementation* correctly computes sqrt(sum(sq_diff)) via
+Map.map_gpu2 + HReduce.reduce + sqrt, so end-to-end behavior vs PyTorch should
+match. The spec looseness is a *proof* gap, not a *code* bug.
+
+Verification is Phase-0 honest:
+  - Existence-style loop invariant (doesn't track which witnesses)
+  - Classical witness extraction via IndefiniteDescription
+  - Vacuous-witness trick at loop entry
+
+Bridge is faithful. Performance is terrible (2*B+1 reduce launches) but
+acceptable for a correctness-first baseline.
+
+---
+
+## 1. SPEC LOOSENESS (Phase 0) — THE MAIN CORRECTNESS GAP
+
+Kuiper.Spec.TripletMarginLoss.fsti:45-59 defines `triplet_post`:
+
+  exists (s : f32).
+    (forall (r : nat). r < batches ==>
+       (d_ap @! r) %~ (d_ap_real @! r) /\
+       (d_an @! r) %~ (d_an_real @! r)) /\
+    s %~ rsum (to_real_seq (Seq.init batches (fun r ->
+      triplet_step margin (d_ap @! r) (d_an @! r)))) /\
+    (sout @! 0) == F32.mul s inv_b
+
+**CRITICAL:** `d_ap_real` and `d_an_real` are **user-supplied witnesses**
+(existentially quantified in triplet_fw_f32's ensures clause, lines 38-41 of
+Kuiper.KB.TripletMarginLoss.fsti). The spec does NOT constrain these reals to
+be the actual L2 distances: `sqrt(sum_j (a[r,j] - p[r,j])^2)`.
+
+**Why this is a hole big enough to drive a truck through:**
+  - A dishonest impl could compute d_ap := [1, 2, 3, ...], d_an := [4, 5, 6, ...]
+    (ignoring input tensors entirely), then satisfy the post by picking
+    d_ap_real := to_real_seq d_ap, d_an_real := to_real_seq d_an.
+  - The %~ approximation holds trivially (to_real_seq_is_approx).
+  - The rest follows mechanically: sum the triplet_step values, multiply by inv_b.
+
+**What a tight spec would require:**
+  - Define `l2_dist_row : (a p : Seq.lseq f32 d) -> Pure real ...` as
+    `sqrt (rsum (Seq.init d (fun j -> rpow (to_real (a.[j] - p.[j])) 2)))`.
+  - Constrain: `d_ap_real.[r] == l2_dist_row anchor[r*d..(r+1)*d] positive[r*d..(r+1)*d]`
+                `d_an_real.[r] == l2_dist_row anchor[r*d..(r+1)*d] negative[r*d..(r+1)*d]`
+  - This pins the real distance to the actual sqrt-of-sum-of-squares, not an
+    arbitrary user-supplied value.
+
+**Spec comment acknowledges this (lines 9-22):**
+  "The full functional spec would compose: per-row L2-distance [...] analogous
+  to [Kuiper.Spec.L2Norm] using [frobenius_sumsq_r] / [rsqrt] from
+  [Kuiper.Spec.Frobenius]. [...] This Phase-0 module pins the *signature* of
+  [triplet_post] in terms of an abstract per-batch distance vector, leaving the
+  concrete distance / margin / mean composition to a future commit."
+
+**Bottom line:** The spec is a *signature skeleton* for Phase 0. It ensures the
+output is a mean-reduction of *some* triplet-step vector but doesn't constrain
+what those steps mean. This is honest deferral (clearly documented), not stealth
+hand-waving.
+
+---
+
+## 2. WHAT WE ACTUALLY COMPUTE (Implementation is Correct)
+
+Despite the loose spec, the impl does the right thing. Kuiper.KB.TripletMarginLoss.fst:286-306:
+
+**Per-row anchor-positive distance (lines 287-295):**
+  1. Copy anchor[r*d..(r+1)*d] → scratch_a
+  2. Copy positive[r*d..(r+1)*d] → scratch_b
+  3. Map.map_gpu2 sq_diff_step_f32: scratch_a[j] := (a[j] - p[j])^2
+  4. HReduce.reduce: sumsq_p := sum_j scratch_a[j]  (with %~ approx)
+  5. F32.sqrt sumsq_p → d_ap_r
+
+**Per-row anchor-negative distance (lines 297-305):** same pattern.
+
+**Triplet step (line 307):**
+  triplet_step_f32 margin d_ap_r d_an_r = max(0, d_ap_r - d_an_r + margin)
+
+This matches L2 norm computation. HReduce.reduce guarantees `sumsq %~ rsum (to_real_seq sq_diff_vector)`,
+so:
+  d_ap_r ~= sqrt(sum_j (a[j] - p[j])^2)  (floating-point error only)
+  d_an_r ~= sqrt(sum_j (a[j] - n[j])^2)
+
+**Final output (line 337):**
+  output[0] := (sum_r triplet_step margin d_ap_r d_an_r) * inv_b
+
+Matches PyTorch's `triplet_margin_loss(a, p, n, margin, reduction='mean')`
+modulo fp summation order. **The spec looseness is a proof gap, not an impl bug.**
+
+**sq_diff_step_f32 / triplet_step_f32 vs polymorphic versions:**
+  Lines 23-28 define f32-specialized versions to work around Karamel typeclass
+  projection failures. Line 30-32: `triplet_step_f32_eq` lemma proves definitional
+  equality to the polymorphic spec's `triplet_step`. No dishonesty — this is a
+  standard extraction workaround.
+
+---
+
+## 3. EXISTENCE-STYLE INVARIANT
+
+Loop invariant (lines 278-282):
+
+  pure (SZ.v vi <= SZ.v b /\
+        Seq.length vt == SZ.v b /\
+        (exists (d_ap d_an : Seq.lseq f32 (SZ.v b)).
+           forall (r : nat). r < SZ.v vi ==>
+             Seq.index vt r ==
+             triplet_step margin (Seq.index d_ap r) (Seq.index d_an r)))
+
+**What this means:**
+  At iteration vi, the host Vec `vt` has been filled with `triplet_step margin
+  (some d_ap[r]) (some d_an[r])` for r < vi. The invariant doesn't track *which*
+  d_ap/d_an — just that *some* pair exists satisfying the prefix property.
+
+**Why existence-style:**
+  - Each iteration computes new distances (d_ap_r, d_an_r) at lines 295/305.
+  - The invariant extends the witnesses via Seq.upd in `prefix_extend_lemma_ex`
+    (lines 52-98), using classical witness extraction (IndefiniteDescription).
+  - At loop exit (vi = b), we have: `exists d_ap d_an. forall r < b. vt[r] == triplet_step ...`.
+
+**Is this enough to discharge triplet_post?**
+  Yes. `triplet_final_lemma` (lines 102-150) extracts the witnesses (lines 129-134),
+  then picks:
+    d_ap_real := to_real_seq w_ap
+    d_an_real := to_real_seq w_an
+
+  The %~ approximation holds trivially (to_real_seq_is_approx). Since the spec
+  doesn't constrain d_ap_real/d_an_real further, the post is satisfied.
+
+**Phase-0 honesty:**
+  This is honest *for a Phase-0 spec*. The invariant doesn't track provenance
+  (i.e., that witnesses came from L2 distance computations), but the spec doesn't
+  require it. A tighter spec would need a more precise invariant linking d_ap[r]
+  to actual sqrt-of-sumsq.
+
+---
+
+## 4. VACUOUS-WITNESS TRICK (triplet_inv_init)
+
+Lines 202-220 define `triplet_inv_init`, called at line 260 before the loop:
+
+  let triplet_inv_init (b : nat) (margin : f32) (vt : Seq.lseq f32 b)
+    : Lemma (exists (d_ap d_an : Seq.lseq f32 b).
+               forall (r : nat). r < 0 ==>
+                  Seq.index vt r == triplet_step margin (Seq.index d_ap r) (Seq.index d_an r))
+    = let z : Seq.lseq f32 b = Seq.create b F32.zero in
+      introduce exists (d_ap d_an : Seq.lseq f32 b). ...
+      with z z and ()
+
+**Why this works:**
+  At loop entry (vi = 0), the prefix property is `forall r < 0 ==> ...`. This is
+  vacuously true (no r < 0), so *any* pair of witnesses works. Pulse's SMT needs
+  an explicit lemma to introduce the existential.
+
+**Is this concealing a bug?**
+  No. The witnesses (two zero-filled sequences) are never inspected at vi = 0.
+  The loop body overwrites them at iteration 0 via `prefix_extend_lemma_ex`
+  (line 314-316), extending the prefix from [< 0] to [< 1] by appending the
+  first real d_ap_r/d_an_r.
+
+**Bottom line:** Standard Pulse trick to seed the loop invariant. Not dishonest.
+
+---
+
+## 5. CLASSICAL WITNESS EXTRACTION (triplet_final_lemma)
+
+Lines 102-150 use `FStar.IndefiniteDescription.indefinite_description_ghost` twice:
+
+  Line 129-130: Extract w_ap : (d_ap : Seq.lseq f32 b { pp d_ap })
+  Line 132-134: Extract w_an : (d_an : Seq.lseq f32 b { phyp w_ap d_an })
+
+**What indefinite_description_ghost does:**
+  - Takes a predicate `p : a -> prop` and proof `exists (x : a). p x`.
+  - Returns refinement `(x : a { p x })` via classical logic (excluded middle).
+  - Effect: GTot (ghost) — proof-only, not executable.
+
+**Why this is acceptable:**
+  - Kuiper already depends on classical logic (Kuiper.ClassicalUtils).
+  - Witnesses are only used to discharge the post, not executed.
+  - The spec is loose enough that the trivial witness (to_real_seq w_ap/w_an) suffices.
+
+**Alternative:**
+  A constructive invariant tracking witnesses explicitly (d_ap/d_an as part of
+  loop state) would avoid classical extraction. Phase-0 defers this complexity.
+
+**Bottom line:** Adds classical-axiom dependency but is standard F* practice for
+existence-style proofs. Not dishonest. Mark as technical debt for future
+constructive refactor.
+
+---
+
+## 6. BRIDGE CORRECTNESS
+
+kuiper_triplet_bridge.cu:63-69 calls the verified kernel:
+
+  Kuiper_KB_TripletMarginLoss_triplet_fw_f32(
+    (uint32_t)B, (uint32_t)D,
+    (float)margin, (float)inv_b,
+    A.data_ptr<float>(),   // anchor
+    P.data_ptr<float>(),   // positive
+    N.data_ptr<float>(),   // negative
+    out.data_ptr<float>());
+
+**Argument order vs F* signature (Kuiper.KB.TripletMarginLoss.fsti:12-24):**
+  (b : szp)              ← uint32_t B          ✓
+  (d : szp)              ← uint32_t D          ✓
+  (margin : f32)         ← float margin        ✓
+  (inv_b : f32)          ← float inv_b         ✓
+  (anchor : Array1.t)    ← A.data_ptr          ✓
+  (positive : Array1.t)  ← P.data_ptr          ✓
+  (negative : Array1.t)  ← N.data_ptr          ✓
+  (output : Array1.t)    ← out.data_ptr        ✓
+
+**Match:** YES. Arguments in correct order.
+
+**Python wrapper (99_kuiper_triplet.py:26-41):**
+  - Validates shapes (line 29-34): 2-D float32 CUDA, matching shapes.
+  - Computes inv_b = 1.0 / B (line 36).
+  - Calls kuiper_triplet.kuiper_triplet with contiguous tensors.
+  - Fallback (line 43): PyTorch's triplet_margin_loss for unsupported shapes.
+
+**End-to-end:** Python → JIT bridge → verified kernel → output. Bridge is faithful.
+
+---
+
+## 7. PERFORMANCE (Terrible but Acceptable)
+
+Loop (lines 262-319) runs B times (host iterations).
+
+**Per iteration:**
+  - 2 memcpy_device_to_device (4 bytes × D each)
+  - 2 Map.map_gpu2 (sq_diff)
+  - 2 HReduce.reduce (tree-reduce D elements to scalar)
+
+**Total GPU launches:**
+  - 2*B reduce launches (one per d_ap_r/d_an_r)
+  - 1 final reduce (sum B triplet_step values)
+  - 2*B map launches (sq_diff)
+  - 1 final map (scalar multiply)
+
+**For B=1000:** 2001 reduce launches. Each launch has ~5-10us overhead. This is
+~10-20ms of pure overhead (before any actual work).
+
+**Why this is terrible:**
+  A fused kernel would compute all d_ap/d_an in parallel (one launch), then
+  triplet_step + reduce (two more launches). 3 launches vs 4*B+2.
+
+**Why this is acceptable for KernelBench:**
+  Correctness > performance for a verified baseline. The host-loop pattern is
+  straightforward to verify. Phase-0 defers fusion complexity.
+
+**Bottom line:** Performance debt clearly documented. No dishonesty.
+
+---
+
+## 8. OTHER OBSERVATIONS
+
+- **No assumes/admits/magic:** Confirmed (grep returns zero hits).
+- **F* solver settings (lines 222, 356):** `--z3rlimit 120/240`
+  are timeouts, not proof skips.
+- **Array1.from_seq identity at l1_forward (lines 325-330):** Layout-specific
+  reasoning for contiguous 1-D. Correct for l1_forward.
+- **Seq.upd in prefix_extend_lemma_ex (lines 88-89):** Updates witness sequences
+  but immediately existentially quantifies them. Proof-engineering inefficiency
+  (ghost-only), not dishonest.
+
+---
+
+## SUMMARY VERDICT
+
+**Verification:** HONEST. No admits, no magic, no skipped proofs.
+
+**Spec:** LOOSE (Phase 0). Main gap: `triplet_post` doesn't constrain
+`d_ap_real`/`d_an_real` to be actual L2 distances. Spec accepts *any* user-supplied
+reals; impl satisfies it via trivial witness (to_real_seq of computed f32 values).
+**This is clearly documented in spec comments (lines 3-22), so it's honest
+deferral, not stealth hand-waving.**
+
+**Implementation:** CORRECT end-to-end vs PyTorch. Code computes the right
+sqrt(sum(sq_diff)) via Map + HReduce + sqrt. Spec looseness is a *proof* gap,
+not a *code* bug.
+
+**Proof technique:** PHASE-0 HONEST. Existence-style invariant + classical
+witness extraction is standard F*/Pulse for prototyping. Simpler to verify than
+constructive approach; adds classical-axiom dependency.
+
+**Bridge:** FAITHFUL. Arguments in correct order.
+
+**Performance:** TERRIBLE (2*B+1 reduce launches) but **acceptable for
+correctness-first baseline**. Clearly documented as known debt.
+
+**Honesty grade:** B+ (would be A if spec gap were closed, but deferral is
+clearly acknowledged).
+
+**Phase 1 recommendations:**
+  1. Tighten spec: add `l2_dist_row` and constrain `d_ap_real.[r]`/`d_an_real.[r]`
+     to actual L2 distances of input rows.
+  2. Switch to constructive invariant tracking distance witnesses explicitly.
+  3. Fuse B iterations into single GPU kernel for perf.

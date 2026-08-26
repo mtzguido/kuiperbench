@@ -1,0 +1,8 @@
+/.kuiper/
+/.tools/
+/obj/
+/.venv/
+/.depend*
+/*.smt2
+*.pyc
+src/kernelbench/**/build/

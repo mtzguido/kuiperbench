@@ -1,0 +1,88 @@
+SKEPTIC REVIEW — KernelBench L2 #76 Gemm_Add_ReLU
+==================================================
+Verdict: SOLID. Drop-in is faithful; verification is real; no blocking issues.
+Below is the honest, point-by-point assessment with the few caveats that exist.
+
+(a) VERIFIED vs ASSUMED
+-----------------------
+- The postcondition gemm_add_relu_post is a genuine per-element EXACT float
+  spec:
+      sy'@!(i*out+j) == relu(add(macc(matmul sx swt) i j)(sbias@!j))
+  No real-number / epsilon approximation hides in the spec.
+- "Exact" is exact w.r.t. KUIPER'S left-fold matmul accumulation order
+  (MS.matmul / EM.macc), NOT bit-identical to cuBLAS. This is the correct
+  reading: float add is non-associative, so the GPU test must (and does) pass
+  at 1e-4 tolerance vs torch, because torch/cuBLAS use a different reduction
+  order. The fused epilogue (bias-add then relu) is pure pointwise, so it adds
+  ZERO additional ordering error — the only numerical gap is the GEMM
+  reduction order. Claim is honest.
+- Orientation checked: sx is (batch x input), swt = W.T is (input x out),
+  matmul sx swt -> (batch x out), macc at (i,j) = row i . col j. With wt=W.T
+  this is exactly x @ W.T. Correct.
+
+(b) NO assume/magic/admit/sorry
+-------------------------------
+- grep of .fst and .fsti for assume|admit|magic|sorry|axiom: the ONLY hit is
+  the word "admit" inside a comment ("No assume / magic / admit."). No actual
+  escape hatches. Proof is discharged via BA.bias_add_at_ij + Classical
+  .forall_intro_2 over gar_row_aux. Clean.
+
+(c) BRIDGE (kuiper_gar_bridge.cu)
+---------------------------------
+- W transpose: W is (out, input) per nn.Linear; bridge does
+  W.transpose(0,1).contiguous() -> (input, out) = wt. Correct.
+- bias length guard: TORCH_CHECK(B.size(0) == out). Correct.
+- dtype/device guards: float32 + is_cuda enforced on X, W, B; same-device
+  check present. X made contiguous; B made contiguous. Good.
+- ABI bounds: enforces batch,input,out > 0; each <= UINT32_MAX; the three
+  products (batch*input, input*out, batch*out) <= UINT32_MAX; and
+  batch*out <= KUIPER_MAX_BLOCKS*KUIPER_MAX_THREADS (2097152*1024). These
+  mirror the fsti refinements (SZ.fits + max_blocks*max_threads) exactly.
+  Note products are computed as int64 from int64 operands, so no overflow in
+  the check itself. Correct.
+  For the benchmark shape (1024 x 8192 x 8192): batch*out=8.4M, input*out=67M,
+  batch*input=8.4M — all well within UINT32_MAX. Fine.
+- Output: torch::empty({batch*out}) then reshape({batch,out}) -> (batch,out)
+  matching reference. Correct.
+- Symbol wiring: PYBIND exposes "kuiper_gar" -> kuiper_gar_cuda; Python calls
+  kuiper_gar.kuiper_gar(...). Matches.
+
+(d) ModelNew CONSTRUCTION ORDER (the key risk for THIS challenge)  ** CONFIRMED **
+--------------------------------------------------------------------------------
+- Reference __init__:
+      self.gemm = nn.Linear(in, out, bias=False)
+      self.bias = nn.Parameter(torch.randn(bias_shape))
+- ModelNew __init__: IDENTICAL — nn.Linear(bias=False) FIRST, then
+  nn.Parameter(torch.randn(bias_shape)) SECOND, same arg, same names.
+- This matters because under KernelBench's fixed-seed init the RNG stream must
+  be consumed in the same order: Linear's weight (kaiming) draw happens first,
+  then randn for bias. Order and shapes match, so weight/bias draws coincide.
+  No extra parameters/buffers are registered that would perturb the RNG. PASS.
+
+(e) OP ORDERING: bias added BEFORE relu
+---------------------------------------
+- .fst pipeline: Launch1 GEMM -> Launch2 BA.bias_add_gpu (writes y) ->
+  Launch3 Map.map_gpu relu over y. Spec relu(add(macc ...)(bias@!j)) encodes
+  add-then-relu. Matches reference forward (x+bias then relu). Correct.
+
+CAVEATS / HONEST NITS (none blocking)
+-------------------------------------
+1. relu = fmax x zero. torch.relu(NaN) = NaN, whereas C fmax(NaN,0) = 0, so
+   the spec/kernel and torch DISAGREE on NaN inputs. NOT triggered here:
+   get_inputs uses torch.rand (finite [0,1)) and finite init weights, so no
+   NaN/Inf arises; test passes at 1e-4. Flagging only for generality — it is a
+   latent semantic mismatch, not a bug for this benchmark.
+2. Fallback path in ModelNew.forward (non-2D / non-f32 / CPU) silently routes
+   to the eager reference. Fine for correctness; just note the verified kernel
+   is only exercised on the f32/CUDA/2-D fast path (which is what KernelBench
+   uses).
+3. "Exact" should not be misread as bit-equal to torch — it is exact relative
+   to Kuiper's accumulation order only (see (a)). The 1e-4 GPU pass is the
+   right evidence; a tighter tolerance would NOT be justified.
+
+BOTTOM LINE
+-----------
+No admits/assumes/magic. Spec is a real exact float postcondition. Bridge
+transpose, bias length, dtype/device, and ABI bounds are all correct. The
+fixed-seed construction order matches the reference exactly (the one real trap
+for #76). Bias is added before relu. Ship it.

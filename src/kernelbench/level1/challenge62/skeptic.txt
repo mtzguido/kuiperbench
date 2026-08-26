@@ -1,0 +1,56 @@
+Skeptic review — KernelBench L1 #62/56/55/50 (Kuiper.KB.Conv2DGeneral)
+========================================================================
+
+Verdict: PASSES `bash run.sh` (matches PyTorch reference at f32 tol
+1e-4 via `eval_kernel_against_ref`).  Same verification story as #63
+(see challenge63/skeptic.txt for the canonical analysis); this challenge
+re-uses the verified `Kuiper.Kernel.Conv2D.Naive` kernel via the thin
+monomorphic wrapper `Kuiper.KB.Conv2DGeneral.conv2d_general_f32`, which
+exposes asymmetric inputs, asymmetric kernels, stride>=1, pad>=0.
+
+What's verified
+---------------
+* Memory safety / data-race freedom of `conv2d_naive_gpu` (Pulse).
+* SizeT bounds via `conv2d_size_req` (front-loaded SZ.fits obligations
+  for every multiplication, including `h_out*stride+kh` neighbour-index
+  fits).
+* The wrapper itself is admit-free and magic-free; just a re-export.
+* nthr <= max_blocks*max_threads = 2^31, enforced in the bridge.
+
+What's admitted (inherited tree-wide debt, same as #63)
+--------------------------------------------------------
+* Spec connection: `assume pure (result == conv2d_out_at ...)` at end of
+  `kf` in Kuiper.Kernel.Conv2D.Naive.fst (same pattern as
+  GEMM.BlockTiling1D / HReduce.Block).
+* `setup`/`teardown`/`kpre_sendable`/`kpost_sendable` are `magic ()`.
+* `lseq_to_t4` view + index lemma are admitted vals.
+
+Bridge correctness
+------------------
+* `kuiper_conv2d_general_bridge.cu` (shared common.h) validates: 4D
+  inputs, square stride/pad pairs, dilation=1, groups=1, all sizes fit
+  u32, nthr <= 2^31.  Bias path: forwards caller's bias if defined,
+  else allocates a cudaMemset(0) scratch (varray_alloc0 is misnamed; it
+  does NOT actually zero).  No raw conv kernel logic.
+
+Numerical sensitivity (CRITICAL for this family)
+-------------------------------------------------
+* The Python wrapper sets `torch.backends.cudnn.allow_tf32 = False` and
+  `torch.backends.cuda.matmul.allow_tf32 = False` BEFORE invoking the
+  reference.  Without this, the reference Conv runs TF32 (10-bit
+  mantissa) on Ampere by default, which diverges from our naive f32
+  accumulator by up to ~5e-4 on K*K*Cin in the thousands — past the
+  1e-4 fp32 tolerance from `get_tolerance_for_precision`.  This is a
+  fairness knob, not a Kuiper bug: the verified kernel is more
+  numerically faithful than the cuDNN reference's TF32 path.
+* If anyone changes the reference setup, `run.sh` will start failing.
+
+What this would NOT catch
+-------------------------
+* A bug in `conv2d_out_at` (spec).  The `assume pure` welds runtime to
+  spec; only `run.sh` proves the spec is right.
+* A divergence in nvcc / Karamel codegen.  The extracted .cu was sanity-
+  checked against the F* source; a malicious-looking emit (e.g. the
+  earlier `for (; ; k1 = kk + 1U)` Karamel artifact that referenced
+  out-of-scope `kk`) would compile-fail before runtime, but a subtler
+  bug could slip past.

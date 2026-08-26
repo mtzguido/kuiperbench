@@ -1,0 +1,94 @@
+UPDATED 2026-06-14: Output spatial size is now computed by the VERIFIED
+helper Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim (F* ensures
+r == (n + 2p - k)/s + 1), and the output buffer is self-allocated by the
+verified entry dwconv2d_alloc_f32 (returns the device pointer, wrapped
+with torch::from_blob + cudaFree deleter).  The bridge no longer contains
+any unverified C++ output-size division or torch::empty.  The kernel and
+its wrappers are admit/assume/magic-free (grep-clean).  See skeptic.txt.
+========================================================================
+
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 82 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+KernelBench L1 #82 — Depthwise 2D Convolution (square input, square kernel)
+============================================================================
+
+Reference (from KernelBench/level1/82_conv_depthwise_2D_square_input_square_kernel.py):
+
+    nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3,
+              stride=1, padding=0, groups=64, bias=False)
+
+    input  : (B=16, 64, 512, 512)
+    output : (16, 64, 510, 510)
+        H_out = (512 + 2*0 - 3)/1 + 1 = 510 (same for W_out)
+
+Reduction depth per output pixel: 3 * 3 = 9 muls/adds.
+Total fmadds: 16 * 64 * 510 * 510 * 9 ≈ 2.4e9 (~2.4 GFLOPs).
+
+This is the simplest of the four depthwise challenges (#82-#85): all
+spatial parameters square, no dilation, no padding.  Use it as the
+template for the depthwise kernel proof; #83-#85 will follow by
+parameterisation (asymmetric K, asymmetric input, dilation).
+
+
+Status
+------
+
+PHASE 0 (functional spec) :: SHIPPED, verified ADMIT=0.
+
+   src/lib/spec/Kuiper.Spec.DepthwiseConv2D.{fsti,fst}
+
+   - Reuses [etensor4] / [tacc] / [read_padded] from Spec.Conv2D.
+   - Per-pixel partial sum [__dwconv2d_single] is a left-fold over
+     a linearised (kh, kw) index; mirrors Spec.Conv2D minus the (ic)
+     axis.
+   - Whole-tensor [dwconv2d] + index lemma [lemma_dwconv2d_index]
+     with SMTPat (mirrors lemma_conv2d_index).
+   - Polymorphic in [scalar et]; floating-point %~ approximation
+     falls out of the existing real_like / a_add / a_mul chain.
+
+PHASE 1 (kernel + bridge + run.sh) :: DEFERRED.
+
+Why deferred
+------------
+
+Depthwise 2D conv is a specialisation of standard 2D conv with the
+input-channel inner loop dropped.  At the time of this triage there
+is NO `Conv2D.Naive` kernel in tree (see
+src/kernelbench/level1/challenge50/STATUS.txt — Phase 0 spec only).
+The natural Phase 1 strategy is:
+
+  1. Wait for `Kuiper.Kernel.Conv2D.Naive` to land (some other agent
+     is expected to ship it for #50).
+  2. Specialise it: drop the (ic) loop, index weight as
+     `w[c, kh, kw]`, fold the per-channel computation into the
+     per-thread body.  Each output thread computes one
+     `dwconv2d_single` value.
+  3. Setup/teardown: per-channel split — `x[b, c, :, :]` is shared
+     by `K_h*K_w`-many output threads.  `forevery_factor'` plumbing
+     analogous to `Kuiper.Kernel.RowScale.setup`.
+
+Estimated Phase 1 LOC: ~600 (kernel + proofs) + ~150 (KB
+orchestrator) + ~80 (bridge / Python / run.sh).
+
+See also
+--------
+
+  src/kernelbench/level1/CONV_DEPTHWISE_DESIGN.md
+        — design doc for the whole #82-#87 cluster.
+  src/kernelbench/level1/challenge50/STATUS.txt
+        — Conv2D Phase 0 status (depthwise blocks on Conv2D.Naive).
+
+
+-----------------------------------------------------------------
+PHASE 1 (kernel + bridge + run.sh) :: SHIPPED, run.sh PASS.
+
+  Result: PASS (eval_kernel_against_ref, 1e-4 fp32 tolerance).
+  Kernel: src/lib/kernel/Kuiper.Kernel.Conv2D.Depthwise.fst (verifies)
+  Wrapper: src/kernelbench/level1/challenge82/Kuiper.KB.DepthwiseConv2D.fst
+  See skeptic.txt for the verification audit.

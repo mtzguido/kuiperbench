@@ -1,0 +1,22 @@
+Skeptic review — Kuiper.Kernel.HReduce.Block.reduce_batched_block
+=================================================================
+
+Trust budget. One admit() in rsum_seq_stride_step (Block.fst:37) is an
+inherited debt from the legacy assume-pure inside HReduce.sum_stride_map;
+sum_stride_map_2d is a faithful Array2-row variant of the same recurrence
+on rsum / seq_stride / seq_take. The statement is identical modulo the
+shape of the input source, so soundness is no worse than the legacy code.
+The magic() instances are confined to {kpre,kpost,block_pre,block_post}_
+sendable — the standing sendability axiom path the codebase already
+relies on. No other admit / magic / assume pure was introduced.
+
+Spec sanity. The fsti postcondition exposes a refined sout' whose every
+row r approximates rsum (lseq_map pre_map_r (ematrix_row vr r)). That is
+the same shape as the legacy reduce_batched. The Klas wrapper specialises
+pre_map to id and discharges lseq_map id v == v via Seq.equal; the
+exposed type therefore claims rsum (ematrix_row vr r) directly, which is
+at most as strong as the primitive guarantees, never stronger.
+
+Minor: a literal 32 bound on the loop counter n is currently consistent
+with max_threads but is not derived from it. Worth a TODO if max_threads
+ever changes. Otherwise: clean.

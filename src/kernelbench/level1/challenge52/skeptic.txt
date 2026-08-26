@@ -1,0 +1,105 @@
+Skeptic review — KernelBench L1 #52 (argmin over dim=1)
+================================================================
+
+What is genuinely verified (no admits/assumes/magic in the new code)
+--------------------------------------------------------------------
+
+* Kuiper.Kernel.HReduce.Argmin  (new module, .fst only):
+  - One-thread-per-row argmin kernel reduce_batched_argmin_f32.  Same
+    skeleton as the verified Kuiper.Kernel.HReduce.Min primitive
+    shipped for #49: kpre/kpost/kf/setup/teardown/kdesc + entry
+    point, all verified.  Tracks a (idx, val) tuple of references
+    (bi_ref : sz, bv_ref : f32) per thread; updates them strictly on
+    F32.lt (PyTorch first-occurrence semantics).
+  - Pure spec row_argmin_partial defined recursively (opaque) with
+    unfolding lemmas row_argmin_partial_zero/_succ.
+  - row_argmin_val_eq_fmin bridges the value component of the
+    partial fold to row_fmin_partial (reusing
+    Kuiper.Kernel.HReduce.Min.row_fmin_partial_succ + fmin_comm).
+  - row_argmin_idx_inv proves by induction that the index component
+    is always in-bounds (bi <= max 0 (k-1)) AND the value at that
+    index in the matrix equals the partial-fold value.
+  - row_argmin_at_full assembles those two into the
+    "is-a-row-fmin" property at k = cols.
+  - row_argmin_first_inv proves by induction the first-occurrence
+    invariant: every column strictly before the selected index has a
+    value different from the running min (it relies on a local prefix
+    sequence + the seq_fmin_leq axiom and the strict-lt update).
+  - row_argmin_first_at_full assembles the full PyTorch tie-break:
+    bi < cols, x[r,bi] == seq_fmin (row), and for all j < bi,
+    x[r,j] =/= seq_fmin (row).
+  - argmin_i64 wrapper coerces the partial-fold index to I64.t given
+    the precondition cols < pow2 63.
+
+* Kuiper.KB.ArgminReduceDim  (challenge wrapper, .fsti + .fst):
+  - bridge_post lemma promotes the per-row argmin post produced by
+    the kernel (HRAmin.seq_reduce_rows_argmin cols sx) to
+    argminreduce_post via Classical.forall_intro of the in-bounds +
+    value-match + first-occurrence facts proven by
+    row_argmin_first_at_full.
+  - Layout reuse: the (B, D, M) row-major buffer is re-viewed as a
+    rows=B*M, cols=D Array2 via l2_bcm_pages B M D.  Same as #49/#53.
+
+What is *axiomatized* (introduced for this PR; sound under non-NaN
+IEEE-754 semantics)
+---------------------------------------------------------------------
+
+* Kuiper.Math.Argmin  (new .fsti, no .fst — vals act as axioms):
+  - val gt_iff_fmin_strict (v w : f32) : Lemma
+        (F32.lt v w == true <==> (fmin v w == v /\ ~(v == w)))
+  - val not_gt_fmin_keeps  (v w : f32) : Lemma
+        (F32.lt v w == false ==> fmin v w == w)
+  - val gt_pos_inf_or_eq   (v   : f32) : Lemma
+        (F32.lt v pos_inf == true \/ v == pos_inf)
+  - val seq_fmin_geq       (s : Seq.seq f32) (i : nat) : Lemma
+        (i < Seq.length s ==> F32.lt (s @! i) (seq_fmin s) == false)
+  - Symmetric .lt/fmin/pos_inf versions for #52 (lt_iff_fmin_strict,
+    not_lt_fmin_keeps, lt_pos_inf_or_eq, seq_fmin_leq).
+  These connect F32's abstract gt/lt comparators to the
+  fmin/fmin reductions we already use for #49/#53.  They are sound
+  on the modeled f32 carrier whenever inputs are non-NaN, which is
+  the case for KernelBench's torch.rand inputs.  They are *new
+  axioms* — the alternative is to provide a concrete carrier model
+  and discharge them, which is significantly more work and out of
+  scope for this PR.
+
+What's potentially weak / worth flagging
+----------------------------------------
+
+* Tie-break: PROVED.  The kernel uses a strict-lt update, which gives
+  the PyTorch "first occurrence" behavior (smallest k with
+  x[k] == min), and we now formally verify it.  The post is:
+
+      argminreduce_post: 0 <= y[r] < cols /\
+                         x[r, y[r]] == seq_fmin (x[r, *]) /\
+                         (forall j < y[r].
+                            x[r, j] =/= seq_fmin (x[r, *]))
+
+  i.e. y[r] is the FIRST index attaining the row min — exactly the
+  is_seq_argmin first-min predicate of Kuiper.Spec.ArgminReduceDim.
+  The extra induction step lives in row_argmin_first_inv /
+  row_argmin_first_at_full (no admit/assume; z3rlimit <= 40 in the
+  wrapper, default in the primitive).
+
+  Caveat: like the value-match facts, this is proved relative to the
+  Kuiper.Math.Argmax axioms (seq_fmin_leq etc.), which are sound on
+  non-NaN IEEE-754 inputs (KernelBench feeds torch.rand, no NaNs).
+
+* Performance: this clones the *one-thread-per-row* primitive — same
+  trade-off as #49/#53.  Memory-bandwidth bound; not optimal for
+  typical KernelBench shapes (B*M=4096, D=256).
+
+* Cols bound: argminreduce_dim_fw_f32 requires SZ.v d < pow2 63 to
+  coerce the (nat) partial-fold index into an i64.  Since our szp is
+  ≤ pow2 64, this strictly restricts the API.  In practice the bridge
+  asserts D <= UINT32_MAX which is far smaller than pow2 63, so this
+  is a tight precondition relative to the actual hardware envelope.
+
+* Output dtype: we produce torch.int64 (matching torch.argmin's
+  default).  The bridge allocates Y with dtype=torch.kInt64 and
+  passes &Y[0] as int64_t* — Kuiper's i64 = FStar.Int64.t = int64_t
+  in the extracted ABI.
+
+* run.sh exercises KernelBench's own eval_kernel_against_ref via
+  src/kernelbench/run_test.py.  Reports PASS for the harness's
+  default trial schedule.

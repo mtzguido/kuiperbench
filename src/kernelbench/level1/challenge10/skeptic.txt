@@ -1,0 +1,95 @@
+Skeptic review — KB L1 challenge 10 (3D tensor @ matrix), NEW verified-reshape design
+=====================================================================================
+Module verifies clean: `./fstar.sh Kuiper.KB.MatmulND.fst` =>
+"All verification conditions discharged successfully". grep for
+admit|assume|magic|sorry => only the comment text "Zero assume · zero
+magic · zero admit" in both .fst and .fsti. No proof holes. Confirmed.
+
+(a) GENUINELY VERIFIED vs ASSUMED
+---------------------------------
+Verified IN THIS MODULE (real proofs, no shortcuts):
+  - reshape3to2 / reshape2to3 / reshape2to3_eq: the (N,M,K)->(N*M,K)
+    flatten is a pure GHOST re-interpretation of the SAME buffer via the
+    library's A3.lower / A2.raise' (and back). Ownership is linear: the
+    A3 pts_to is consumed to mint the A2 pts_to and later restored, so
+    there is never simultaneous A3/A2 aliasing. The extracted .cu
+    contains NO reshape code at all (just the GEMM), confirming the
+    reshape is erased at runtime.
+  - imap_eq / content_ok: genuinely prove flattened row (i*M+j) holds
+    A3[i][j][:] — i.e. macc(flat3to2 s3)(i*M+j) c == EMatrix3.macc s3 i j c.
+    The flatten is exactly batched row-major semantics. Faithful.
+  - entry_eq / from_to2: bridge the szp-product (SZ.v(n*^m)) vs nat-product
+    (n*m) dimension gap purely at the scalar macc level (propositional
+    pnm==n*m, no type transport). Sound.
+Assumed / TRUSTED (outside this module — normal Kuiper TCB):
+  - The Kuiper library (A3.lower/A2.raise', layout imap injectivity,
+    Klas.GEMM.Naive3 correctness) is taken as verified elsewhere.
+  - Karamel extraction is trusted.
+  - The C++ bridge is untrusted glue (see (c)/(d)).
+
+(b) DOES THE SPEC CAPTURE 3D BATCHED MATMUL?
+--------------------------------------------
+Yes. Precond `flat3to2 eA %~ rA`, postcond `flat3to2 eC' %~ MS.matmul rA rB`.
+Because content_ok proves flat3to2 IS the batched row-major flatten, and
+B is the SAME matrix for every (N,M) slice, "flatten then 2D matmul" is
+provably identical to per-slice batched matmul. The spec is the standard
+Kuiper real-number approximation (%~) of the Kahan-summed Naive3 kernel;
+rA is a free real reading tied to the stored fp32 only via %~. Acceptable.
+Cancellation risk at atol=rtol=1e-4: NONE of concern. Inputs are U[0,1),
+so every product is non-negative and the K=2048 reduction is a sum of
+non-negative terms (magnitude ~512) — monotonic accumulation, no
+catastrophic cancellation. Kahan summation keeps error O(eps) independent
+of K. Comfortably within 1e-4 rel/abs tol. The reference (cuBLAS fp32)
+has comparable rounding. Not a risk.
+
+(c) BRIDGE CORRECTNESS
+----------------------
+  - Passes RAW pointers + dims n=N,m=M,k=K,l=L; no transpose/flatten/copy
+    of its own (only .contiguous(), which is correct and required). The
+    (N,M)->(N*M) collapse now lives in the verified domain. Good.
+  - Output torch::empty({n,m,l}, A_c.options()) is row-major contiguous =>
+    matches l3_batched_row_major n m l. Allocated/returned correctly.
+  - FStar_SizeT_v(nm) no-op macro: SOUND. Extracted .cu shows it as a
+    standalone statement `FStar_SizeT_v(nm);` whose value is discarded
+    (the SZ.v coercion is only used at the type level to derive SZ.fits).
+    Defining it as ((void)(x)) changes nothing observable.
+  - TORCH_CHECKs: 3D/2D shapes, A.size(2)==B.size(0) contraction, float32
+    dtype, is_cuda, same-device, positive dims, per-dim <= UINT32_MAX, and
+    launch bound (n*m)*l <= 2147483647. The launch bound is CORRECT and in
+    the safe direction: size_req = nm*l <= max_blocks*max_threads = 2^21*2^10
+    = 2147483648; the bridge caps at 2^31-1 < that. OK.
+
+(d) SOUNDNESS GAPS (real, ranked)
+---------------------------------
+*** Medium — INCOMPLETE uint32 overflow guards in the bridge. ***
+  SZ.fits <==> fits in 32 bits (Kuiper.SizeT: SizeTFitsU32). So every
+  Array length must be <= 2^32-1 for the `gX |-> ...` preconditions to
+  even hold; the untrusted bridge is the TCB boundary that must enforce it.
+  Buffers: gA length = N*M*K, gB length = K*L, gC length = N*M*L.
+  The bridge enforces N*M <= U32MAX and (N*M)*L <= 2^31-1 (covers gC and
+  the n*^m multiply), but does NOT check:
+      - N*M*K <= UINT32_MAX   (gA buffer / index trow*k)
+      - K*L   <= UINT32_MAX   (gB buffer / index anf0*l)
+  Individual dims being <= U32MAX does NOT bound these products. The
+  extracted kernel computes indices `gA[trow*k + ...]` and `gB[anf0*l + ...]`
+  in uint32 arithmetic; if N*M*K (or K*L) exceeds 2^32 the multiply wraps
+  mod 2^32 -> silently wrong (or OOB) reads, i.e. results that diverge from
+  the verified spec. The verified module is NOT at fault — its precondition
+  is simply under-enforced by the bridge.
+  NOT triggered by the benchmark: N=16,M=1024,K=2048,L=768 gives
+  N*M*K=3.36e7, K*L=1.57e6, N*M*L=1.26e7 — all far below 2^32. So run.sh
+  passes and the default tensors are safe. The gap only bites for very
+  large K or L (multi-GB operands). Recommend adding the two missing
+  TORCH_CHECKs to fully close the TCB boundary.
+
+  Non-issues (checked and cleared):
+  - szp-vs-nat nm=n*m: handled by entry_eq (propositional eq, no transport);
+    extracted `nm=n*m` guarded by N*M<=U32MAX.
+  - ghost reshape: confirmed zero runtime code in obj/Kuiper_KB_MatmulND.cu.
+  - A3/A2 aliasing: linear ownership transfer, no double-ownership.
+
+VERDICT: The headline claim — "the (N,M)->(N*M) flatten is moved out of
+untrusted C++ into a verified ghost re-interpretation" — is TRUE and the
+proof is real (clean verify, no admits/assumes, faithful content_ok). The
+only real risk is the bridge's incomplete overflow guards (N*M*K, K*L),
+which is benchmark-safe but should be tightened.

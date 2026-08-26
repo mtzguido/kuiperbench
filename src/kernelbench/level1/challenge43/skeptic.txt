@@ -1,0 +1,192 @@
+SKEPTIC — KernelBench L1 #43 MaxPool3D
+======================================
+
+Scope
+-----
+Kuiper.KB.MaxPool3D — a thin verified wrapper over the existing
+[Kuiper.Kernel.WindowReduce1D.windowreduce] primitive instantiated
+with the f32 fmax monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fmax_f32].
+
+The .fst is structurally identical to Kuiper.KB.MaxPool2D (#42); the
+extracted entry [maxpool3d_axis_fw_rm_f32] performs ONE per-axis
+windowed max over the inner (last) axis of a 2-D row-major view.
+The C++ bridge orchestrates THREE such calls — first over W, then
+over H, then over D, with a PyTorch permute+contiguous between
+each pass — to realise the 3-D max-pool.
+
+Spec faithfulness (per-axis)
+----------------------------
+Each verified pass establishes the post
+
+  output |-> windowreduce_result cmonoid_fmax_f32 sx k s p d l_out
+
+i.e. exactly the polymorphic post that windowreduce produces.  For
+cmonoid_fmax_f32, m.rid = -INFINITY and m.rop = fmaxf, so:
+
+    out[r, j] = fmaxf over di in [0, k) of
+                  (in_bounds ? input[r, j*s + di*d - p] : -INFINITY)
+
+This matches PyTorch nn.MaxPool1d, modulo the order-of-reduction
+freedom that fmax has anyway (see Math.Fmax.fmax_assoc /
+fmax_comm axioms).  Padding contributes -inf (PyTorch's documented
+max-pool behaviour).
+
+Spec faithfulness (3-D composition)
+-----------------------------------
+3-D max pool is the composition of three 1-D max pools because fmax
+is associative and commutative:
+
+  max{x[d+dd, h+dh, w+dw] : 0<=dd,dh,dw<k}
+  = max_dd (max_dh (max_dw x[d+dd, h+dh, w+dw]))
+
+The bridge runs:
+
+    pass 1: y1[n,c,d,h,j_w]      = max_dw  x[n,c,d,h,j_w*s+dw*D-p]
+    pass 2: y2[n,c,d,j_h,j_w]    = max_dh  y1[n,c,d,j_h*s+dh*D-p,j_w]
+                                 = max_(dh,dw) x[n,c,d,...,...]
+    pass 3: y3[n,c,j_d,j_h,j_w]  = max_dd  y2[n,c,j_d*s+dd*D-p,j_h,j_w]
+                                 = max_(dd,dh,dw) x[n,c,...,...,...]
+
+All three passes use the SAME (k, s, p, dilation) since the KB
+harness uses a cubic kernel.  Padding contributes -inf in each
+pass, so the composition's padding semantics also match PyTorch
+nn.MaxPool3d (any padded position contributes -inf, and the max
+ignores it).
+
+This composition equality is NOT mechanically proved in F* — the
+verified guarantee is per-axis.  See "Verification gaps" below.
+
+Inherited debt
+--------------
+[Kuiper.Kernel.WindowReduce1D] carries three pre-existing named
+admit-stubs in setup/teardown (setup_fold_kpre_step,
+teardown_unfold_kpost_step, rewrite_macc_windowreduce_result) plus
+the two kdesc-level [magic ()] (kpre_sendable / kpost_sendable)
+shared by every plain-kernel_desc kernel in tree.  Same legacy
+class as MaxPool2D, AvgPool2D, MaxPool1D, AvgPool1D, RowScale,
+HReduce, Map.
+
+MaxPool3D itself adds zero new [admit ()] / [magic ()] / [assume pure].
+
+Verification gaps (unverified glue)
+-----------------------------------
+The following are NOT verified by Kuiper:
+
+1. **Inter-pass permute+contiguous (×2)**: PyTorch's
+   `t.permute(...).contiguous()` is taken on faith.  Two such
+   calls between passes (W→H, H→D) plus one final permute back
+   to KB's expected layout.  This is a vendor data-movement op
+   — same trust class as the `torch.empty`, `.contiguous()`,
+   `data_ptr<float>()` calls that every Kuiper bridge uses.
+
+2. **3-D-as-composition argument**: that "3-D max-pool = max
+   over W then max over H then max over D" is a pure
+   mathematical fact about commutative+associative operations
+   on finite multisets, appealed to in this skeptic but not
+   formalised in Kuiper.Spec.Pool3D (no such module exists).
+
+3. **Bridge no-op #define**: kuiper_maxpool3d_bridge.cu carries
+   the same `#define FStar_SizeT_v(x) ((void)(x))` workaround
+   as #41/#42/#44/#45, for the stray Karamel-extracted ghost
+   calls in WindowReduce1D's `let r : natlt _ = SZ.v r_sz`
+   bindings.  No semantic effect.
+
+4. **Per-axis row chunking**: the bridge wraps each per-axis
+   call in a row-chunking loop bounded by UINT32_MAX/L and the
+   verified primitive's bc*l_out <= 2^31 thread bound.  Each
+   row is independent (the verified per-row primitive reads
+   only its own row), so chunking is sound at the row
+   granularity but not formally stated as an interface
+   guarantee.  The KB harness shape (B=16, C=32, D=H=W=128,
+   K=3, S=2, P=1, Dilation=3 → D_out=H_out=W_out=62) does NOT
+   trigger any chunk split: all three passes have bc*L well
+   below 2^32 (max bc*L = 8.4M*128 = 2^30).
+
+Newly minted infrastructure
+---------------------------
+- None.  Inherits the `(p : szp)` argument that #42 already used
+  in its 2-D wrapper (P=1 in the KB harness).
+
+Edge cases
+----------
+- bc * L > UINT32_MAX: handled via row chunking; rejected by
+  TORCH_CHECK only if a single row's L itself exceeds u32.
+- Empty windows / padded-only windows: returns -inf (matches
+  PyTorch).
+- Cubic pool with non-cubic ks/strides: not exercised by KB but
+  the entry point accepts any (k, s, p, d) tuple per pass.
+
+Performance
+-----------
+KB harness (B=16, C=32, D=H=W=128, K=3, S=2, P=1, Dilation=3 →
+D_out=H_out=W_out=62):
+
+- Pass 1 (over W): 8,388,608 rows × 62 outputs × 3 K-iters
+  ≈ 1.6 G ops; bc*L = 2^30 fits in single launch.
+- permute+contiguous (W↔H): 16*32*128*128*62*4 = 2.0 GB shuffle.
+- Pass 2 (over H): 4,063,232 rows × 62 × 3 ≈ 760 M ops; single launch.
+- permute+contiguous (H↔D): 16*32*128*62*62*4 = 1.0 GB shuffle.
+- Pass 3 (over D): 1,968,128 rows × 62 × 3 ≈ 360 M ops; single launch.
+- Final permute+contiguous: 16*32*62*62*62*4 = 487 MB.
+
+End-to-end PASSes the standard KernelBench correctness comparison
+against PyTorch's nn.MaxPool3d.
+
+Follow-ups
+----------
+- Mechanise the N-D-composition argument (Spec.PoolND rectangle
+  equivalence lemma) so that the bridge orchestration can be
+  related to a single 3-D postcondition.
+- Avoid the inter-pass permute+contiguous (3 GB total) by writing
+  a true 3-D windowreduce primitive (~3× the proof effort of
+  WindowReduce1D but eliminates the data shuffle).
+- Same FStar_SizeT_v fixup move as #41 follow-up.
+
+--- UPDATE (FStar_SizeT_v leak fixed at source) ---
+The FStar_SizeT_v extraction leak discussed above has been ELIMINATED at the
+source. Kuiper.Kernel.WindowReduce1D (and Scan1D) no longer bind the row/col
+indices as non-erased `let r : natlt _ = SZ.v r_sz`; the SZ.v-derived values are
+inlined directly into ghost/vprop positions (with an explicit natlt ascription
+on the pts_to_cell index tuple), and the inner loop counter is `erased nat`. The
+generated .cu now contains zero FStar_SizeT_v calls, so the bridge
+`#define FStar_SizeT_v(x) ((void)(x))` no-op macro has been REMOVED. Both kernels
+re-verify green and all pool tests still PASS at atol=rtol=1e-4.
+
+--- UPDATE (self-allocating axis entry; chunking loop REMOVED) ---
+The per-axis pass now uses [maxpool3d_axis_alloc_f32], which takes ONLY raw
+(k,s,p,d, bc, L) plus the input device pointer. Inside the verification
+boundary it: (a) computes L_out via the verified pool_out_len_1d, (b) allocates
+the (bc, L_out) GPU output buffer (extracts to cudaMalloc via KPR_GPU_ALLOC),
+(c) runs the windowreduce, and (d) returns the dependent pair (L_out, out_ptr)
+as a Prims dtuple2. The new lemma [pool_out_len_1d_ub] (L_out <= L+2P) lets all
+L_out-dependent overflow / launch-bound side conditions be discharged from
+preconditions stated PURELY on raw dims, at the file-default z3rlimit (no bump).
+
+The unverified `run_axis` row-CHUNKING LOOP (gap #4 above) has been REMOVED. It
+only existed for bc*L > u32 generality, but the KB shape never splits (max
+bc*L = 2^30). Each pass is now a single self-allocating call guarded by the raw-
+dim contract check (check_axis_raw), which rejects any input whose bc*padded
+would exceed u32 or the 2^31 launch bound. No bridge-side loop, no pointer
+arithmetic, no torch::empty for the pool outputs, no pool_out_len_1d_sz calls.
+The returned cudaMalloc'd buffer is wrapped in a torch::from_blob tensor with a
+cudaFree deleter. The two inter-pass permutes + final permute remain (unavoidable
+PyTorch data-movement copies); the row-count flatten products (B*C*D*H, etc.)
+remain as overflow-checked contract-level launch bookkeeping, not an algorithmic
+pass. Gap #4 (per-axis row chunking) is therefore OBSOLETE and no longer applies.
+
+ABI caveat: same as #42 — the Prims dtuple2 result needs the struct typedef
+Prims_dtuple2__uint32_t__float_ and KRML_CLITERAL declared in the bridge before
+#include (build uses -drop Prims). Pure ABI declarations.
+
+Re-verified green; extracted; KernelBench correctness PASS at atol=rtol=1e-4.
+
+--- NOTE (why N passes live in the driver) ---
+The per-axis passes are orchestrated in the C++ bridge (with PyTorch permutes
+between them) because WindowReduce1D only reduces the INNER axis and Kuiper has
+no executable transpose kernel, so the non-inner-axis reduction needs a physical
+transpose that currently cannot be expressed inside the verified boundary.
+Folding the orchestration in (and proving the full 2-D/3-D rectangle post) needs
+new verified infrastructure — see src/kernelbench/level1/POOLING_DESIGN.md §7 for
+the three options (bespoke batched-col-major layout / verified transpose-copy
+kernel / true rectangle WindowReduce2D) and the deferred fmax-assoc/comm
+composition lemma. Flagged for maintainer scheduling; not attempted unilaterally.

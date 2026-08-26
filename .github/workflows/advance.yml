@@ -1,0 +1,172 @@
+name: Advance Kuiper package
+
+# A KBENCH_ADVANCE_GH_TOKEN PAT is optional but recommended: PRs opened with
+# GITHUB_TOKEN do not trigger other workflows. The PAT needs Contents and Pull
+# requests read/write access to mtzguido/kuiperbench.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+# Candidate verification executes the downloaded compiler suite with read-only
+# permissions and no write credential in its environment. A separate job gets
+# write permission only after the candidate succeeds.
+permissions:
+  contents: read
+
+jobs:
+  verify_candidate:
+    name: Verify candidate (hosted CPU)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/fstarlang/kuiper-base-nocuda:latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      moved: ${{ steps.pin.outputs.moved }}
+      latest: ${{ steps.pin.outputs.latest }}
+    steps:
+      - name: Clean runner workspace
+        run: find . -delete
+
+      - name: Check out KuiperBench
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up build environment
+        run: |
+          echo "HOME=/home/vscode" >> "$GITHUB_ENV"
+          echo "PATH=/usr/local/bin:$PATH" >> "$GITHUB_ENV"
+
+      - name: Find latest Kuiper nightly
+        id: pin
+        run: |
+          current=$(sed -n 's/^KUIPER_NIGHTLY ?= //p' Makefile)
+          latest_tag=$(./scripts/install-kuiper.sh --nightly --list |
+            grep '^nightly-' | sort -r | head -1)
+          test -n "$latest_tag"
+          latest=${latest_tag#nightly-}
+          [[ "$latest" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "$latest" ]; then
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+            echo "Kuiper is already at nightly $current."
+          else
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+            echo "Trying Kuiper nightly $latest (currently $current)."
+          fi
+
+      - name: Restore candidate Kuiper package
+        if: ${{ steps.pin.outputs.moved == 'true' }}
+        uses: actions/cache@v5
+        with:
+          path: .kuiper
+          key: kuiper-nightly-${{ steps.pin.outputs.latest }}-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Update the candidate pin
+        if: ${{ steps.pin.outputs.moved == 'true' }}
+        env:
+          LATEST: ${{ steps.pin.outputs.latest }}
+        run: |
+          sed -i "s/^KUIPER_NIGHTLY ?= .*/KUIPER_NIGHTLY ?= $LATEST/" Makefile
+          sed -i "s/^  KUIPER_NIGHTLY: .*/  KUIPER_NIGHTLY: $LATEST/" .github/workflows/ci.yml
+
+      - name: Verify, extract, and update dist
+        if: ${{ steps.pin.outputs.moved == 'true' }}
+        run: |
+          make -j4 prepare
+          # Match the hosted verification job's memory-safe F* concurrency.
+          make -j2 all
+          make -j4 dist
+          git diff --check
+
+          unexpected=$(git diff --name-only |
+            grep -Ev '^(Makefile|\.github/workflows/ci\.yml|dist/)' || true)
+          if [ -n "$unexpected" ]; then
+            echo "Candidate modified unexpected files:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+
+          # Transfer only generated-output changes to the credentialed job.
+          # The pin edits are repeated independently there.
+          git diff --binary -- dist > dist.patch
+
+      - name: Upload candidate dist patch
+        if: ${{ steps.pin.outputs.moved == 'true' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: kuiper-candidate-dist
+          path: dist.patch
+          if-no-files-found: error
+
+  open_pr:
+    name: Open advance PR
+    needs: [verify_candidate]
+    if: ${{ needs.verify_candidate.outputs.moved == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out KuiperBench
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download candidate dist patch
+        uses: actions/download-artifact@v7
+        with:
+          name: kuiper-candidate-dist
+          path: candidate
+
+      - name: Reconstruct the verified candidate
+        env:
+          LATEST: ${{ needs.verify_candidate.outputs.latest }}
+        run: |
+          [[ "$LATEST" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
+          sed -i "s/^KUIPER_NIGHTLY ?= .*/KUIPER_NIGHTLY ?= $LATEST/" Makefile
+          sed -i "s/^  KUIPER_NIGHTLY: .*/  KUIPER_NIGHTLY: $LATEST/" .github/workflows/ci.yml
+          if [ -s candidate/dist.patch ]; then
+            git apply candidate/dist.patch
+          fi
+
+          unexpected=$(git diff --name-only |
+            grep -Ev '^(Makefile|\.github/workflows/ci\.yml|dist/)' || true)
+          test -z "$unexpected"
+          git diff --check
+
+      - name: Commit and open pull request
+        env:
+          GH_TOKEN: ${{ secrets.KBENCH_ADVANCE_GH_TOKEN || github.token }}
+          LATEST: ${{ needs.verify_candidate.outputs.latest }}
+        run: |
+          branch=advance/kuiper-package
+          title="Advance Kuiper package to $LATEST"
+          if [ -s candidate/dist.patch ]; then
+            dist_note="Generated CUDA changed and dist/ was regenerated."
+          else
+            dist_note="Generated CUDA is unchanged."
+          fi
+
+          git config user.name "Actions bot"
+          git config user.email "none@none"
+          git checkout -B "$branch"
+          git add Makefile .github/workflows/ci.yml dist
+          git commit -m "$title"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git push --force origin "$branch"
+
+          body="Automated Kuiper nightly advance to $LATEST. The package-backed build verified and extracted successfully. $dist_note"
+          pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "$title" --body "$body"
+          else
+            gh pr create --base main --head "$branch" --title "$title" --body "$body"
+          fi

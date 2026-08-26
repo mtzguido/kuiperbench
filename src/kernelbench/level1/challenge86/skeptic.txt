@@ -1,0 +1,106 @@
+Skeptic review — KernelBench L1 #86 (Kuiper.KB depthwise-separable Conv2D)
+============================================================================
+
+Verdict: PASSES `bash run.sh` at 1e-4 fp32 tolerance, and now routes
+through a VERIFIED COMPOSED entry whose post-condition equals the WHOLE
+separable-conv functional spec.
+
+UPDATE 2026-06-14
+-----------------
+This challenge previously chained two independently-verified C functions
+with a `torch::empty` intermediate and an unverified C++ output-size
+division, and the disclosure below claimed the spec connection was
+"empirical" / inherited per-kernel "assume pure" / "magic ()".  Those
+claims are now STALE and have been removed:
+
+  * The underlying kernels (Kuiper.Kernel.Conv2D.Depthwise and
+    Kuiper.Kernel.Conv2D.Naive) contain NO `assume` / `assume pure` /
+    `magic ()` / `admit` (grep-clean).  Each output cell is tied to its
+    real `*_out_at` spec by Pulse separation-logic proofs.
+
+  * There is now a single VERIFIED Pulse module that composes the two
+    stages and proves the composition equals the spec of the whole
+    separable conv — see below.
+
+What is genuinely verified now
+------------------------------
+New module: src/kernelbench/level1/challenge86/Kuiper.KB.SeparableConv2D.{fst,fsti}
+(verifies with ./fstar.sh, ADMIT-free, z3rlimit default ≤ 40,
+ no admit/assume/magic).
+
+  * `separable_alloc_f32` is a self-allocating Pulse entry.  Inside the
+    verification boundary it:
+       1. allocates the depthwise-output scratch `mid` (B*C*Hout*Wout),
+       2. runs the verified depthwise kernel `DW.dwconv2d_f32` into it,
+       3. allocates the final output `y` (B*Cout*Hout*Wout),
+       4. runs the verified general-conv kernel `CG.conv2d_general_f32`
+          with kh=kw=1, stride=1, pad=0 (a 1×1 / pointwise conv) reading
+          `mid`,
+       5. frees `mid`, returns `y`.
+
+  * Its post-condition proves, for every output index `tid`,
+
+        sy[tid] == separable_out_at ... sx sw_dw sbias_dw sw_pw sbias_pw tid
+
+    where `separable_out_at` decodes `tid` and evaluates
+    `Kuiper.Spec.SeparableConv2D.separable_conv2d` — i.e. the published
+    output equals the spec of the ENTIRE separable conv applied to the
+    ORIGINAL inputs (both weights + both biases), NOT merely two
+    independent per-stage posts glued by hand.
+
+  * The composition proof (ADMIT-free) rests on three pure lemmas:
+       - `decode4_lemma`  : mixed-radix index round-trip;
+       - `mid_eq_lemma`   : the scratch tensor equals the depthwise spec
+                            output tensor (pointwise-equal -> tensor-equal
+                            via etensor4_ext);
+       - `pw_eq_lemma`    : a 1×1 general conv per pixel equals the
+                            pointwise-conv per pixel (recursion
+                            `pw_eq_aux` over the channel reduction);
+    chained through
+    `Kuiper.Spec.SeparableConv2D.lemma_separable_conv2d_index`.
+
+  * Output spatial dims come from the VERIFIED helper
+    `separable_out_dim` (re-exports `DepthwiseConv2D.dwconv2d_out_dim`,
+    whose ensures pins `r == (n + 2p - k)/s + 1`).  No hand-rolled C++
+    division remains in the bridge.
+
+Bridge (kuiper_dwsep_bridge.cu)
+-------------------------------
+Single verified call.  The bridge now only:
+  * dim-checks: depthwise weight (C, 1, kH, kW), pointwise weight
+    (Cout, Cin, 1, 1), all sizes fit u32, both nthr ≤ 2^31;
+  * computes Hout/Wout via the verified `separable_out_dim` (no division);
+  * builds bias scratch for each stage (caller's tensor copied, or
+    `cudaMemset(0)` — a memcpy/memset, not algorithmic math);
+  * makes ONE call to `Kuiper_KB_SeparableConv2D_separable_alloc_f32`,
+    which self-allocates scratch + output;
+  * wraps the returned device pointer with `torch::from_blob` + a
+    `cudaFree` deleter (no `torch::empty`).
+  * `#include`s the extracted `Kuiper_KB_SeparableConv2D.{h,cu}` (the
+    bundle inlines BOTH the depthwise and general-conv kernels as static
+    functions, so no other .cu needs including).
+
+TF32 caveat
+-----------
+The Python wrapper sets
+    torch.backends.cuda.matmul.allow_tf32 = False
+    torch.backends.cudnn.allow_tf32 = False
+before constructing the reference.  Without this, cuDNN's TF32 path
+disagrees with our naive accumulator (especially the pointwise stage,
+inner reduction over Cin=64 taps) past the 1e-4 fp32 tolerance.  Same
+precedent as #50/#55/#56/#62/#63/#82/#85.
+
+What this still would NOT catch
+-------------------------------
+* Float rounding: the spec and the kernel both accumulate in fp32 in the
+  same order, so the equality is exact in the model; on hardware the
+  PASS is within 1e-4 (TF32 disabled as above).
+* The proof fixes dilation=1 and the pointwise kernel to kh=kw=1,
+  stride=1, pad=0; the bridge enforces these (TORCH_CHECK dilation==1,
+  and the 1×1 pointwise weight shape).
+
+Bottom line
+-----------
+#86 now has a verified composed entry: its published output provably
+equals `Kuiper.Spec.SeparableConv2D.separable_conv2d` of the inputs,
+with no admit/assume/magic and no unverified output-size arithmetic.

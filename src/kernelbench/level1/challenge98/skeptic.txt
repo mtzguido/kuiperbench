@@ -1,0 +1,36 @@
+KernelBench L1 #98: KLDivLoss (reduction='batchmean')
+======================================================
+
+Spec: src/lib/spec/Kuiper.Spec.KLDivLoss.fsti  (kl_post)
+
+  exists s. s %~ rsum (to_real_seq (lseq_map2 kl_step sp st))
+        /\ sout[0] == mul s inv_n
+  with kl_step p t = t * (log t - log p).
+
+Faithfulness to PyTorch's
+  F.kl_div(log(predictions), targets, reduction='batchmean'):
+  * For each i: torch's kl_div formula reduces (when log_target=False)
+    to  target * (log(target) - input)  where input = log(predictions).
+    So target * (log(target) - log(predictions))  = our kl_step.
+  * 'batchmean' divides by batch_size (predictions.shape[0]),
+    not by N_total.  The Python wrapper sets
+    inv_n = 1.0 / batch_size accordingly.
+  * Bit-exact f32 elementwise op; only the tree-reduction sum is
+    [%~]-approximated against the real sum.
+
+Inherited debt:
+  * Float-summation associativity (same %~ pattern used elsewhere).
+  * F32.log uses the platform libdevice logf; we trust it as a
+    primitive (consistent with how F32.exp / F32.sqrt are treated
+    elsewhere in Kuiper).
+
+Edge cases:
+  * Non-positive inputs to log produce NaN/-inf; this matches PyTorch
+    behaviour (also calls log on the same data).  Out-of-distribution
+    inputs are caller's responsibility.
+  * Empty input forbidden by bridge TORCH_CHECK.
+  * Falls back to torch reference for non-conforming shapes/dtypes.
+
+Extraction note: same typeclass-extraction workaround as #94 / #100;
+[kl_step_f32] uses [Kuiper.Float32] ops directly and is shown
+definitionally equal to the spec's [kl_step #f32].

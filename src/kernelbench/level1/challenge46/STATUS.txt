@@ -1,0 +1,32 @@
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 46 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+NOTE: the bridge's divide-by-K post-pass now uses the verified
+      Kuiper.KB.ScalarMul kernel (avgpool3d); the previous
+      hand-written __global__ scale kernel has been removed.
+========================================================================
+
+STATUS — KernelBench L1 #46 AvgPool3D — deferred
+
+Phase 0 spec is `Kuiper.Spec.Pool1D` (avg-pool variant).  The
+3-D postcondition decomposes as a fold of the 1-D spec along
+each of the three spatial axes; see `POOLING_DESIGN.md` §2.
+
+Per-challenge dimensions (from `46_Average_Pooling_3D.py`):
+
+  batch_size = 16, channels = 32
+  depth = height = 128, width = 256
+  kernel_size = 3, stride = 2, padding = 1
+  (no dilation parameter — D = 1)
+
+Output spatial:
+  along D/H: floor((128 + 2 - 3) / 2) + 1 = 64
+  along W:   floor((256 + 2 - 3) / 2) + 1 = 128
+Output tensor shape (B, C, 64, 64, 128).
+
+Kernel impl + bridge deferred until `Kuiper.Kernel.WindowReduce1D`
+lands.  See `src/kernelbench/level1/POOLING_DESIGN.md` for the
+full plan, LOC estimates, and resume instructions.

@@ -1,0 +1,45 @@
+Skeptic review — KB L1 challenge 1 (matmul wrapper)
+========================================================
+
+Verified component
+------------------
+Klas.GEMM.BlockTiling2D.g_gemm_f32_128x128x32_8x8: the GEMM kernel
+is verified end-to-end in src/klas/Klas.GEMM.BlockTiling2D.fst (and
+its Inst module) and src/lib/kernel/gemm/Kuiper.Kernel.GEMM.BlockTiling2D.fst.
+N = 4096 makes rows/cols/K aligned to the 128/128/32 tile dimensions,
+so this kernel verifies + extracts cleanly for this challenge.
+No assume / admit / magic in the kernel proofs themselves.
+
+KernelBench problem shape
+-------------------------
+Square matmul C = A * B with N = 4096 (fp32, row-major, CUDA).
+4096 is a multiple of both 128 and 32, so for this specific
+challenge the bridge's pad+slice path is dormant: gA = A_contig,
+gB = B_contig, and the final slice is a no-op view.
+
+Unverified glue in the .cu bridge
+---------------------------------
+Square matmul.  Bridge zero-pads to BlockTiling2D tile sizes
+(rows->128, K->32, cols->128) using torch.nn.functional.pad, calls
+the verified BlockTiling2D kernel with alpha=1, beta=0, then slices
+back to the original shape.  Pad+slice does not affect correctness
+because the padded region is zero-initialised (zeros in the K-extension
+contribute zero products; extra rows/cols are simply discarded).
+Slicing a contiguous tensor yields a non-contiguous view; PyTorch
+handles that inside the comparison harness.
+
+Bridge defensive checks (added post-review)
+-------------------------------------------
+TORCH_CHECK validates dim==2, inner-dim agreement, fp32 dtype, CUDA
+placement, device match, positive dimensions, and uint32 ABI bounds
+before dispatching.  These produce clearer errors than a silent
+illegal-memory-access if the bridge is ever reused outside KernelBench.
+.contiguous() on both inputs guarantees row-major (cols, 1) strides,
+matching the Kuiper kernel's i*N + j flat indexing.
+
+Result
+------
+run.sh PASSes against the KernelBench reference (correctness
+check via kernelbench.eval.eval_kernel_against_ref).
+No new verified Kuiper code was written for this challenge; this is
+a thin bridge over the existing Klas.GEMM.BlockTiling2D primitive.

@@ -1,0 +1,162 @@
+KernelBench L1 Conv Cluster — Phase 0 STATUS
+============================================
+
+Cluster: standard convolutions
+  - 1D : #67, #76                    (Kuiper.Spec.Conv1D)
+  - 2D : #50, #55, #56, #62, #63     (Kuiper.Spec.Conv2D)
+  - 2D dilated/asym-pad : #80        (Kuiper.Spec.Conv2DDilated)
+  - 3D : #54, #59, #60, #66          (Kuiper.Spec.Conv3D)
+
+
+Per-challenge KernelBench parameters
+------------------------------------
+
+#50  Conv2D  3 ->  96, k=11, s=4, p=2,                 in (256,3,224,224)
+#54  Conv3D  3 ->  64, k=3,  s=1, p=0,  d=1,           in (16,3,64,64,64)
+#55  Conv2D 64 -> 128, k=3,  s=1, p=0,  d=1,  asym H!=W  in (8,64,512,1024)
+#56  Conv2D 64 -> 128, k=(5,7), s=(1,1), p=(0,0), d=(1,1)  in (8,64,512,256)
+#59  Conv3D  3 ->  64, k=(3,3,1), s=1, p=0, d=1, asym in (16,3,256,256,10)
+#60  Conv3D  3 ->  64, k=(3,5,7), s=1, p=0, d=1,         in (16,3,64,64,64)
+#62  Conv2D 32 ->  64, k=(5,9), s=1, p=0, d=1,           in (8,32,512,512)
+#63  Conv2D 16 -> 128, k=3,    s=1, p=0, d=1,            in (16,16,1024,1024)
+#66  Conv3D  3 ->  64, k=(3,5,7), s=(1,1,1), p=(0,0,0), d=(1,1,1) in (8,3,16,128,128)
+#67  Conv1D 64 -> 128, k=3,    s=1, p=0, d=1,            in (32,64,131072)
+#76  Conv1D 64 -> 128, k=3,    s=3, p=0, d=4,            in (64,64,524280)
+#80  Conv2D 32 ->  64, k=(5,9), s=1, p=(2,4), d=(2,3),   in (8,32,512,512)
+
+
+Phase 0 (functional spec) status
+--------------------------------
+
+  Module                            Covers                      ADMIT=0
+  --------------------------------- --------------------------- -------
+  Kuiper.Spec.Conv2D       (b010fa)  #50, #55, #56, #62, #63    ✓
+  Kuiper.Spec.Conv1D       (this PR) #67, #76                   ✓
+  Kuiper.Spec.Conv3D       (this PR) #54, #59, #60, #66         ✓
+  Kuiper.Spec.Conv2DDilated(this PR) #80                        ✓
+
+All Phase-0 spec modules verify clean under ./fstar.sh.
+
+Spec design points (consistent across the cluster):
+  - n-D erased tensor (etensor3 / etensor4 / etensor5) with
+    extensionality machinery (mirrors [chest2]).
+  - read_padded{,1,3} : zero-padded boundary read at signed
+    spatial indices.
+  - unrank{,1,3}_*   : flat-to-nD index decomposition for the
+    linearised reduction (mirrors unrank_ic in
+    [Kuiper.Spec.Conv2D]).
+  - __conv*_single   : recursive partial sum with zero-base
+    + per-step lemma (mirrors __matmul_single in
+    [Kuiper.Spec.GEMM]).
+  - conv*_single     : bias addition.
+  - conv*            : whole-tensor result via mkT4 / mkT5.
+  - lemma_conv*_index : SMTPat hook that lets clients reduce
+    [tacc (conv ...) idx] to [conv_single ... idx] automatically.
+
+The accumulation is folded LEFT-to-RIGHT over a linearised index
+(ic, k1, k2, ...) -- this fixes one specific summation order.
+Floating-point implementations whose order differs need a
+decomposition lemma analogous to [matmul_tiles_lemma] in
+[Kuiper.Spec.GEMM].
+
+Conv2DDilated additionally provides:
+  - lemma_conv2dd_specialises_conv2d : at (Sh=Sw=s, Ph=Pw=p,
+    Dh=Dw=1) [conv2dd] reduces to [conv2d].  Lets clients of
+    the dilated kernel discharge the non-dilated case by a
+    single rewrite.
+
+Scalar polymorphism: all four spec modules are [scalar et]-
+polymorphic.  An f32 implementation gets a real-arithmetic
+approximate spec for free via the existing real_like / a_add /
+a_mul / [Kuiper.EMatrix.lemma_to_real_matrix_approximates]
+machinery, exactly as in [Kuiper.Spec.GEMM].
+
+
+Phase 1 (implementation) status
+-------------------------------
+
+NOTHING SHIPPED.  The recommended path is the same as documented
+in src/kernelbench/level1/challenge50/STATUS.txt:
+
+  Option B (direct conv kernel) for first impl.
+
+For a follow-up agent the order of work is unchanged:
+
+  1. Build [Kuiper.Tensor.Layout.NCHW] (4-D flatten/index
+     helpers).  Mirror [Kuiper.Tensor.Layout.BCMPages] -- the
+     latter views (B,C,H,W) as a 2D matrix (B*HW, C); the new
+     module wants a 4-D injection (b,c,h,w) -> b*C*H*W + c*H*W
+     + h*W + w.  ~80-150 LOC.
+
+  2. Build [Kuiper.Kernel.Conv2D.Naive] (Option B, one thread
+     per output pixel).  Loop invariant tracks the partial sum
+     equals [__conv2d_single ... to].  Use [__conv2d_single_lemma]
+     to extend each iteration.  ~250-400 LOC F* + Pulse.
+
+  3. Klas wrapper, KernelBench harness for #50 (50_kuiper_conv2d.py,
+     kuiper_conv2d_bridge.cu, Kuiper.KB.Conv2D.{fst,fsti}, run.sh,
+     skeptic.txt).
+
+  4. Once #50 is green, the SAME Conv2D.Naive kernel covers
+     #55, #56, #62, #63 with ZERO new kernel code -- they are
+     parameter swaps in the bridge + Python.  Each ~30 minutes.
+
+  5. #67 needs a sibling [Kuiper.Kernel.Conv1D.Naive] (one
+     thread per output sample); structurally trivial once
+     Conv2D.Naive is stable.
+
+  6. #80 needs Conv2DDilated.Naive (per-axis stride/pad/dilation
+     in the bridge -- the spec ALREADY supports it).  Reuse
+     [lemma_conv2dd_specialises_conv2d] to bridge to
+     [Kuiper.Spec.Conv2D] when a non-dilated caller routes
+     through the dilated kernel.
+
+  7. #54, #59, #60, #66 need [Kuiper.Kernel.Conv3D.Naive]
+     -- structurally a third sibling.  Per-axis from the start
+     because #60, #66 already have asymmetric kernels.
+
+  8. #76 = #67 with non-trivial (stride, dilation).  The
+     1D kernel built at step 5 should already accept these
+     parameters; just a different bridge.
+
+
+KB tolerance
+------------
+
+Conv accumulates many fp ops -> %~ approximate post over real
+arithmetic.  fp32 ≈ 1e-4 tolerance per element.  The summation
+order is fixed in the spec (left-to-right over the linearised
+index); the kernel must use the same order or carry an
+associativity-decomposition lemma.
+
+
+What is NOT in any spec (deliberately)
+--------------------------------------
+
+  - groups > 1 (depthwise/grouped conv).  Not required for
+    this cluster.  See [Kuiper.Spec.DepthwiseConv2D] in adjacent
+    work for the depthwise case.
+  - bias = None.  Modelled as bias = const_seq zero by caller.
+  - Output-dimension computation.  Caller computes (h_out, w_out,
+    d_out, l_out) and passes them in; avoids divisibility
+    constraints in the type signature.
+  - Mixed-precision accumulation.  All ops happen in [et].
+
+
+Realistic outcome of THIS session
+---------------------------------
+
+  Shipped:
+    - Kuiper.Spec.Conv1D     (Phase 0, ADMIT=0)
+    - Kuiper.Spec.Conv3D     (Phase 0, ADMIT=0)
+    - Kuiper.Spec.Conv2DDilated (Phase 0, ADMIT=0)
+    - this STATUS document
+
+  Deferred:
+    - Phase 1 impl for #50 and the entire cluster.
+
+  Unblock path: see "Phase 1 (implementation) status" above.
+  Estimated effort to ship the FIRST end-to-end challenge (#50)
+  through Conv2D.Naive: ~1 day of focused work.  Each adjacent
+  challenge that reuses the same kernel: ~30 minutes of harness
+  glue.

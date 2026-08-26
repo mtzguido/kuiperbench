@@ -1,0 +1,32 @@
+
+#ifndef Kuiper_KB_MaxPool2D_H
+#define Kuiper_KB_MaxPool2D_H
+
+#include <kuiper.h>
+#include <kbench.h>
+
+uint32_t Kuiper_KB_MaxPool2D_pool_out_len_1d_sz(uint32_t l, uint32_t k,
+                                                uint32_t s, uint32_t p,
+                                                uint32_t d);
+
+void Kuiper_KB_MaxPool2D_maxpool2d_axis_fw_rm_f32(uint32_t k, uint32_t s,
+                                                  uint32_t p, uint32_t d,
+                                                  uint32_t bc, uint32_t l,
+                                                  uint32_t l_out, float *input,
+                                                  float *output);
+
+Prims_dtuple2__uint32_t__float_
+Kuiper_KB_MaxPool2D_maxpool2d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
+                                             uint32_t d, uint32_t bc,
+                                             uint32_t l, float *input);
+
+Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32(uint32_t kh, uint32_t kw,
+                                             uint32_t sh, uint32_t sw,
+                                             uint32_t ph, uint32_t pw,
+                                             uint32_t dh, uint32_t dw,
+                                             uint32_t bc, uint32_t h,
+                                             uint32_t w, float *input);
+
+#define Kuiper_KB_MaxPool2D_H_DEFINED
+#endif /* Kuiper_KB_MaxPool2D_H */

@@ -1,0 +1,103 @@
+SKEPTIC REVIEW — L2 #70 Gemm_Sigmoid_Scaling_ResidualAdd
+========================================================
+Verdict: SOLID. Genuinely verified, no proof holes, bridge and Python
+correct. The only caveats are inherent fp transcendental-equivalence
+issues (empirical, not a defect), noted below for honesty.
+
+(a) GENUINELY VERIFIED vs ASSUMED
+---------------------------------
+VERIFIED (at the float typeclass level, EXACTLY — no real-number approx):
+  Output sy'[i*out+j] == sig_scale_res sf (macc(matmul sx swt) i j + bias[j])
+  where
+    sigmoid v       = div one (add one (exp (sub zero v)))   = 1/(1+exp(-v))
+    sig_scale_res    = add (mul (sigmoid v) sf) v            = sigmoid(v)*sf + v
+  This is the exact torch op order (sigmoid(g)*sf + g, g = x@W.T+bias).
+  The pipeline is three real verified kernel launches:
+    1. P.mmcomb_gpu_exact  -> gC = x @ wt (exact, eC' == matmul sx swt)
+    2. BA.bias_add_gpu     -> y[i*out+j] = C[i,j] + bias[j]
+    3. Map.map_gpu (sig_scale_res sf) -> fused pointwise
+  The per-(i,j) postcondition is discharged by gssr_row_aux via
+  BA.bias_add_at_ij + lseq_map, then Classical.forall_intro_2. No shortcuts.
+
+  inline_for_extraction noextract CONFIRMED PRESENT on both sigmoid (fsti:39)
+  and sig_scale_res (fsti:44). This is the attribute whose ABSENCE originally
+  caused the Karamel failure "Cannot re-check sigmoid__float as valid Low*";
+  it is now in place, so the noted re-verify+re-extract is consistent with the
+  current source. Good.
+
+ASSUMED / EMPIRICAL (NOT covered by the proof — be honest):
+  * Kuiper `exp` extracts to CUDA `expf`. The verified spec guarantees the
+    output equals the FLOAT expression 1/(1+expf(-g))*sf + g. It does NOT
+    prove this equals torch's sigmoid bit-for-bit. torch.sigmoid uses its own
+    (typically more numerically stable) kernel, not literally 1/(1+expf(-x)).
+    Agreement is EMPIRICAL — the test passes at atol=rtol=1e-4. This is a real
+    transcendental-equivalence gap, acceptable under KernelBench tolerance but
+    worth stating: "verified == correct float formula", not "verified ==
+    bitwise torch".
+  * Numerical edge behavior of 1/(1+exp(-v)):
+      - v very negative: exp(-v) -> +inf, 1/(1+inf) = 0  (matches torch -> 0)
+      - v very positive: exp(-v) -> 0,   1/(1+0)   = 1  (matches torch -> 1)
+    No NaN is produced (1/inf is well-defined 0 in IEEE). So overflow/underflow
+    does not diverge from torch in the limits. For mid-large |v| the two
+    formulas can differ by a few ULP, but stays within 1e-4. Inputs here are
+    torch.rand (x in [0,1)) through a random Linear, so |g| is moderate and
+    this is a non-issue in practice. Noted only for completeness.
+
+(b) NO assume/magic/admit/sorry
+-------------------------------
+grep over .fst/.fsti: the ONLY match for "assume/magic/admit" is the prose
+comment in the .fsti ("No assume / magic / admit"). No `assume pure`, no
+`magic()`, no `admit()`, no `sorry` in code. Clean. Z3 nonlinear arithmetic is
+handled by the gssr_row_aux lemma + rlimit bumps (z3rlimit 50/100), not papered
+over.
+
+(c) BRIDGE CORRECTNESS (kuiper_gssr_bridge.cu)
+----------------------------------------------
+  * W transpose: nn.Linear weight is (out, input); bridge takes out = W.size(0),
+    checks W.size(1) == input, and forms Wt = W.transpose(0,1).contiguous()
+    => (input, out), exactly the [wt] the kernel/spec expects. CORRECT.
+  * bias length: TORCH_CHECK B.dim()==1 and B.size(0)==out. Matches l1_forward
+    (out). CORRECT.
+  * ABI bounds: explicit guards batch,input,out > 0 and each <= UINT32_MAX, and
+    each pairwise product (batch*input, input*out, batch*out) <= UINT32_MAX, and
+    batch*out <= MAX_BLOCKS*MAX_THREADS (2097152*1024). These mirror the .fsti
+    refinements (SZ.fits products + batch*out <= max_blocks*max_threads). Casts
+    to uint32_t are guarded. CORRECT. (Note products are computed as int64_t
+    before the UINT32 compare, so no overflow in the check itself.)
+  * Contiguity: Xc = X.contiguous(), Wt contiguous, Bc contiguous before
+    data_ptr. CORRECT — avoids stride aliasing into the row-major kernel.
+  * Reshape: Y allocated flat {batch*out} with Xc.options() (same dtype/device),
+    written by the kernel, returned reshape({batch,out}). CORRECT shape.
+  * dtype/device guards: X/W/B all checked is_cuda + kFloat32, and all three
+    checked same device. CORRECT.
+  * sf cast: double -> (float)sf. sf=2.0 is exactly representable; harmless.
+    CORRECT.
+  * No raw CUDA: bridge #includes the Karamel-extracted .cu/.h and calls the
+    generated entry point. Compliant with workflow rule 8.
+
+(d) ModelNew (70_kuiper_gemm_sigmoid_scale_residual.py)
+-------------------------------------------------------
+  * __init__ builds self.gemm = nn.Linear(input_size, hidden_size), IDENTICAL
+    to the reference Model (same arg order, with bias). Under KernelBench's
+    fixed-seed init the weight/bias draws match. CORRECT.
+  * Fast path guards dim==2, float32, cuda, bias present 1-D float32, then calls
+    the verified kernel with (x, W, b, sf).
+  * Fallback exactly reproduces the reference: gemm -> original=x -> sigmoid ->
+    *sf -> +original  =>  sigmoid(g)*sf + g. CORRECT.
+
+(e) OP ORDERING
+---------------
+  sig_scale_res sf v = sigmoid(v)*sf + v, applied to v = g = matmul+bias.
+  - Residual additive term is g (the POST-bias matmul entry), NOT the scaled
+    value, and NOT the pre-bias matmul. CORRECT (matches original_x = x after
+    gemm, before sigmoid).
+  - sigmoid is applied to g, not to the scaled value. CORRECT.
+  Matches reference order exactly.
+
+BOTTOM LINE
+-----------
+No proof holes, no assumes, spec matches intended semantics exactly at the
+float level, bridge and wrapper correct. The single honest caveat is that
+"verified" means the kernel computes the exact float formula 1/(1+expf(-g))*sf+g;
+bit-exact agreement with torch.sigmoid is established empirically (1e-4), not by
+proof — which is the expected and acceptable situation for a transcendental.

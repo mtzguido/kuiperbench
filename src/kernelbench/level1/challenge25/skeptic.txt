@@ -1,0 +1,36 @@
+SKEPTIC — KernelBench L1 #25: Swish (x * sigmoid(x))
+=====================================================
+
+Verdict: pure elementwise, single-launch verified Kuiper kernel.
+The cleanest of the three (#23/#24/#25) — no batched reduction,
+just `map_gpu` over a `floating`-typed swish_step.
+
+What is actually proved
+-----------------------
+- `Kuiper.KB.Swish.swish` is a thin wrapper around
+  `Kuiper.Kernel.Map.map_gpu` with cell function
+  `swish_step x = x * (1 / (1 + exp(0 - x)))`.
+- Postcondition: the output sequence equals
+  `KS.lseq_map swish_step` of the input — i.e. exact equality at
+  the float level, no `%~` slack. (`map_gpu` carries the exact
+  cellwise spec.)
+- Single 1-D kernel; bridge flattens the (B,D) contiguous input to
+  a 1-D buffer of length B*D and calls the verified entry point
+  once. B*D = 4096 * 16384 = 6.7e7 fits the
+  `kernel_desc_n` budget (`<= max_blocks * max_threads`).
+- Race-freedom and permission accounting verified.
+
+What is assumed
+---------------
+- Standard Kuiper `Float32`/`Float64` axioms.
+- `floating` typeclass dispatch for `add/sub/mul/div/exp/zero/one`.
+
+Bridge correctness
+------------------
+- Single Klas call, no host loop. Standard contiguity / dtype
+  checks. Treats the 2-D input as a flat 1-D array, which is sound
+  because swish is element-local.
+
+Test result
+-----------
+`bash src/kernelbench/level1/challenge25/run.sh` → PASS.

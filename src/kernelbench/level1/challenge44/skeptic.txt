@@ -1,0 +1,171 @@
+SKEPTIC — KernelBench L1 #44 AvgPool1D
+======================================
+
+Scope
+-----
+Kuiper.KB.AvgPool1D — a thin verified wrapper over the existing
+[Kuiper.Kernel.WindowReduce1D.windowreduce] primitive, instantiated with
+the f32 fadd monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fadd_f32].
+
+Spec faithfulness (verified portion)
+-------------------------------------
+The verified entry point [avgpool1d_fw_rm_f32] establishes the post
+
+  output |-> windowreduce_result cmonoid_fadd_f32 sx k s p d l_out
+
+where cmonoid_fadd_f32 has rid = 0.0f and rop = (+).  Concretely:
+
+    out[r, j] = sum over di in [0, k) of
+                  (in_bounds ? input[r, j*s + di*d - p] : 0.0f)
+
+This is the un-divided window sum.  Padding contributes 0, matching
+PyTorch's count_include_pad=True (the default) implicit semantics.
+
+Verified post-pass — the divide-by-K
+-------------------------------------
+PyTorch's nn.AvgPool1d(K, S, P) divides by K (not by valid-tap count).
+The bridge applies this divide with the VERIFIED elementwise kernel
+[Kuiper.KB.ScalarMul.smul_fw_f32] (= Map.map_gpu (smul_step inv_k),
+extracted as a bounds-checked kernel_desc_n), launched after the
+verified sum pass:
+
+    y[gid] = y[gid] * (1.0f / K)
+
+This post-pass is now VERIFIED (data-race-free + functionally
+y'[i] == y[i] * inv_k for all i < lena).  The only precondition the
+bridge discharges is lena <= max_blocks*max_threads (2^31), checked
+with TORCH_CHECK before the call.  The AvgPool sum and the /K scale
+are both verified Kuiper kernels; only the layout glue is unverified.
+
+Inherited debt
+--------------
+[Kuiper.Kernel.WindowReduce1D] carries three pre-existing named
+admit-stubs in setup/teardown plus the two kdesc-level [magic ()]
+shared by every plain-kernel_desc kernel in tree.  Same legacy class
+as RowScale, HReduce, Map, MaxPool1D.
+
+AvgPool1D itself adds zero new [admit ()] / [magic ()] / [assume pure].
+
+The fadd monoid record is concrete (Kuiper.Monoid.Reduce.F32.fst,
+landed with #41) using:
+- Float32.add_comm (axiom in Float32.fsti);
+- fadd_assoc, fadd_zero_neutral (axioms in Kuiper.Math.Fadd.fsti, new
+  with #41).
+These three squash axioms (fp associativity/commutativity/neutrality)
+are NOT proved — same model assumptions PyTorch's reference relies on
+implicitly.  End-to-end harness comparison validates the model.
+
+Edge cases
+----------
+- Padding > 0 with K=1: sum/1 = single tap; harmless.
+- All-padded window: sum = 0, output = 0, divisor still K — matches
+  PyTorch.
+- K = 0: rejected by the [szp] type (k > 0).
+- Float catastrophic cancellation: AvgPool's cmonoid is true addition
+  with order = increasing-di tap order, same scan order as PyTorch's
+  reference cuda kernel.  KernelBench's default rtol=1e-5/atol=1e-8
+  comparison tolerates the ULP wiggle.
+- bc * l_out > 2³¹ (max_blocks * max_threads): rejected by the bridge
+  TORCH_CHECK before launch.
+
+Bridge (unverified glue)
+------------------------
+- kuiper_avgpool1d_bridge.cu carries the same one-line
+  [#define FStar_SizeT_v(x) ((void)(x))] no-op as MaxPool1D — Karamel
+  emits stray ghost-binding calls from WindowReduce1D's
+  [let r : natlt _ = SZ.v r_sz] helpers.  See challenge41/skeptic.txt
+  for context.
+- The unverified scale kernel (above).
+
+Performance
+-----------
+2 GPU launches: (1) verified windowreduce sum, (2) verified scale
+(Kuiper.KB.ScalarMul).
+For the KB harness (B=64, C=128, L=65536, K=8, S=1, P=4, L_out=65537,
+BC=8192) the sum pass is ~525k blocks × 1024 threads × 8 iters; the
+scale is the same grid × 1 fma.  End-to-end well under a second.
+PASSes the standard KernelBench correctness comparison against
+PyTorch's nn.AvgPool1d.
+
+Follow-ups
+----------
+- The divide-by-K post-pass is now VERIFIED via Kuiper.KB.ScalarMul;
+  the only remaining unverified glue is the FStar_SizeT_v fixup.
+- The same FStar_SizeT_v fixup discussion as MaxPool1D applies.
+- AvgPool2D #45 has padding=0, which the szp range (p ≥ 1) rules out;
+  needs a different windowreduce variant.
+
+--- UPDATE (FStar_SizeT_v leak fixed at source) ---
+The FStar_SizeT_v extraction leak discussed above has been ELIMINATED at the
+source. Kuiper.Kernel.WindowReduce1D (and Scan1D) no longer bind the row/col
+indices as non-erased `let r : natlt _ = SZ.v r_sz`; the SZ.v-derived values are
+inlined directly into ghost/vprop positions (with an explicit natlt ascription
+on the pts_to_cell index tuple), and the inner loop counter is `erased nat`. The
+generated .cu now contains zero FStar_SizeT_v calls, so the bridge
+`#define FStar_SizeT_v(x) ((void)(x))` no-op macro has been REMOVED. Both kernels
+re-verify green and all pool tests still PASS at atol=rtol=1e-4.
+
+--- UPDATE (self-allocating entry: sum + verified /K folded into ONE call) ---
+The bridge no longer computes L_out, no longer allocates the output tensor, no
+longer flattens B*C, and no longer issues a SECOND kernel launch for the /K
+scale — ALL of that now happens inside the single verified entry
+[avgpool1d_alloc_f32]. The bridge is reduced to raw-dimension contract checks
+plus a torch::from_blob wrap.
+
+What is genuinely verified now:
+- The entry computes L_out via the verified [pool_out_len_1d_sz] (provably
+  == pool_out_len_1d), allocates the (B*C, L_out) GPU buffer via [Array2.alloc0]
+  (extracts to KPR_GPU_ALLOC -> cudaMalloc), runs the fadd (SUM) windowreduce
+  (rid = 0; padding contributes 0), then divides every output element by K in
+  place via the verified [Kuiper.KB.ScalarMul] kernel (scaling by
+  inv_k = avgpool_recip_f32 k = 1/K), and returns the dependent pair
+  (L_out, output_ptr). Ownership of the pts_to for the returned buffer is
+  transferred to the caller in the postcondition (no F* leak).
+- The post is exactly "windowed SUM, then /K": every output accumulator equals
+  mul inv_k (macc (windowreduce_result cmonoid_fadd_f32 ...) i j). This is the
+  faithful spec of what the two kernels compute, fully discharged at the file
+  default z3rlimit (no bump).
+- The new lemma [pool_out_len_1d_ub] proves L_out <= L + 2P (div-mod + kspan>=1),
+  which lets every L_out-dependent overflow / launch-bound side condition (fits
+  L_out*S + K*D, B*C*L_out <= max_blocks*max_threads, fits B*C*L_out) be
+  discharged from preconditions stated purely on the raw PyTorch dims (L+2P).
+  Mult-monotonicity hints (lemma_mult_le_left/right) bridge the nonlinear steps.
+- The Array1<->Array2 view bridging: to drive the FLAT verified ScalarMul over
+  the (B*C, L_out) row-major output, the buffer is re-viewed as a flat
+  bc*L_out Array1 over the SAME store and back, via ghost reshape helpers
+  [reshape2to1]/[reshape1to2]/[reshape1to2_eq] (Array2.lower + Array1.raise'
+  forward; Array1.lower + Array2.raise back). These mirror the proven
+  Array3<->Array1 reshapes in Kuiper.KB.SDPA, with l1_forward / l2_row_major.
+  The pure lemma [smul_reshape_eq2] proves that mapping (mul c) over the flat
+  row-major sequence equals flattening the scaled matrix (index-wise; mul c
+  commutes with the layout permutation). A small [scale_matrix_cong]
+  reflexivity lemma closes the final post (the SMT solver will not substitute
+  the let-bound inv_k / windowreduce_result inside the mkM lambda).
+- The ScalarMul kernel is extracted INLINE (a `static` hoisted device function)
+  into Kuiper_KB_AvgPool1D.cu, so the bridge needs NO separate ScalarMul
+  include/link; the two-call orchestration is gone entirely.
+
+What the bridge still does (allowed dimension-contract checks ONLY):
+- Validates the raw-dim preconditions via a single TORCH_CHECK (all products
+  fit u32, B*C*padded <= launch bound, window fits => L_out > 0). It computes
+  NOTHING that feeds the kernel and allocates NOTHING.
+- Wraps the returned cudaMalloc'd pointer in torch::from_blob with a
+  [](void*p){ cudaFree(p); } deleter; shape {B, C, L_out} uses the returned
+  L_out.
+
+Honest caveats / ABI fragility:
+- The dependent-pair result extracts to a Karamel `Prims_dtuple2__uint32_t__
+  float_` struct. Because the build passes `-drop Prims`, that struct's typedef
+  is NOT emitted in the header, and the gpu-branch krml's `KRML_CLITERAL` macro
+  is absent from this karamel runtime header. The bridge declares BOTH (the
+  struct ABI {uint32_t fst; float* snd;} and KRML_CLITERAL) before #include-ing
+  the extracted .cu. These are pure ABI declarations matching Karamel's
+  deterministic codegen, but they ARE coupled to its mangled name and field
+  layout; a future krml rename/reorder would require following.
+- The stronger functional bridge `(dsnd r) %~ avgpool1d_post` from
+  Spec.Pool1D (relating this to the real-valued count-include-pad average over
+  the window) remains a SEPARATE DEFERRED bridge. The deliverable here is the
+  map-of-windowreduce_result post, which is fully verified.
+- torch::from_blob on a raw cudaMalloc pointer bypasses torch's caching
+  allocator; correctness is unaffected (PASSes at atol=rtol=1e-4) but the buffer
+  is not pool-tracked.

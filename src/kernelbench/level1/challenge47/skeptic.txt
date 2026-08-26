@@ -1,0 +1,66 @@
+SKEPTIC — KernelBench L1 #47 Sum reduction over a dimension
+==========================================================
+
+Scope
+-----
+Kuiper.Spec.SumReduceDim and Kuiper.KB.ReduceSum.
+
+Spec faithfulness
+-----------------
+The verified entry point [reduce_sum_fw_f32] establishes
+[sumreduce_post] from Kuiper.Spec.SumReduceDim: every output cell
+y[r] (r = b*M + j) approximates, in the [%~] sense, the real-valued
+sum of the corresponding input row x[b,:,j].  The reference is
+torch.sum(x, dim=1, keepdim=True), which is also a tree reduction
+in floating point with non-deterministic round-off; our [%~] post
+covers any such reduction order.  The existential is on the
+floating-point witness, not its exact value, mirroring
+Kuiper.Spec.Frobenius / Kuiper.Spec.L2Norm.
+
+Layout
+------
+The (B, D, M) row-major buffer is viewed as a 2-D Array2 of shape
+(B*M, D) using [Kuiper.Tensor.Layout.BCMPages.l2_bcm_pages] with
+parameters (b=B, hw=M, c=D).  Its imap
+    (r, ci) ↦ (r/M)*D*M + ci*M + r%M
+matches the physical row-major layout exactly: row r = b*M+j,
+column ci = k yields flat offset b*D*M + k*M + j, which is x[b,k,j].
+The injectivity / fits proofs are inherited from the existing
+BCMPages module (verified at ADMIT=0 since #36 RMSNorm landed).
+
+Output is a flat length-(B*M) Array1 with the standard l1_forward
+layout; the bridge reshapes to (B, 1, M) on the host (reinterpret,
+no data motion), and PyTorch's allclose handles the reshape view.
+
+GPU launches
+------------
+Exactly one: KB.reduce_batched_block (block-per-row tree reduction
+in shared memory).  Each block reduces a length-D row.
+
+Inherited debt
+--------------
+None new.  The block-per-row primitive reaches the tree-wide
+[kpre/kpost_sendable] magic only via [launch_sync], same as every
+other plain-kernel-descriptor kernel (documented in the existing
+[REDUCE_BATCHED_BLOCK_skeptic.txt]).
+
+Bridge / harness
+----------------
+The bridge:
+  * accepts only 3-D contiguous CUDA float32 inputs,
+  * checks B,D,M fit in u32 and B*M ≤ max_blocks (2^21),
+  * checks D + max_threads (1024) fits in u32 (block-reduce nth=1024),
+  * allocates the (B,1,M) output and calls the verified entry,
+  * returns the new tensor (the kernel writes a fresh buffer, so the
+    input is unmodified — matches the PyTorch reference's pure-fn
+    semantics).
+The Python ModelNew falls back to torch.sum for any shape outside
+the verified envelope.
+
+Assumptions / known gaps
+------------------------
+None beyond the documented [%~] approximation: the spec does not
+pin a particular reduction tree, only an approximation to the
+mathematical sum.  PyTorch's allclose tolerance (default rtol=1e-5,
+atol=1e-8) covers the f32 round-off accumulated over 4096-element
+reductions.

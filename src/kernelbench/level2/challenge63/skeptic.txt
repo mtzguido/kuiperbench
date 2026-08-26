@@ -1,0 +1,117 @@
+SKEPTIC AUDIT — KernelBench L2 #63 (Gemm_ReLU_Divide), Kuiper solution
+Soundness/honesty review. Module verifies clean; test passes at atol=rtol=1e-4.
+
+=====================================================================
+(a) GENUINELY VERIFIED vs ASSUMED
+=====================================================================
+- Comment-stripped grep for admit/assume/magic/sorry in
+  Kuiper.KB.GemmReluDivide.fst and .fsti: NONE local to this module.
+  (The only hits are the prose "No assume / magic / admit." in the .fsti
+  header comment.)
+- Dependencies actually used are admit-free in the relevant parts:
+    * Kuiper.Kernel.GEMM.Naive2 (.fst/.fsti): no admit/assume/magic/sorry.
+    * Kuiper.Kernel.BiasAdd (.fst/.fsti): none (only the header-comment hit).
+    * Kuiper.Kernel.Map (.fst/.fsti): none.
+- The module DOES transitively rest on the standard Kuiper trust base,
+  identical to every other Kuiper kernel and NOT specific to this one:
+    * Kuiper.Kernel.Base GPU-launch model admits,
+    * Array.Core cudaMalloc alignment assume,
+    * Float32 real_like "magic" bridge to reals,
+    * SizeT fits model.
+  These are foundational and out of scope for this challenge, but they
+  mean "verified" = "verified relative to that trusted model," not
+  machine-checked down to the metal.
+
+Verdict: as honest as a Kuiper kernel gets — zero local holes, clean
+dependency surface.
+
+=====================================================================
+(b) DOES THE SPEC MATCH PyTorch SEMANTICS?
+=====================================================================
+Spec (gemm_relu_div_post): for all i<batch, j<out,
+  sy'[i*out+j] == div (relu (add (macc (matmul sx swt) i j) (sbias@!j))) divisor
+
+- Orientation: matmul sx swt with sx:(batch,input), swt:(input,out).
+  Bridge passes wt = W.T (input,out), so result[i,j] = sum_k x[i,k]*W[j,k]
+  = (x @ W.T)[i,j]. CORRECT.
+- Bias broadcast: bias_add_at uses j = tid % out, i.e. per-COLUMN bias
+  added across all rows. Matches nn.Linear's +bias[j]. CORRECT.
+- ReLU: relu x = fmax x zero = max(x,0). CORRECT.
+- Divide orientation: div_by divisor v = div v divisor = v/divisor
+  (NOT divisor/v). CORRECT.
+- Order of ops: bias-add -> relu -> divide  ==  relu(x@W.T+bias)/divisor.
+  CORRECT.
+
+EXACTNESS CLAIM — important nuance:
+- The postcondition uses float equality (==), NOT the %~ real-approx
+  relation, and macc/relu/div are exact float ops. The relu, bias-add,
+  and divide stages introduce NO summation/reassociation, so the spec is
+  genuinely bit-exact for those three stages. TRUE as stated.
+- BUT "exact" here means exact RELATIVE TO Kuiper's own matmul spec
+  (MS.matmul), which is a sequential left-fold over k (matmul_single_lemma:
+  acc <- add(acc, mul(a,b)), k=0..shared). That is the kernel's
+  accumulation order, NOT PyTorch/cuBLAS order. PyTorch GEMM uses a
+  different (tiled/parallel) summation order, so the pipeline is NOT
+  bit-identical to the reference output. The test only passes because
+  float reassociation error stays within atol=rtol=1e-4. Do not read
+  "EXACT" as "bit-equal to PyTorch" — it is not, and cannot be for any
+  naive GEMM vs cuBLAS.
+
+=====================================================================
+(c) BRIDGE CORRECTNESS
+=====================================================================
+- W shape: nn.Linear weight is (out,input). Bridge sets out=W.size(0),
+  checks W.size(1)==input, transposes to Wt=(input,out).contiguous().
+  CORRECT and the .contiguous() is necessary (the proof/ABI assumes a
+  dense row-major (input,out) layout).
+- bias length checked == out. CORRECT.
+- Output: torch::empty({batch*out}) filled as y[i*out+j], then
+  reshape({batch,out}). Row-major reshape gives [i,j]=y[i*out+j]. CORRECT.
+- dtype/device guards: TORCH_CHECK enforces 2-D/1-D float32 CUDA tensors
+  and same device. CORRECT.
+- ABI bounds: checks each dim >0 and <=UINT32_MAX, each product
+  <=UINT32_MAX, and batch*out <= MAX_BLOCKS*MAX_THREADS. SZ.fits is
+  exactly "fits in u32" (fits_iff_u32), so <=UINT32_MAX matches the
+  spec's SZ.fits preconditions. CORRECT.
+  * MINOR (theoretical only): the product checks compute e.g.
+    `batch * input` in int64 BEFORE the <=UINT32_MAX comparison. If both
+    dims were near UINT32_MAX (~4.29e9), the int64 product (~1.8e19)
+    exceeds INT64_MAX (~9.2e18) and is signed-overflow UB, which could
+    make the guard pass spuriously. This is unreachable in practice
+    (such tensors can't be allocated), so it is a robustness nit, not a
+    real bug. Casting to uint64/unsigned or checking dims against a
+    sqrt bound would be airtight.
+- Fallback path mirrors the reference exactly: self.linear(x); relu; /divisor.
+- ModelNew builds nn.Linear(in_features, out_features) identically to the
+  reference Model, with matching __init__ signature/order, so under
+  KernelBench's fixed-seed init the weight/bias draws match. CORRECT.
+  * Minor: the Python gate checks W/b are float32 but does not check
+    W.is_cuda / b.is_cuda; if x were CUDA but the module's params on CPU,
+    the gate passes and the bridge TORCH_CHECK raises instead of falling
+    back. Irrelevant for the benchmark (whole module is .cuda()).
+
+=====================================================================
+(d) DIVISOR = 0 HAZARD
+=====================================================================
+- `div` in the floating typeclass is total (t -> t -> t) with NO
+  divisor != 0 precondition; the kernel ABI and gemm_relu_div_post
+  likewise impose NO divisor =!= 0 requirement. divisor=0 is therefore
+  UNGUARDED at every level (Python wrapper, bridge TORCH_CHECK, spec).
+- This is NOT a correctness defect vs the reference: float div-by-zero is
+  IEEE-defined (->+/-inf or NaN), the spec faithfully models whatever
+  `div` computes, and PyTorch's `x / 0.0` does the same, so kernel and
+  reference would still agree. The benchmark uses divisor=2.0, so no live
+  hazard.
+- Honest flag: it is an unvalidated edge. Nothing crashes, but a 0
+  divisor silently yields inf/NaN rather than an error.
+
+=====================================================================
+BOTTOM LINE
+=====================================================================
+Sound. Zero local proof holes; clean dependency surface; spec orientation
+(matmul/bias/relu/divide) all correct; bridge shapes/guards/reshape
+correct. Two honest caveats for readers: (1) "EXACT" is exact w.r.t.
+Kuiper's sequential matmul order, NOT bit-equal to PyTorch/cuBLAS — the
+1e-4 test tolerance is doing the reconciliation for the GEMM summation
+order; (2) divisor=0 is unguarded (benign, but unmodeled). One theoretical
+int64-overflow nit in the ABI product checks. No changes required.

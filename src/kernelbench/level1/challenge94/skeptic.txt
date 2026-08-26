@@ -1,0 +1,33 @@
+KernelBench L1 #94: Mean Squared Error
+=========================================
+
+Spec: src/lib/spec/Kuiper.Spec.MSELoss.fsti  (mse_post)
+
+  exists s. s %~ rsum (to_real_seq (lseq_map2 mse_step sp st))
+        /\ sout[0] == mul s inv_n
+  with mse_step a b = (a - b) * (a - b).
+
+Faithfulness to the PyTorch reference (torch.mean((p - t) ** 2)):
+  * mse_step is the bit-exact f32 elementwise op (subtract, then square).
+  * The summation step is the only one approximated under [%~]: tree
+    reduction order is implementation-defined, so we cannot bit-equal
+    a particular accumulator order.  This is the same convention used
+    by Kuiper.Spec.Frobenius and Kuiper.Spec.SumReduceDim.
+  * inv_n is supplied by the host (1/N where N is the flat numel).
+    The Python wrapper computes it from p_flat.numel().
+
+Inherited debt: float-summation associativity is approximate.
+  No new admits / assumes were introduced.
+
+Edge cases:
+  * Empty input: forbidden in the bridge (TORCH_CHECK N > 0).
+  * Non-equal shapes / non-float32 / non-contiguous CUDA: the Python
+    wrapper falls back to torch reference.
+  * Overflow: bridge enforces N + max_threads <= UINT32_MAX.
+
+Extraction note (shared with #100): the karamel extraction of the
+Scalars typeclass [zero] / [one] dictionary fields is unsound (emits
+[(float)(void *)0U]), so we manually inline the f32 step
+[mse_step_f32 a b = (a - b) * (a - b)] using Kuiper.Float32 ops
+(which have explicit extraction overrides) and prove
+[mse_step_f32 a b == mse_step #f32 a b] by reflexivity.

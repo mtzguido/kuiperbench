@@ -1,0 +1,229 @@
+BLOCKER — KernelBench L1 pooling cluster (#41–#46)
+====================================================
+
+Branch: kb-l1-pool-cluster
+Date:   session that picked up the cluster after the WIP .fsti landed
+        on `kb-windowreduce1d-wip` (and was merged to main as
+        commit 2be8577b).
+
+This file records the analysis of the engagement, an architectural
+insight that materially simplifies the long pole identified in
+POOLING_DESIGN.md, and concrete next-steps.  No `.fst` impl,
+`Kuiper.KB.*`, bridge, or run script was committed in this session
+because the engagement does not fit in a single autonomous session
+without violating the no-`magic()`/`admit()`/`assume` rule.
+
+------------------------------------------------------------
+1. Scope reality check
+------------------------------------------------------------
+
+POOLING_DESIGN.md §3 estimates:
+
+  - WindowReduce1D core           ~600 LOC  ❌ deferred
+  - Setup / teardown (split + gather) ~250 LOC  ❌ deferred
+  - Per-challenge wirings (×6)    ~150 LOC each
+  - 2-D / 3-D challenges          ~200 LOC each
+
+i.e. ~1000 LOC of new Pulse + proof for the primitive alone, plus
+~1200 LOC of mechanical (but not trivial) wiring across the six
+challenges.  POOLING_DESIGN.md §5 explicitly recommends:
+
+  > Don't try to ship all six in one session — even with the
+  > primitive landed, that's a week of work.  Treat each KB
+  > challenge as a separate ~200-LOC PR.
+
+The session-mode constraint (no human-in-the-loop, no possibility
+to ask clarifying questions) plus the no-holes rule below means the
+honest delivery is: analysis + unblocking insight + a clear
+hand-off, NOT 1000 LOC of speculative Pulse that doesn't verify.
+
+------------------------------------------------------------
+2. The no-holes rule and existing-tree precedent
+------------------------------------------------------------
+
+The cluster instructions say:
+
+  > NEVER add `assume`, `admit`, `magic ()`, or `assume pure`
+  > to any KernelBench kernel.  Existing assumes in baseline
+  > files [...] are fine.  New assumptions are NOT acceptable:
+  > a kernel with assumes is NOT verified.
+
+The repository's own existing reduction / map / row-scale
+primitives DO use these holes in their setup/teardown plumbing
+(documented as inherited debt in their skeptics):
+
+  - `Kuiper.Kernel.RowScale.kdesc`: `setup = magic(); teardown = magic();`
+  - `Kuiper.Kernel.Map.kmap2`: `kpost_sendable = magic ();
+    kpre_sendable  = magic ();`
+  - `Kuiper.Kernel.HReduce.Block.rsum_seq_stride_step`: `admit()`
+    (an inherited debt private lemma)
+
+Meeting the no-holes rule for `WindowReduce1D` therefore requires
+delivering a primitive that EXCEEDS the verification quality of
+every existing reduce/map primitive on main.  This is achievable
+in principle but is multi-day, hard separation-logic + inductive-
+proof work — not one-shot deliverable.
+
+------------------------------------------------------------
+3. Architectural insight (NEW — not in POOLING_DESIGN.md)
+------------------------------------------------------------
+
+POOLING_DESIGN.md §2 and §2.1 frame the long pole as the K-fold
+*overlapping-permission split* needed when stride S < kernel K,
+and propose a `forevery_factor'` / `forevery_zip` plumbing of
+fractional permissions across overlapping K-element windows.
+That framing makes the setup proof *much harder than it needs
+to be.*
+
+The simpler pattern, used today by `Kuiper.Kernel.Map.kmap2` for
+its read-only second array, is:
+
+  Each thread holds `Frac (fIn /. nthreads) sx` of the *whole*
+  input array (via `Array2.share_n input nthreads`).  This is
+  ONE fractional permission per thread of the WHOLE input;
+  there is no per-cell or per-window decomposition.  Each
+  thread reads its K input elements directly via
+  `Array2.read input (row, raw_col)`, where `raw_col` is the
+  per-tap dilated/strided/padded index.  The framework already
+  guarantees concurrent readers commute on `Frac`-style
+  permissions; this is exactly what we need for K-element
+  overlapping reads, and what `kmap2` already exercises.
+
+Concretely, the WindowReduce1D setup becomes:
+
+  1. `Array2.share_n input  nthreads`    -- whole-input shares
+  2. `Array2.explode  output`             -- per-cell write perm
+  3. zip the two via `forevery_zip` to assemble the per-thread
+     `kpre`:  `(input |-> Frac (fIn /. nthreads) sx)
+              ** Cell output (j_to_cell j) |-> macc sout (...)`
+
+This is the EXACT setup pattern of `kmap2.explode_setup_2`,
+which is ~30 LOC of straightforward Pulse and verifies cleanly
+on main.  No `forevery_factor'` over overlapping windows needed.
+
+The teardown is symmetric: `gather_n` on the input side,
+`forevery_unzip` + `implode` on the output side.
+
+This insight does NOT resolve the rest of the engagement — the
+per-thread loop's inductive invariant matching
+`window_fmax_aux` / `avg_window_sum_r`, the bridge from the
+`cmonoid`-fold post to the Spec.Pool1D row-predicates, and the
+two-axis (#42/#45) and three-axis (#43/#46) compositions — but
+it eliminates the single hardest setup-proof obstacle the
+design doc called out, and brings the primitive's LOC budget
+closer to the ~250–300 range of `kmap2`-class primitives plus
+the inner-loop reduction proof.
+
+------------------------------------------------------------
+4. What was NOT delivered in this session and why
+------------------------------------------------------------
+
+Not delivered:
+
+  - `Kuiper.Kernel.WindowReduce1D.fst` (the primitive impl).
+  - `Kuiper.KB.MaxPool1D.{fsti,fst}` and bridge for #41.
+  - `Kuiper.KB.AvgPool1D.{fsti,fst}` and bridge for #44.
+  - 2-D / 3-D challenge wirings for #42 / #43 / #45 / #46.
+
+Why not:
+
+  Even with the share_n simplification above, the primitive
+  still requires:
+
+  a. A per-thread inductive invariant relating the running
+     accumulator after `di` iterations of the inner K-loop to
+     the ghost recursive `window_fmax_aux row k s p d j di cur`
+     (for max) or to a partial `seq_fold_left fadd 0.0
+     (Seq.init di (...))` (for avg).  These are ~150 LOC of
+     tight Pulse `with_invariant`-style proofs each.
+
+  b. A bridge proof from the polymorphic `cmonoid`-fold
+     postcondition of the primitive to the concrete
+     `row_max_pooled_1d` / `row_avg_pooled_1d` predicates from
+     `Kuiper.Spec.Pool1D`.  For max-pool this requires
+     unfolding the `option`-accumulator pattern; for avg-pool
+     this requires composing with the `Kuiper.Approximates.a_add`
+     %~-lemma chain (see `Kuiper.Spec.Frobenius`,
+     `Kuiper.Spec.L2Norm` for the established pattern).
+     Each ~100 LOC.
+
+  c. For #42 / #45 (2-D), a host-side composition that calls
+     `windowreduce_1d` twice — once over each axis — with a
+     scratch transpose / reshape in between.  The transpose
+     itself is ~100 LOC if a reusable transpose primitive
+     doesn't already exist (and a quick search of
+     `src/lib/kernel/` did not surface one for arbitrary
+     B*C × H × W tensors).
+
+  d. For #43 / #46 (3-D), three sequential 1-D passes with two
+     intermediate scratch buffers.
+
+Attempting any of (a)–(d) without committing magic()/admit()
+in a single autonomous session yields code that does not
+verify and is worse than not committing it (because it would
+break `make -j$(nproc)` at the commit it lands in, violating
+"the repo MUST build green at every commit").
+
+------------------------------------------------------------
+5. Concrete resume plan for the next session
+------------------------------------------------------------
+
+Recommended order, narrowed and informed by §3 above:
+
+Step A — Implement `Kuiper.Kernel.WindowReduce1D.fst` for the
+no-overlap subcase (S = K, P = 0, D = 1) FIRST.  Use the
+share_n / Frac whole-row pattern from §3 (NOT the
+`forevery_factor'` over windows pattern proposed in
+POOLING_DESIGN.md §2.1).  This yields a primitive whose setup
++ teardown proof copies `Kuiper.Kernel.Map.kmap2`'s
+`explode_setup_2` / `explode_teardown_2` almost line-for-line,
+modulo replacing the per-cell-of-`a` ownership with
+per-cell-of-output + the K-element inner loop.
+
+Step B — Once the no-overlap subcase verifies, generalise the
+INNER LOOP to support arbitrary K, S, P, D.  The setup /
+teardown do NOT change between Step A and Step B because the
+share_n pattern is independent of the access pattern.  Only
+the inner loop's bounds-check predicate (`pool_in_bounds`) and
+its inductive invariant change.
+
+Step C — Wire challenge #45 (no overlap, no padding, no
+dilation, S = K = 11) as the first sanity check.  This
+exercises Step A end-to-end without exercising the full
+generality of Step B.
+
+Step D — Wire challenge #44 (overlap, padding, no dilation)
+and challenge #41 (overlap, padding, dilation).  These exercise
+the full Step B inner loop.
+
+Step E — 2-D challenges #42 / #45.  If a 2-axis transpose
+primitive does not already exist, write one (probably ~150
+LOC of standard `Array2`-cell-permutation plumbing).  Compose
+two `windowreduce_1d` calls.
+
+Step F — 3-D challenges #43 / #46.  Three sequential 1-D
+passes; reuse the transpose primitive from Step E.
+
+Estimated session-budget for steps A–F (assuming the no-holes
+rule continues to hold): 4–6 working days of dedicated focus.
+
+------------------------------------------------------------
+6. References
+------------------------------------------------------------
+
+  - src/kernelbench/level1/POOLING_DESIGN.md — full design doc
+    landed before this session.
+  - src/lib/kernel/Kuiper.Kernel.WindowReduce1D.fsti — WIP
+    contract-only interface (already on main).
+  - src/lib/spec/Kuiper.Spec.Pool1D.{fst,fsti} — postcondition.
+  - src/lib/kuiper/Kuiper.Monoid.Reduce.{fst,fsti} +
+    Kuiper.Monoid.Reduce.F32.fsti — cmonoid abstraction.
+  - src/lib/kernel/Kuiper.Kernel.Map.fst — `kmap2` is the
+    template the no-overlap WindowReduce1D should be modeled
+    after (per §3 above).
+  - src/lib/kernel/Kuiper.Kernel.HReduce.Block.fst — template
+    for the per-thread inner-loop reduction proof.
+  - src/lib/kernel/Kuiper.Kernel.RowScale.fst — example of a
+    minimal kernel_desc using `Frac fA sa` shared-input
+    permission (uses `magic()` in setup/teardown, which the
+    no-holes rule forbids us from replicating).

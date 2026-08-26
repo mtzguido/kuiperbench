@@ -1,0 +1,44 @@
+Skeptic review — KB L1 challenge 15 (tril(A @ B))
+==================================================
+
+Reference:  C = torch.tril(torch.matmul(A, B)),  A, B (N, N), N = 4096.
+
+Verified component
+------------------
+EVERYTHING on the GPU is verified.  Single extracted entry
+Kuiper_KB_TrilMatmul_tril_matmul_f32(uint32_t n, float* A, float* B, float* Y),
+2 launches, IN PLACE on the output buffer Y (no scratch alloc):
+
+  1. GEMM  : Y := A @ B   via Kuiper.Kernel.GEMM.Naive3.mmcomb_gpu_approx
+             (Kahan summation -> O(eps) column-reduction error at K=4096;
+             APPROXIMATE %~ MS.matmul postcondition).
+  2. tril  : Y := s_tril Y  (in place)  via the generic verified kernel
+             Kuiper.Kernel.Tril (src/lib/kernel/Kuiper.Kernel.Tril.fst),
+             an in-place one-thread-per-element Array2 mask modeled on the
+             verified Kuiper.Kernel.RowScale.
+
+The output is an Array2 (l2_row_major); the spec is stated directly as an
+chest2 via mkM, with NO flattening and NO flat-index arithmetic:
+
+  s_tril b = EM.mkM (fun i j -> if j <= i then macc b i j else zero)
+
+Exported postcondition (Kuiper.KB.TrilMatmul.fsti), chest2 form:
+  forall i j : natlt N.
+    macc Y i j  %~  (if j <= i then macc (MS.matmul rA rB) i j else 0.0R)
+i.e. each output entry approximates (float-vs-real) the real matmul entry on
+and below the diagonal, and is EXACTLY 0 strictly above it.
+
+No assume / admit / magic / assume pure / --admit_smt_queries anywhere.
+Both modules verify clean (exit 0).
+
+Unverified glue in the .cu bridge
+---------------------------------
+NONE of the math.  kuiper_tril_matmul_bridge.cu only: contiguity/shape/dtype
+TORCH_CHECKs, square-shape + uint32 ABI-range checks, one device alloc for the
+output, the single call to the verified entry, and a final reshape
+(N*N -> (N,N)).  No torch::tril.
+
+Result
+------
+make test-kb-15 PASSes against the KernelBench reference
+(kernelbench.eval.eval_kernel_against_ref, fp32 atol=rtol=1e-4).

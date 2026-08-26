@@ -1,0 +1,1 @@
+../challenge57/kuiper_convt2d_general_bridge.cu

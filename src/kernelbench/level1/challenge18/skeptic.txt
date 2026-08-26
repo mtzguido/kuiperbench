@@ -1,0 +1,50 @@
+Skeptic review — KB L1 challenge 18 (matmul wrapper)
+========================================================
+
+Verified component
+------------------
+Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
+the GEMM kernel is verified end-to-end in
+src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
+its Inst module).  Kahan-style summation in Naive3 keeps the
+column-reduction error O(eps) regardless of K, which is why we
+use it for every challenge except #1/#2 (where rows/cols/K are
+multiples of 128/128/32 and the BlockTiling2D variant verifies +
+extracts cleanly).  No assume / admit / magic in the kernel
+proofs themselves.
+
+Unverified glue in the .cu bridge
+---------------------------------
+A.T @ B.T.  Both inputs materialised as transposes via .t().contiguous(), then plain GEMM.
+
+Result
+------
+run.sh PASSes against the KernelBench reference (correctness
+check via kernelbench.eval.eval_kernel_against_ref).
+No new verified Kuiper code was written; this is a thin
+bridge over the existing Klas.GEMM.* primitives.
+
+========================================================
+UPDATE 2026-06-08 — removed physical transpose
+--------------------------------------------------------
+Previously the bridge materialized A.T and B.T via torch .t().contiguous()
+(unverified data movement OUTSIDE the verified kernel). Fixed: both original
+row-major buffers are fed DIRECTLY to the verified layout-polymorphic GEMM
+(Klas.GEMM.Naive3.spec) under col-major views = the GhostTranspose row2col
+reinterpretation = logical A.T and B.T. No transpose/extra copy; C = A.T @ B.T
+in a single verified launch via g_matmul_f32_ccr (col,col,row). The kernel
+computes MS.matmul of the LOGICAL operands, so functional correctness (approx
+spec, %~) carries over. Verified clean; test PASS at atol=rtol=1e-4.
+
+========================================================
+UPDATE 2026-06-12 — transpose now INSIDE the verification boundary
+--------------------------------------------------------
+Transpose is now captured in the proof, not in a bridge comment.
+Klas.GEMM.Naive3.spec_atbt takes all operands ROW-MAJOR, ghost-transposes BOTH
+A and B via Kuiper.Ghost.TensorTranspose.ghost_transpose1 (verified row<->col
+reindexing holding `mtranspose`), runs the verified GEMM, and restores
+ownership with ghost_transpose1_back. Postcondition stated explicitly as
+  eC' %~ MS.matmul (mtranspose rA) (mtranspose rB)  (F* proves ~ A.T @ B.T).
+Bridge passes plain row-major (K,M)/(N,K) buffers, calls
+g_matmul_f32_atbt (m,n,k, gA,gB,gC). No col-major reinterpretation, no
+assume/admit/magic. Test PASS at atol=rtol=1e-4.

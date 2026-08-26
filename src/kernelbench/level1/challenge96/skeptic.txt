@@ -1,0 +1,61 @@
+KernelBench L1 #96: Smooth L1 (Huber) Loss
+==============================================
+
+Spec: src/lib/spec/Kuiper.Spec.HuberLoss.fsti  (huber_post)
+
+  exists s. s %~ rsum (to_real_seq (lseq_map2 huber_step sp st))
+        /\ sout[0] == mul s inv_n
+  with huber_step a b =
+    let d = a - b in let ad = |d| in
+    if ad < 1 then 0.5 * d * d else ad - 0.5.
+
+Faithfulness to PyTorch's F.smooth_l1_loss(p, t)
+   (defaults: beta=1.0, reduction='mean'):
+  * The formula above is the PyTorch piecewise definition with
+    beta = 1.0 substituted.
+  * 'mean' reduction divides by N_total; the Python wrapper sets
+    inv_n = 1.0 / numel.
+  * Bit-exact f32 elementwise step; tree-sum approximated under [%~]
+    (same convention as #94 / #98 / #100).
+
+Spec choice: Huber's spec is f32-specific (rather than [floating]
+polymorphic) because the constants 0.5 and 1.0 are most naturally
+written as f32 literals via [Kuiper.Float32.of_literal "0.5f"] and
+[Kuiper.Float32.one].  This sidesteps the typeclass extraction
+issue entirely (no workaround function needed).
+
+Inherited debt: float-summation associativity (%~).  No new
+admits / assumes were introduced.
+
+Edge cases:
+  * Empty input forbidden (TORCH_CHECK N > 0).
+  * Differing shapes / non-float32: Python wrapper falls back to
+    torch reference.
+
+----------------------------------------------------------------------
+UPDATE 2026-06-05 (soundness audit): admit() FOUND AND FIXED.
+----------------------------------------------------------------------
+The line above ("No new admits/assumes were introduced") was WRONG:
+huber_step_approx_lemma was `= admit()`.  It papered over an actually
+UNSOUND claim: the old huber_step branched on the FLOATING comparison
+`lt ad one`, while the spec branches on the REAL comparison `ad <. 1`.
+The [%~] relation has no sound rule connecting an fp comparison to a
+real comparison (near |d|=1 the branches can flip => results stop
+approximating), and f32 has no precise_real_like instance, so the
+branchy lemma was unprovable AND false in general.
+
+FIX: huber_step rewritten BRANCHLESS using only ops with approximation
+rules (sub/mul/add/div/fmax/of_int):
+    |d|          = fmax d (0 - d)
+    e = max(|d|-1,0) = fmax (|d|-1) 0
+    m = min(|d|,1)   = |d| - e
+    step         = m*m/2 + e
+A pure real lemma (huber_real_eq) proves this equals the faithful
+branchy PyTorch spec real_huber_step (case split on |d|<1, exact real
+arithmetic).  huber_step_approx_lemma is now proved (NO admit), gaining
+the floating_real_like constraint + the standard has_type SMT trigger.
+Spec .fsti unchanged (still the faithful PyTorch definition).
+
+Verified clean ("All verification conditions discharged successfully");
+re-extracted (emits fmaxf, no fabs/branch); L1 #96 re-tested PASS at
+atol=rtol=1e-4.  This module now has ZERO admit/assume/magic.

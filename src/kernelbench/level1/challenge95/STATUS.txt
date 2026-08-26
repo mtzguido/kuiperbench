@@ -1,0 +1,81 @@
+STATUS — KernelBench L1 #95 Cross-Entropy Loss
+==============================================
+
+Status:    GREEN end-to-end:
+             - .fst/.fsti verify clean (./fstar.sh), no admit/assume/magic
+             - src/lib/spec/Kuiper.Spec.CrossEntropyLoss.{fst,fsti} verify
+               clean and ARE imported/used by the kernel .fsti
+             - extraction emits non-empty obj/Kuiper_KB_CrossEntropyLoss.{cu,h}
+             - nvcc + bridge build cleanly
+             - bash src/kernelbench/level1/challenge95/run.sh -> PASS
+               (KernelBench correctness vs torch.nn.functional.cross_entropy,
+                fp32, 1e-4)
+
+What landed (single verified entry — whole reduction is verified)
+-----------------------------------------------------------------
+- src/lib/spec/Kuiper.Spec.CrossEntropyLoss.fsti
+    CORRECT functional spec [cross_entropy_post], a genuine function of
+    ALL inputs (the flat (B*C) predictions buffer [sp] and the length-B
+    target index sequence [st]):
+
+      exists per_batch s.
+        (forall r < B. per_batch[r] %~ ce_term_r C sp r (st[r])) /\
+        s %~ rsum (to_real_seq per_batch) /\
+        res == mul s inv_b
+
+    where ce_term_r C sp r t = - (log_softmax(crow sp C r))[t], pinned to
+    the verified [Kuiper.Kernel.LogSoftmax.log_softmax_real] (numerically
+    stable subtract-max) path the kernel actually computes.  This equals
+    the PyTorch per-sample CE  logsumexp(row) - row[target]  mathematically.
+
+    (The previous Phase-0 stub — which mislabelled [rsum(exp(.))] as
+    "logsumexp" and never subtracted the target logit, and was imported
+    by nothing — has been replaced.)
+
+- src/kernelbench/level1/challenge95/Kuiper.KB.CrossEntropyLoss.{fsti,fst}
+    A SINGLE self-contained verified entry [ce_loss_fw_f32] that owns its
+    scratch and performs the WHOLE computation inside the verification
+    boundary:
+      * per batch row b: copy the length-C row into scratch, run verified
+        [log_softmax_gpu] in place, gather the negated target lane (the
+        per-row CE loss) via the requires-established in-range target;
+      * write all B per-row losses into a device buffer and reduce-sum
+        them on-device with verified [HReduce.reduce];
+      * multiply by the verified reciprocal [ce_recip_f32 = 1/B].
+    Post is exactly [Kuiper.Spec.CrossEntropyLoss.cross_entropy_post].
+    Mirrors the verified L1 #99 TripletMarginLoss per-row-then-reduce
+    pattern (carried-prefix loop invariant + final-lemma discharge).
+    No admit / assume / assume pure / magic.  z3rlimit 40.
+
+- src/kernelbench/level1/challenge95/kuiper_crossentropyloss_bridge.cu
+    Single verified call: ce_recip_f32(B) then ce_loss_fw_f32(B, C, inv_b,
+    predictions, targets).  NO host reduction loop.  The only host loop is
+    a pure bounds-check that establishes the kernel precondition (every
+    target in [0, C)); it computes no loss arithmetic.
+
+CLOSED GAP
+----------
+- The former "KNOWN GAP: the bridge still performs a HOST summation loop
+  (unverified algorithmic reduction)" is FIXED.  The cross-batch sum and
+  the 1/B mean are both inside the verification boundary now; the final
+  scalar is verified as a function of all B*C predictions and all B
+  targets.  No unverified algorithmic/reduction pass remains in the bridge.
+
+Verification artefacts
+----------------------
+$ ./fstar.sh src/lib/spec/Kuiper.Spec.CrossEntropyLoss.fsti      -> OK
+$ ./fstar.sh src/kernelbench/level1/challenge95/Kuiper.KB.CrossEntropyLoss.fsti -> OK
+$ ./fstar.sh src/kernelbench/level1/challenge95/Kuiper.KB.CrossEntropyLoss.fst  -> OK
+$ make obj/Kuiper_KB_CrossEntropyLoss.cu obj/Kuiper_KB_CrossEntropyLoss.h      -> non-empty
+$ bash src/kernelbench/level1/challenge95/run.sh                 -> PASS
+
+Notes / trust boundary
+----------------------
+- [Kuiper.Kernel.LogSoftmax.log_softmax_gpu], [Kuiper.Kernel.HReduce.reduce]
+  are reused as verified black boxes (their contracts pin the in-place row
+  to %~ log_softmax_real and the result to %~ rsum, respectively).  The
+  HReduce block kernels carry the project-wide, disclosed kpre/kpost
+  sendability debt (framework-level, not functional); no NEW assume/magic
+  is introduced here.
+- B per-row log_softmax launches (perf, not correctness); a batched
+  LogSoftmax2D + indexed gather would be a future optimisation.

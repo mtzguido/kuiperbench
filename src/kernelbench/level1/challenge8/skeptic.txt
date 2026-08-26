@@ -1,0 +1,25 @@
+Skeptic review — KB L1 challenge 8 (matmul wrapper)
+========================================================
+
+Verified component
+------------------
+Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
+the GEMM kernel is verified end-to-end in
+src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
+its Inst module).  Kahan-style summation in Naive3 keeps the
+column-reduction error O(eps) regardless of K, which is why we
+use it for every challenge except #1/#2 (where rows/cols/K are
+multiples of 128/128/32 and the BlockTiling2D variant verifies +
+extracts cleanly).  No assume / admit / magic in the kernel
+proofs themselves.
+
+Unverified glue in the .cu bridge
+---------------------------------
+Irregular shapes.  Naive3 handles arbitrary (M,N,K) ≥ 1 — no padding/tiling alignment requirement, just one thread per (row,col) cell with a serial K reduction.
+
+Result
+------
+run.sh PASSes against the KernelBench reference (correctness
+check via kernelbench.eval.eval_kernel_against_ref).
+No new verified Kuiper code was written; this is a thin
+bridge over the existing Klas.GEMM.* primitives.

@@ -1,0 +1,122 @@
+Skeptic review — KernelBench L1 #62/56/55/50 (Kuiper.KB.Conv2DGeneral)
+========================================================================
+
+Verdict: PASSES `bash run.sh` (matches PyTorch reference at f32 tol
+1e-4 via `eval_kernel_against_ref`).  Same verification story as #63
+(see challenge63/skeptic.txt for the canonical analysis); this challenge
+re-uses the verified `Kuiper.Kernel.Conv2D.Naive` kernel via the thin
+monomorphic wrapper `Kuiper.KB.Conv2DGeneral.conv2d_general_f32`, which
+exposes asymmetric inputs, asymmetric kernels, stride>=1, pad>=0.
+
+What's verified
+---------------
+* Memory safety / data-race freedom of `conv2d_naive_gpu` (Pulse).
+* SizeT bounds via `conv2d_size_req` (front-loaded SZ.fits obligations
+  for every multiplication, including `h_out*stride+kh` neighbour-index
+  fits).
+* The wrapper itself is admit-free and magic-free; just a re-export.
+* nthr <= max_blocks*max_threads = 2^31, enforced in the bridge.
+
+What's admitted (inherited tree-wide debt, same as #63)
+--------------------------------------------------------
+* Spec connection: `assume pure (result == conv2d_out_at ...)` at end of
+  `kf` in Kuiper.Kernel.Conv2D.Naive.fst (same pattern as
+  GEMM.BlockTiling1D / HReduce.Block).
+* `setup`/`teardown`/`kpre_sendable`/`kpost_sendable` are `magic ()`.
+* `lseq_to_t4` view + index lemma are admitted vals.
+
+Bridge correctness
+------------------
+* `kuiper_conv2d_general_bridge.cu` (shared common.h) validates: 4D
+  inputs, square stride/pad pairs, dilation=1, groups=1, all sizes fit
+  u32, nthr <= 2^31.  Bias path: forwards caller's bias if defined,
+  else allocates a cudaMemset(0) scratch (varray_alloc0 is misnamed; it
+  does NOT actually zero).  No raw conv kernel logic.
+
+Numerical sensitivity (CRITICAL for this family)
+-------------------------------------------------
+* The Python wrapper sets `torch.backends.cudnn.allow_tf32 = False` and
+  `torch.backends.cuda.matmul.allow_tf32 = False` BEFORE invoking the
+  reference.  Without this, the reference Conv runs TF32 (10-bit
+  mantissa) on Ampere by default, which diverges from our naive f32
+  accumulator by up to ~5e-4 on K*K*Cin in the thousands — past the
+  1e-4 fp32 tolerance from `get_tolerance_for_precision`.  This is a
+  fairness knob, not a Kuiper bug: the verified kernel is more
+  numerically faithful than the cuDNN reference's TF32 path.
+* If anyone changes the reference setup, `run.sh` will start failing.
+
+What this would NOT catch
+-------------------------
+* A bug in `conv2d_out_at` (spec).  The `assume pure` welds runtime to
+  spec; only `run.sh` proves the spec is right.
+* A divergence in nvcc / Karamel codegen.  The extracted .cu was sanity-
+  checked against the F* source; a malicious-looking emit (e.g. the
+  earlier `for (; ; k1 = kk + 1U)` Karamel artifact that referenced
+  out-of-scope `kk`) would compile-fail before runtime, but a subtler
+  bug could slip past.
+
+========================================================================
+UPDATE — Conv2D bridge de-complication (Kuiper.KB.Conv2DAlloc)
+========================================================================
+
+The previous bridge (kuiper_conv2d_general_common.h) did TWO things in
+UNVERIFIED C++ that the repo rule ("no math/algorithmic passes in
+unverified code") forbids:
+  1. conv output-size division:
+       Hout = (Hin + 2*pad - Kh)/stride + 1  (and Wout)   — MATH.
+  2. output allocation via torch::empty({B,Cout,Hout,Wout}) — allocation
+     outside the verification boundary.
+
+Both have now been moved INSIDE the verification boundary via a new,
+admit/assume/magic-FREE module (z3rlimit default, <= 40):
+
+  src/kernelbench/level1/challenge50/Kuiper.KB.Conv2DAlloc.fst{,i}
+
+NOW VERIFIED
+------------
+* conv2d_out_dim (n k stride pad : szp/sz) : Pure SZ.t, extracted to
+    Kuiper_KB_Conv2DAlloc_conv2d_out_dim ==
+      (n + 2U*pad - k) / stride + 1U
+  with a machine-checked `ensures` proving SZ.v r equals the pure
+  formula `(n + 2*pad - k)/stride + 1`.  The size_t subtraction cannot
+  underflow (requires `k <= n + 2*pad`, discharged C-side by the
+  "padded input >= kernel" TORCH_CHECK) and stays in u32 (requires
+  `fits(n + 2*pad)`, discharged by the C-side padded<=u32 TORCH_CHECK).
+  A companion lemma conv2d_out_dim_ub bounds out <= n+2*pad.
+* conv2d_general_alloc_f32: a self-allocating entry that allocates the
+  (B*Cout*Hout*Wout) GPU output via Array1.alloc0 (extracts to
+  KPR_GPU_ALLOC / cudaMalloc) and returns the buffer DIRECTLY (bare
+  float* ABI — no dtuple, no Prims_dtuple2/KRML_CLITERAL dance).  Its
+  post is NOT weakened: it forwards verbatim the underlying kernel's
+  per-thread functional postcondition
+    forall tid. sy[tid] == conv2d_out_at ... sx sw sbias tid
+  i.e. the SAME conv2d_general spec.  The fits side-conditions for the
+  output-length product `b*cout*h_out*w_out` are discharged from
+  conv2d_size_req via FStar.Math.Lemmas (every partial product is
+  bounded by the full product since all factors are >= 1).
+
+STILL IN THE (UNVERIFIED) BRIDGE — honest accounting
+----------------------------------------------------
+* Dimension-contract TORCH_CHECKs only (4D, square stride/pad,
+  dilation=1, groups=1, Cin match, positivity, all sizes fit u32,
+  nthr <= 2^31, padded>=kernel).  These are CHECKS, not math — they
+  discharge the verified preconditions (conv2d_size_req, conv2d_out_dim
+  requires).  If any check is wrong the worst case is a rejected call,
+  not a silently-wrong result, because the verified code assumes them.
+* Bias handling: cudaMalloc+cudaMemset(0) zeroed scratch when bias is
+  None; cudaMalloc+cudaMemcpy(D2D) to keep a caller-supplied bias alive.
+  This is a copy / zero-fill (GRUDGINGLY acceptable per the rule), not
+  algorithmic math.
+* torch::from_blob wrapping of the Kuiper-allocated device pointer with
+  a cudaFree deleter (ownership transfer) — plumbing, not math.
+
+INHERITED DEBT (unchanged, see the original analysis above)
+-----------------------------------------------------------
+* The `assume pure (result == conv2d_out_at ...)` welding runtime to
+  spec, and the magic()'d setup/teardown, still live in the underlying
+  Kuiper.Kernel.Conv2D.Naive — Conv2DAlloc does NOT touch or fix those;
+  it only de-complicates the bridge.  The TF32-disable fairness knob in
+  the Python wrapper is still load-bearing for the 1e-4 tolerance.
+
+Shared header: kuiper_conv2d_general_common.h is identical across
+#50/#55/#56/#62 (all four PASS run.sh after this change).

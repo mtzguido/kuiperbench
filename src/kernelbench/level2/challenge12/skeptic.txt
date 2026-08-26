@@ -1,0 +1,93 @@
+SKEPTIC REVIEW — L2 #12 Gemm_Multiply_LeakyReLU
+================================================
+Verdict: SOLID. No correctness bugs found. Test passes at 1e-4. Below is the
+brutally-honest audit of each claim.
+
+(b) NO proof holes — CONFIRMED
+------------------------------
+grep over .fst/.fsti for assume|magic|admit|sorry finds only the doc-comment
+string "No assume / magic / admit" in the .fsti. Zero actual occurrences in
+code. The postcondition gemm_mul_lrelu_post is discharged constructively:
+  - GEMM via P.mmcomb_gpu_exact (eC' == MS.matmul sx swt, asserted pure).
+  - bias_add via BA.bias_add_gpu with per-tid fact bias_add_at.
+  - fused map via Map.map_gpu (mul_lrelu mult slope).
+  - per-(i,j) glue lemma gmlr_row_aux + Classical.forall_intro_2.
+Nothing is papered over. z3rlimit bumps (50/100) are legitimate, not holes.
+
+(a) Float branch vs torch LeakyReLU boundary — MATCHES (no observable diff)
+--------------------------------------------------------------------------
+Closures:
+  leaky_relu slope v = if gte v zero then v else mul v slope
+  mul_lrelu mult slope v = leaky_relu slope (mul v mult)
+Spec asserts output == mul_lrelu mult slope (matmul+bias), float-level ==.
+
+Boundary analysis (the thing you flagged):
+  - v = +0.0: gte (+0.0) (+0.0) = true  -> returns +0.0.
+    torch leaky_relu(+0.0) = +0.0 either way (0*slope = +0.0). MATCH.
+  - v = -0.0: IEEE (-0.0) >= (+0.0) is TRUE, so closure returns v = -0.0.
+    torch returns -0.0 (or -0.0*slope = -0.0). Same value. MATCH.
+  - Whether torch internally uses ">" or ">=" is irrelevant here: at the only
+    ambiguous point (±0) both formulas yield a zero of identical magnitude, and
+    the eval tolerance (atol=rtol=1e-4) does not distinguish signed zero anyway.
+  - NaN: torch.rand inputs => no NaN reaches the op; moot.
+
+Caveat worth stating (NOT a bug): the floating typeclass model
+(Kuiper.Floating.Base.fsti, line ~49) explicitly conflates +0.0 and -0.0 under
+propositional ==. So the *spec* cannot even talk about signed-zero distinctions;
+it is an abstraction over IEEE. The extracted CUDA still performs a real
+`v >= 0.0f` compare on the GPU. This is a modeling abstraction, not a soundness
+hole, and has no effect on the benchmark outcome.
+
+(c) Bridge correctness — CORRECT
+--------------------------------
+  - W transpose: nn.Linear weight is (out, input). out = W.size(0); checks
+    W.size(1) == input. Wt = W.transpose(0,1).contiguous() => (input, out),
+    exactly the [wt] layout the kernel expects. CORRECT.
+  - bias length: TORCH_CHECK B.size(0) == out, B is 1-D. Spec indexes bias by
+    column j (out dim) via bias_add_at -> sbias@!j. CORRECT.
+  - ABI bounds: guards batch,input,out > 0; each <= UINT32_MAX; each pairwise
+    product <= UINT32_MAX (matches SZ.fits requirements); and
+    batch*out <= KUIPER_MAX_BLOCKS*KUIPER_MAX_THREADS. Verified that
+    KUIPER_MAX_BLOCKS = 2097152 == Kuiper.Base.max_blocks (pow2 21) and
+    KUIPER_MAX_THREADS = 1024 == max_threads. Matches the .fsti precondition
+    batch*out <= max_blocks*max_threads. CORRECT.
+  - dtype/device guards: X/W/B checked float32 + is_cuda + dims (2/2/1); all on
+    same device. CORRECT.
+  - reshape: Y allocated flat {batch*out}; kernel writes row-major i*out+j;
+    reshape({batch,out}) is row-major => element (i,j). CORRECT.
+  - double->float casts: (float)mult, (float)slope. mult=2.0 exact; slope=0.1
+    becomes 0.1f, which is exactly what torch's float32 LeakyReLU uses when the
+    double scalar is applied to a float tensor. CORRECT.
+  - Contiguity: Xc, Wt, Bc all .contiguous() before data_ptr. CORRECT.
+
+(d) ModelNew vs reference (fixed-seed match) — CORRECT
+------------------------------------------------------
+  - self.gemm = nn.Linear(in_features, out_features): identical to reference,
+    constructed first => same RNG draw for weight/bias under fixed seed.
+  - nn.LeakyReLU(negative_slope) constructed after gemm in both; it has no
+    parameters, so it consumes no RNG and cannot perturb the weight init.
+  - Extra attrs (self.multiplier, self.negative_slope) are plain Python floats,
+    no RNG impact.
+  - Fallback path: x = self.gemm(x); x = x*self.multiplier;
+    return self.leaky_relu(x) — byte-for-byte the reference forward. CORRECT.
+  - bias is not None guard holds (nn.Linear default bias=True).
+
+(e) Silent-wrong-answer / order-of-ops — CORRECT
+------------------------------------------------
+torch order: linear = x@W.T + bias; then * multiplier; then leaky_relu.
+Spec: mul_lrelu mult slope (add (macc (matmul sx swt) i j) (bias@!j))
+    = leaky_relu slope (mul (matmul+bias) mult).
+So bias is added BEFORE the multiply, multiply BEFORE leaky_relu. Exact match.
+Implementation realizes this in the same order: GEMM -> bias-add (into y) ->
+fused (y*mult then lrelu). No reordering, no bias-after-mult bug, no
+lrelu-before-mult bug. Float multiply is commutative so mul v mult == mult*v.
+
+Residual risks (all judged acceptable)
+--------------------------------------
+  1. Signed-zero model abstraction (a) — cosmetic, no runtime/eval effect.
+  2. Trusts the imported library kernels (mmcomb_gpu_exact, bias_add_gpu,
+     map_gpu) and their specs; those are existing verified Kuiper components,
+     not part of this change.
+
+Bottom line: genuinely verified, spec faithfully encodes the reference
+semantics, bridge and Python wrapper are correct. Nothing to fix.

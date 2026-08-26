@@ -1,0 +1,64 @@
+Skeptic review — KB MeanVarNorm (#34, #35) functional spec
+===========================================================
+
+(a) Does the spec correspond to mathematical row-wise mean/variance
+normalisation? YES.  The PyTorch InstanceNorm / GroupNorm reference
+is y[r,j] = (x[r,j] - mean_r) * rsqrt(var_r + eps) where
+mean_r = (1/D) Σ x[r,j], var_r = (1/D) Σ x[r,j]^2 - mean_r^2.  The
+post [mean_var_post b d eps inv_d s s'] expands to: for every row
+r < b, slice s'[r*d..(r+1)*d] equals affine_result inv neg_mean_inv
+(slice s ...) for some existentially-bound (sum, sum2, mean, m2,
+var, var_eps, inv, neg_mean_inv) where:
+  - sum  %~ rsum (to_real_seq row)        [Σ x]
+  - sum2 %~ frobenius_sumsq_r (to_real_seq row)  [Σ x²]
+  - mean == sum * inv_d                   [(Σx) * (1/D)]
+  - m2 == sum2 * inv_d                    [(Σx²) * (1/D)]
+  - var == m2 - mean*mean                 [variance]
+  - var_eps == var + eps                  [stabilised]
+  - inv == rsqrt var_eps                  [1/σ]
+  - neg_mean_inv == 0 - mean*inv          [-μ/σ]
+  - output row == affine_result inv neg_mean_inv row
+    where affine_step a b x = add (mul x a) b = a*x + b
+
+So output[j] = inv * x[j] + (-mean*inv) = inv*(x[j] - mean) =
+(x[j] - mean) / sqrt(var + eps), exactly the contract.
+
+The reductions' real-arithmetic counterparts are pinned via the
+[%~] approximation predicate.  The remaining float ops (mul, sub,
+add, rsqrt) are the actual hardware ops; the spec doesn't unfold
+these to real-arithmetic equivalents because rsqrt has no real
+counterpart in Kuiper.Approximates, but they're pinned bit-exactly.
+This is enough to certify "rounded mean/var normalisation, with
+float operations performed in this exact order".
+
+For #35 (GroupNorm) the bridge reshapes inputs so each "row" is a
+group's worth of elements; the Kuiper spec is identity, the
+reshape correctness is bridge-side.
+
+(b) Is the proof genuine? YES.  No assume/admit/magic in
+Kuiper.Spec.MeanVarNorm.{fst,fsti} or
+Kuiper.KB.MeanVarNorm.fst.  The proof chain mirrors L1/L2: per-row
+body uses HReduce.reduce id id over scratch == row to get
+sum1 %~ rsum (to_real_seq row); Map.map_gpu square turns
+scratch into lseq_map sq_step row; HReduce.reduce id id then
+gives sum2 %~ rsum (to_real_seq (lseq_map sq_step row)) which
+unfolds to frobenius_sumsq_r (to_real_seq row).  After that, all
+float arithmetic is concrete; the affine map is verified separately
+in the shared Kuiper.Spec.Frobenius.affine_step (applied via map_gpu).  Loop invariant tracks "rows < vi
+normalised; rows >= vi unchanged".  Two seq_blit/slice equalities
+discharged with Seq.lemma_eq_intro.
+
+(c) Edge cases.
+- b = 0 / d = 0: the latter ruled out by szp; b = 0 makes the
+  forall vacuous.
+- Constant row + eps > 0: var_eps = eps > 0, inv = 1/sqrt(eps),
+  output is all-zero (modulo rounding).  Spec satisfied.
+- Constant row + eps == 0: var_eps = 0, inv = +inf, output is
+  NaN-filled.  Spec satisfied (existentials take +inf and NaN).
+  Matches PyTorch.
+- inv_d not exactly 1/d: the spec doesn't constrain inv_d's
+  semantic meaning, only that mean = sum * inv_d.  Caller must
+  pass the right value (the bridge does).
+- Per-row witnesses are bound *per row* inside
+  row_mean_var_normalized, so different rows can have unrelated
+  statistics.  No cross-row constraints leak.

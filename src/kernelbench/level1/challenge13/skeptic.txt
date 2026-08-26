@@ -1,0 +1,25 @@
+Skeptic review — KB L1 challenge 13 (matmul wrapper)
+========================================================
+
+Verified component
+------------------
+Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
+the GEMM kernel is verified end-to-end in
+src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
+its Inst module).  Kahan-style summation in Naive3 keeps the
+column-reduction error O(eps) regardless of K, which is why we
+use it for every challenge except #1/#2 (where rows/cols/K are
+multiples of 128/128/32 and the BlockTiling2D variant verifies +
+extracts cleanly).  No assume / admit / magic in the kernel
+proofs themselves.
+
+Unverified glue in the .cu bridge
+---------------------------------
+Symmetric matmul.  PyTorch reference does not exploit symmetry (it is just A @ B with A = (A0+A0.T)/2 prebuilt in the model).  Our bridge is plain GEMM — symmetry is not assumed or exploited, so correctness is the same as #7.
+
+Result
+------
+run.sh PASSes against the KernelBench reference (correctness
+check via kernelbench.eval.eval_kernel_against_ref).
+No new verified Kuiper code was written; this is a thin
+bridge over the existing Klas.GEMM.* primitives.

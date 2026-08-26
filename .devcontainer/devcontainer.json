@@ -1,0 +1,19 @@
+{
+  "name": "Default devcontainer",
+  "image": "ghcr.io/fstarlang/kuiper-base:latest",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "FStarLang.fstar-vscode-assistant"
+      ]
+    }
+  },
+  "remoteEnv": {
+  },
+  // Runs only once when container is prepared
+  "onCreateCommand": "git submodule update --init --depth 1 KernelBench",
+  // Runs periodically and/or when content of repo changes
+  "updateContentCommand": "",
+  // These run only when the container is assigned to a user
+  "postCreateCommand": "echo '\\nRun `make -j$(nproc) prepare` to retrieve the selected Kuiper package.\\n'",
+}

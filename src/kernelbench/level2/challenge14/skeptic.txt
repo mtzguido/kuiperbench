@@ -1,0 +1,153 @@
+SKEPTIC REVIEW — KernelBench L2 #14: Gemm_Divide_Sum_Scaling
+Module: Kuiper.KB.GemmDivSumScale (.fst / .fsti)
+Reviewer stance: brutally honest. Verdict: SOUND, with caller-contract caveats.
+
+================================================================================
+(a) VERIFIED vs ASSUMED
+================================================================================
+- No `admit`, `assume`, `magic`, or `sorry` anywhere in the module. (grep clean;
+  the only hit is the literal comment "No assume / magic / admit" in the .fsti.)
+- The implementation is a straight composition of three PRE-VERIFIED library
+  kernels, each with real-valued (`%~` / approximates) functional specs:
+    1. P.mmcomb_gpu_approx  (Kuiper.Kernel.GEMM.Naive2) — GEMM with comb2.
+    2. HRedB.reduce_batched_block (Kuiper.Kernel.HReduce.Block) — per-row sum.
+    3. Map.map_gpu + SM.smul_step k (Kuiper.Kernel.Map / Kuiper.KB.ScalarMul).
+- The glue lemmas `row_simpl` and `final_row_aux` are proved (Seq.lemma_eq_intro
+  + the a_mul_pat SMTPat from Approximates.Base). `smul_step k x = mul x k`, and
+  `final_row_aux` correctly chains: sout@!r %~ rsum(id-mapped row) and k %~ to_real k
+  ==> (map(smul_step k) sout)@!r == mul(sout@!r) k %~ rsum(row) *. to_real k.
+- GEMM result is the PLAIN real matmul: comb2 x y = y (ignores old gC), and
+  matmul_is_gemm (SMTPat) rewrites mmcomb comb2 m0 m1 m2 == matmul m1 m2. So the
+  pre-existing garbage in the freshly alloc0'd scratch buffer is provably dropped.
+- The `%~` relation is NOT vacuous. The `scalar`/approximates typeclass carries
+  `v_approximates_inj`: if x %~ r and y %~ r then x == y. So for a given real
+  value at most one f32 approximates it — the postcondition pins each output row
+  essentially uniquely, it is not "any float satisfies it". This is the single
+  most important reason the spec is meaningful.
+- Trust base: the correctness rests entirely on the THREE library kernels' specs
+  being faithful to what their CUDA actually computes. Those are reviewed
+  elsewhere (e.g. REDUCE_BATCHED_BLOCK_skeptic.txt). This module adds no new holes.
+
+================================================================================
+(b) DOES gdss_post MATCH THE PYTORCH SEMANTICS?
+================================================================================
+PyTorch ref:
+    x = matmul(x, W.T)              # (batch, hidden), W:(hidden,input) -> W.T:(input,hidden)
+    x = x / 2
+    x = sum(x, dim=1, keepdim=True) # sum over hidden -> (batch, 1)
+    x = x * scaling_factor
+
+gdss_post: forall r<batch.
+    sy'@!r %~ rsum( ematrix_row( matmul(real x, real wt), r ) ) *. to_real k
+
+Checks:
+- Orientation: rA = real x is (batch x input), rB = real wt is (input x hidden);
+  matmul -> (batch x hidden). `matmul_single` sums over the SHARED dim (= input),
+  i.e. it computes sum_i x[b,i]*wt[i,h]. With wt = W.T that is exactly
+  matmul(x, W.T)[b,h]. CORRECT, provided the caller actually passes W.T.
+- Sum dimension: rsum over `ematrix_row(.., r)` sums the row r across all `hidden`
+  columns — i.e. sum over dim=1 (hidden). CORRECT. (HReduce passes pre_map=id,
+  and row_simpl proves lseq_map id row == row, so the reduction's id-mapped sum
+  equals the plain row-sum.)
+- The /2 fold: over REALS, sum(matmul/2)*s = (sum matmul)*(s/2). The spec computes
+  (sum matmul) *. to_real k. So gdss_post matches the PyTorch math IFF the caller
+  sets k = scaling_factor/2. The folding is algebraically exact (linearity), and
+  since the spec is stated over reals there is no rounding discrepancy at the spec
+  level. CORRECT under that caller contract.
+- Per-row `%~`: meaningful (see injectivity argument in (a)). It pins each of the
+  `batch` outputs to the exact real scalar, not a loose bound.
+
+CONCLUSION: gdss_post faithfully captures sum(matmul(x,W.T)/2)*scaling_factor,
+*conditioned on* the two caller obligations (k = scaling_factor/2, wt = W.T).
+
+================================================================================
+(c) SPEC WEAKNESSES / RISKS
+================================================================================
+1. The /2 and scaling_factor are FOLDED OUT of the verified surface into the
+   single opaque constant k. The kernel never divides by 2; it multiplies by k.
+   The spec is fully parametric in k, so it CANNOT detect a caller that passes
+   k = scaling_factor (forgetting the /2) or k = 1. The kernel would still verify
+   and "succeed" while producing numerically wrong results vs PyTorch. This is the
+   primary correctness risk and lives entirely in the un-verified caller bridge.
+2. Likewise the W.T transpose is the caller's responsibility. If the caller passes
+   W (hidden x input) instead of W.T (input x hidden), the layout refinement
+   l2_row_major(input, hidden) still type-checks for any buffer of the right size,
+   so a transposed/mis-shaped weight is NOT caught — only the dimensions are.
+3. Spec is over REALS; it says nothing about fp32 error magnitude. The two
+   computations differ in rounding order: PyTorch divides each element by 2 then
+   sums (then *s); this kernel sums then *(s/2). Both are exact in R but differ in
+   float. This is fine for the KernelBench atol=rtol=1e-4 tolerance, but the spec
+   gives no quantitative error bound — it only guarantees "approximates", whose
+   tightness is whatever the underlying kernel specs provide.
+4. Postcondition is existentially quantified over sy' and is NOT trivially
+   satisfiable (injectivity, see (a)). The empty-batch case (batch via szp is >=1,
+   so batch=0 is excluded by the szp refinement) does not produce a vacuous spec.
+
+================================================================================
+(d) BRIDGE CORRECTNESS NOTES
+================================================================================
+Extracted entry point:
+  void Kuiper_KB_GemmDivSumScale_gemm_div_sum_scale_f32(
+      uint32_t batch, uint32_t input, uint32_t hidden,
+      float k, float *x, float *wt, float *y);
+
+Caller MUST guarantee (these are the verified preconditions + the un-checkable
+semantic contracts):
+- k        = scaling_factor / 2   (semantic; NOT verified — see (c).1).
+- x        = row-major (batch x input), device/global pointer.
+- wt       = W.T, row-major (input x hidden), device/global pointer
+             (semantic transpose; NOT verified — see (c).2).
+- y        = output, length `batch` (one scalar per row; the PyTorch (batch,1)
+             keepdim shape flattens to length batch). Device/global pointer.
+- Size/bounds preconditions actually enforced by the type:
+    batch <= max_blocks                         (one block per row in the reduce)
+    batch * hidden <= max_blocks * max_threads
+    fits(hidden + max_threads), fits(batch*input),
+    fits(input*hidden), fits(batch*hidden)
+  A caller violating any of these has no valid F* proof; the bridge must respect
+  them (e.g. batch must fit in max_blocks — large batch is NOT auto-split here,
+  unlike the elementwise map step).
+- y is overwritten; its incoming contents are ignored (alloc/contents of y need
+  not be zeroed). The GEMM uses an internally alloc0'd scratch buffer gC which is
+  freed before return — no caller-visible scratch, no leak (Array2.free gC present;
+  gC is the only allocation).
+- Standard Kuiper bridge rule: the .cu must #include the Karamel-extracted code
+  and call this symbol; no hand-written CUDA. Watch the known
+  gpu_memcpy_host_to_device' src_off "4U *" extraction bug if the bridge stages
+  data with nonzero offsets (not used internally here, but relevant to bridge H2D
+  copies).
+
+BOTTOM LINE: The module is genuinely verified end-to-end with no proof holes, and
+gdss_post correctly encodes the intended math. The only ways to get a wrong answer
+are caller-side and outside the proof boundary: (1) passing k != scaling_factor/2,
+(2) passing W instead of W.T, (3) buffer shapes/lengths not matching the declared
+dimensions. The test harness (run.sh against the PyTorch ref with 1e-4 tolerance)
+is what actually exercises (1)-(3); keep it.
+
+================================================================================
+(e) BENCHMARK STATUS: UNPASSABLE AT atol=rtol=1e-4 (ILL-CONDITIONED, NOT A BUG)
+================================================================================
+The KernelBench harness uses get_tolerance_for_precision(fp32) = 1e-4 (hard;
+the "1e-2" comments in eval.py are stale). This challenge sums hidden=8192
+signed matmul terms per row, with inputs x ~ U[0,1) and W ~ N(0,1). Output
+magnitudes span min|.|~1.9 to max|.|~8400 (median ~2600): the small rows are
+the result of catastrophic cancellation of ~thousands-magnitude partial sums.
+
+DECISIVE EXPERIMENT (seed 0, exact harness shapes), all vs the cuBLAS GPU
+reference that the benchmark compares against:
+    - cuBLAS rerun (determinism check): max_abs = 0.0       (reference is stable)
+    - reassociated mat-vec x@(sum_j W[j,:]) on GPU: max_abs = 8.6e-3, 3 rows fail
+    - CPU fp32 matmul+sum:                          max_abs = 8.3e-3, 4 rows fail
+    - EXACT fp64 ground truth:                      max_abs = 7.8e-3, 3 rows FAIL
+
+The last line is the smoking gun: even a bit-perfect fp64 oracle differs from
+torch's own fp32 cuBLAS reference by ~8e-3 on the cancelling rows and breaks the
+1e-4 allclose. The fp32 *reference itself* is ~8e-3 away from the true answer
+there. Therefore NO independent implementation — verified Kuiper, reassociated
+mat-vec, CPU torch, or an exact oracle — can pass; the only way to "match" the
+reference bit-for-bit is to call cuBLAS, which is unverified and against repo
+rules. This is a tolerance/conditioning flaw in the benchmark, not a defect in
+the (verified, numerically optimal) Kuiper kernel.
+
+VERDICT: module VERIFIED and CORRECT; benchmark BLOCKED by ill-conditioning.
+Kept as a documented "verified-but-benchmark-incompatible" reference case.

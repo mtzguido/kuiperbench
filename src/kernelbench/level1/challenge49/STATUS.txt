@@ -1,0 +1,71 @@
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 49 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+STATUS — KernelBench L1 #49 Max reduction over dim=1 (DEFERRED)
+================================================================
+
+Reference
+---------
+torch.max(x, dim=1)[0]  on shape (128, 4096, 4095) → (128, 4095).
+
+Why deferred
+------------
+This challenge is structurally identical to #47 (sum) and #48 (mean) at
+the layout / per-row level, but the device-side primitive
+[Kuiper.Kernel.HReduce.Block.reduce_batched_block] is hard-coded to the
+addition monoid (zero, +.) at every level of its 706-line proof.
+
+  src/lib/kernel/Kuiper.Kernel.HReduce.Block.fst:117,129,145,147,217,
+                                                341,351,458,470,476,
+                                                482,554,560,...
+
+Generalising it to an arbitrary commutative monoid (m, ⊕, e) — which
+is what is needed to instantiate at (f32, fmax, -∞) for max-reduction —
+involves:
+
+  - parameterising every [rsum]/[+.] lemma on the monoid laws;
+  - reproving [rsum_seq_stride_step] (the per-stride accumulation
+    invariant) for a general associative ⊕;
+  - threading the identity element [e] through tree-reduction
+    initialisation in shared memory;
+  - re-checking the [%~] approximation chain (which only holds when
+    the device-side and real-arithmetic operations agree, which they
+    do exactly for max but only up to floating-point error for sum).
+
+A sound, careful generalisation is well over the 2-hour wall budget
+this work was scoped to.  Per the project rules ("if it's >>2h, stop
+and report"), this challenge is deferred until either:
+
+  (a) a follow-up PR generalises [reduce_batched_block] to monoids and
+      adds an [(fmax, -∞)] instance, or
+  (b) a dedicated max-reduction primitive (single-purpose, narrower
+      proof surface) is added alongside the sum-reduction one.
+
+Spec sketch (for the future)
+----------------------------
+The natural shape mirrors [Kuiper.Spec.SumReduceDim.sumreduce_post]:
+
+    let maxreduce_post (rows cols : nat)
+                       (sx : chest2 t rows cols)
+                       (sout' : lseq t rows) : prop =
+      forall (r : nat). r < rows ==>
+        (sout' @! r) == seq_max (ematrix_row sx r)
+
+with [seq_max] defined inductively over the row.  Unlike sum,
+floating-point [fmax] is associative and bit-equal regardless of
+reduction order, so the spec can pin equality (no [%~]) — a strict
+strengthening over the sum/mean specs.
+
+Pipeline (when unblocked)
+-------------------------
+  1. View (B, D, M) row-major as 2-D (B*M, D) via the existing
+     [Kuiper.Tensor.Layout.BCMPages] layout (b=B, hw=M, c=D).
+  2. One launch of the hypothetical [reduce_batched_block_max] primitive
+     with pre_map = id, monoid = (fmax, F32.neg_inf).
+  3. Output: length-(B*M) Array1 (l1_forward), reshape to (B, M) on
+     the host bridge.

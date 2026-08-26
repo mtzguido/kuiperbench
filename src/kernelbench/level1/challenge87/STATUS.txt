@@ -1,0 +1,106 @@
+UPDATED 2026-06-14: #87 reuses challenge62's verified general-conv bridge,
+which computes output size via the VERIFIED helper conv2d_out_dim and
+self-allocates the output (no unverified C++ division, no torch::empty).
+The Conv2D.Naive kernel is admit/assume/magic-free; the spec connection
+is a real Pulse proof, not an `assume pure`.  See skeptic.txt.
+========================================================================
+
+UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
+test (src/kernelbench/run_test.py 1 87 -> PASS, bit-correct vs the PyTorch
+reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
+kernel, bridge, python wrapper and run.sh are all in place. The text below
+is HISTORICAL and was written before the kernel landed; treat its
+"deferred"/"pending" wording as obsolete.
+========================================================================
+
+KernelBench L1 #87 — Pointwise 2D Convolution (1×1 conv)
+=========================================================
+
+Reference (from KernelBench/level1/87_conv_pointwise_2D.py):
+
+    nn.Conv2d(in_channels=64, out_channels=128, kernel_size=1,
+              stride=1, padding=0, bias=False)
+
+    input  : (B=16, 64, 1024, 1024)
+    output : (16, 128, 1024, 1024)        ← 1×1 preserves spatial
+
+Reduction depth per output pixel: 64 (just the C_in dot product).
+Total fmadds: 16 * 128 * 1024 * 1024 * 64 ≈ 1.4e11 (~140 GFLOPs).
+
+Pointwise = per-pixel matmul: at each (b, h, w), the output channel
+vector is `weight @ x[b, :, h, w]` where weight is (C_out, C_in).
+NCHW layout makes this a contiguous matmul:
+
+  - x[b, :, :, :] in memory is (C_in, H*W) row-major  → matmul "B".
+  - weight is (C_out, C_in) row-major                  → matmul "A".
+  - y[b, :, :, :] in memory is (C_out, H*W) row-major → matmul "C".
+
+For #87: matmul shape per batch is
+    (C_out=128) × (C_in=64) × (H*W=1048576)
+The existing `Kuiper.Kernel.GEMM.BlockTiling2D`
+(`g_gemm_f32_128x128x32_8x8`) handles this directly: rows=128 ≥ 128,
+cols=H*W ≥ 128, shared=64 ≥ 32, all multiples of the 128×128×32 tile
+or trivially padded.
+
+
+Status
+------
+
+PHASE 0 (functional spec) :: SHIPPED, verified ADMIT=0.
+
+   src/lib/spec/Kuiper.Spec.PointwiseConv2D.{fsti,fst}
+
+   - Per-pixel left-fold accumulator [__pwconv2d_single] over [ic],
+     mirroring Spec.GEMM.__matmul_single exactly.
+   - Whole-tensor [pwconv2d] + index lemma with SMTPat.
+   - Weight is `Kuiper.EMatrix.chest2 et C_out C_in` — the natural
+     shape consumed by the existing GEMM kernels.
+
+PHASE 1 (kernel orchestrator + bridge + Python + run.sh) :: NOT
+        STARTED, but UNBLOCKED.
+
+Phase 1 plan
+------------
+
+#87 is the first challenge in this cluster ready to ship: it reuses
+the verified `Kuiper.Kernel.GEMM.BlockTiling2D` kernel directly via
+a per-batch loop in the bridge.  No new GPU kernel proofs are
+required.
+
+Steps (next session):
+
+  1. Write `src/kernelbench/level1/challenge87/Kuiper.KB.PointwiseConv2D.{fst,fsti}`:
+     a Pulse `fn` that loops `b = 0..B-1`, calls the existing
+     `Kuiper.Kernel.GEMM.BlockTiling2D` per batch with the
+     appropriate sub-array views, and proves the per-batch
+     postcondition matches `pwconv2d_single`.
+
+     Key proof obligation: a one-shot inductive lemma showing
+     `__matmul_single weight x_slice oc hw == __pwconv2d_single x
+     weight b oc oh ow cin` where `hw = oh*W + ow`.  Both are
+     left-folds over `cin` of the same multiplications — straight
+     inductive proof on `to`.
+
+  2. Write `kuiper_pwconv2d_bridge.cu`: include
+     `Kuiper_GEMM_BlockTiling2D.{h,cu}` and loop over the batch axis
+     calling the extracted symbol.  Mirror the structure of
+     `src/kernelbench/level1/challenge1/kuiper_gemm_bridge.cu`.
+
+  3. Write `87_kuiper_pwconv2d.py`: thin `nn.Module` calling the
+     bridge.
+
+  4. Write `run.sh` (single-line `python3 run_test.py 1 87`).
+
+  5. Add a skeptic check (numeric tolerance vs. PyTorch reference).
+
+Estimated Phase-1 LOC: ~150 F* + ~80 CUDA bridge + ~25 Python +
+~5 run.sh = ~260 LOC.  All single-day work.
+
+See also
+--------
+
+  src/kernelbench/level1/CONV_DEPTHWISE_DESIGN.md
+        — design doc for the whole #82-#87 cluster.
+  src/kernelbench/level1/challenge1/kuiper_gemm_bridge.cu
+        — bridge template (also `#include`s the BlockTiling2D kernel
+          and calls the extracted symbol).

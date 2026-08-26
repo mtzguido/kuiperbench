@@ -1,0 +1,85 @@
+SKEPTIC REVIEW — KernelBench L1 #11 (Kuiper.KB.Matmul4D)
+========================================================
+einsum("bijl,lk->bijk"): C[b,i,j,k] = sum_l A[b,i,j,l]*B[l,k], same B per (b,i,j) slice.
+
+(a) GENUINELY VERIFIED vs ASSUMED  -- VERDICT: genuinely verified.
+  - grep -nE 'admit|assume|magic|sorry|admit_smt' on .fst/.fsti: the ONLY hits are the
+    "Zero assume - zero magic - zero admit" comment lines. No proof holes.
+  - ./fstar.sh Kuiper.KB.Matmul4D.fst  => "All verification conditions discharged successfully".
+  - ./fstar.sh Kuiper.KB.MatmulND.fst  => still verifies (generic val exposure did not break ch10).
+  - obj/Kuiper_KB_Matmul4D.cu: grep for reshape / FStar_SizeT_v / SizeT_v => NONE.
+    The four reshape4to3/reshape3to4(_eq) ghost calls produce ZERO runtime code (they are
+    `ghost` fns); the extracted kernel is just `nm = b*i*j` (uint32) + one Kahan-summed GEMM
+    over gA[trow*l+x]*gB[x*k+tcol] -> gC[trow*k+tcol]. The ghost reshape is a true no-op and
+    there is no SizeT_v leak. The whole 4-D layer compiles away to the same flat GEMM as ch10.
+
+(b) DOES THE SPEC CAPTURE 4-D BATCHED MATMUL?  -- VERDICT: yes, faithfully.
+  - l4_row_major = major_on 0 nested over (b,i,j,l): standard row-major, last dim contiguous,
+    layout_size = b*i*j*l, matching the contiguous torch buffer.
+  - flat4to3 collapses leading two dims to (b*i,j,l); flat4to2 = flat3to2 . flat4to3 lands in
+    EMatrix (b*i*j, l). flat4to2_eq proves (by refl) that flat3to2 of the (b*i,j,l) view of s
+    equals flat4to2 s, i.e. the chained flatten linearizes row (b*i*j)-major exactly as the C
+    buffer is laid out. flat4to2_out + from_to3 (proven by extensionality + layout injectivity)
+    close the backward direction. No layout fudging.
+  - Pre `flat4to2 eA %~ rA` / post `flat4to2 eC' %~ MS.matmul rA rB`: this is exactly batched
+    matmul with a SHARED B -- every flattened row r of A is multiplied by the same rB, which is
+    precisely einsum bijl,lk->bijk. Correct semantics.
+  - %~ / Kahan cancellation risk at atol=rtol=1e-4, K=l=256, U[0,1) inputs: all summands
+    A*B are products of non-negatives, so the reduction is a sum of ~256 non-negative terms
+    (no catastrophic cancellation). Kahan only tightens error. No realistic tolerance risk.
+
+(c) BRIDGE CORRECTNESS  -- VERDICT: correct dims/semantics; ONE non-overflow-safe guard (low impact).
+  - Passes raw contiguous buffers, dims b=size0,i=size1,j=size2,l=size3,k=B.size1; no transpose,
+    flatten, or copy of its own. Output torch::empty({b,i,j,k}) shape correct. empty (not zeros)
+    is safe: the GEMM writes EVERY gC[trow*k+tcol] cell (nm*k cells, full coverage), no read of
+    uninitialized C. A.size(3)==B.size(0) and float32/CUDA/device guards present.
+  - Most uint32-ABI guards are division-based and overflow-safe: bi<=U/j, bij<=U/l, bij<=U/k,
+    l<=U/k, and size_req bij<=2147483647/k. The launch bound uses 2^31-1 while the true
+    size_req is m*n <= max_blocks*max_threads = 2^31 (=2147483648); off-by-one in the SAFE
+    (conservative) direction -- rejects only the single value nm*k==2^31. Not a bug.
+  - REAL NIT: `int64_t bi = b * i; TORCH_CHECK(bi <= UINT32_MAX);` multiplies BEFORE checking.
+    b,i are each only bounded by <= UINT32_MAX, so b*i can reach ~1.84e19 > INT64_MAX(9.22e18)
+    => signed int64 overflow (UB) and the subsequent check is then unreliable. The inline comment
+    "bi <= UINT32_MAX^2 < int64 max" is FALSE. This is the one guard not written in the
+    division-based style used everywhere else (should be `i <= UINT32_MAX / b` first).
+    Practical impact ~nil: an A with size(0),size(1) ~4e9 is unallocatable, so this branch is
+    unreachable in practice -- but it contradicts the stated "overflow-safe" guarantee and the
+    comment is wrong. Severity: Low.
+
+(d) SOUNDNESS GAPS extracted-CUDA vs spec  -- VERDICT: none found.
+  - szp-vs-nat: bi = b *^ i (szp) with `assert SZ.v bi == SZ.v b * SZ.v i`; pbi = SZ.v bi feeds
+    the ghost reshapes. SZ.fits(b*i) is DERIVED (pts_to_ref_located4 on gA's layout_size b*i*j*l),
+    not assumed. The nat product b*i*j matches extracted `nm = b*i*j`.
+  - The two chained ghost reshapes (4->3->2 forward, 2->3->4 back) are runtime no-ops over the
+    SAME A4.core buffer (lower/raise'); extraction confirms zero code emitted.
+  - Aliasing: A4/A3/A2 views all sit over one core buffer via lower/raise; Pulse separation logic
+    tracks single ownership through map_loc, so no double-ownership / data race -- and it is
+    machine-checked, not argued informally.
+  - Generic `val matmul_nd` exposure: ch10 MatmulND.fst re-verifies and matmul_nd_f32 is unchanged;
+    matmul4d only CALLS the polymorphic val (inline_for_extraction noextract, no standalone code).
+    No regression to challenge 10.
+
+BOTTOM LINE: The verification is real and the spec genuinely encodes einsum bijl,lk->bijk with a
+shared B. The 4-D flatten is a verified ghost no-op (confirmed in extracted CUDA). Only issue is a
+cosmetic/robustness one: the single `b*i` ABI guard multiplies before bounds-checking (potential
+int64 UB at astronomically-large, unallocatable dims) and carries a false justifying comment.
+Recommend rewriting it division-style for consistency; not a blocker.
+
+---------------------------------------------------------------------------
+UPDATE (guard migration): the numeric overflow / launch-bound checks were
+MOVED from the C++ bridge into the verified kernel using Kuiper.Assert.dguard
+(extracted to KPR_GUARD, which abort()s at runtime on failure):
+  - 5 division-style overflow guards (b*i, b*i*j, b*i*j*l, b*i*j*k, l*k fit
+    uint32), each computed BEFORE the corresponding machine multiply so it
+    fires even when the C product would silently wrap.
+  - 1 launch-bound guard: bijk <= max_blocks*max_threads (2^31), which lets us
+    DROP the `pure (K.size_req ...)` precondition from matmul4d/matmul4d_ty and
+    re-establish it at runtime.
+The kernel re-verifies green; extracted .cu has zero FStar_SizeT_v leaks and 6
+KPR_GUARD lines (KPR_GUARD(i <= 4294967295U / b), ..., bijk <= 2147483648U).
+This RESOLVES finding (c): the bridge no longer does the pre-multiply `b*i`
+overflow check (its int64-UB corner is gone); the bridge now keeps only the
+torch/ABI-boundary checks the kernel cannot see (dim/dtype/device/shape-match,
+per-dim <= UINT32_MAX cast faithfulness, positivity). Caveat: dguard failure is
+a hard abort (not a recoverable TORCH_CHECK exception); acceptable for these
+unallocatable-dimension corner cases.

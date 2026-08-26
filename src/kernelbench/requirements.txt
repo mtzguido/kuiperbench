@@ -1,0 +1,23 @@
+# Minimal deps for `make test-kb-*`. These are the packages that
+# kernelbench.eval / kernelbench.utils import at module load when we
+# call eval_kernel_against_ref. We deliberately omit upstream's heavy
+# unused deps (cupy, modal, transformers, datasets, tilelang,
+# nvidia-cutlass-dsl, triton, nsight-python) since they are not on
+# any code path our run_test.py exercises.
+
+# The default PyTorch 2.9 wheel omits Pascal sm_61, which our self-hosted P620
+# uses. The CUDA 12.6 wheel retains Pascal support and matches the CI toolkit.
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.9.1+cu126
+numpy
+ninja>=1.13.0
+
+# imported at module load by KernelBench/src/kernelbench/{utils,eval}.py
+tqdm>=4.67.1
+python-dotenv>=1.2.1
+einops>=0.8.1
+pydantic
+requests
+litellm
+openai
+packaging
