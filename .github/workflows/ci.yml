@@ -39,10 +39,18 @@ jobs:
       - name: Install fixed verification environment
         run: make -j4 prepare
 
-      - name: Verify and extract
-        # F* workers can have large SMT heaps. Two concurrent workers fit on
-        # the standard hosted runner; using all four cores is OOM-killed.
-        run: make -j2 all
+      - name: Verify
+        run: |
+          jobs=$(scripts/ci-jobs.sh 3072)
+          echo "Verifying with $jobs job(s)."
+          make -j"$jobs" verify
+
+      - name: Extract
+        run: |
+          # Extraction has a higher per-process memory peak than verification.
+          jobs=$(scripts/ci-jobs.sh 8192)
+          echo "Extracting with $jobs job(s)."
+          make -j"$jobs" extract-all
 
       - name: Check generated distribution
         run: |

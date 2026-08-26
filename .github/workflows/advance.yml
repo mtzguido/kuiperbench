@@ -80,8 +80,12 @@ jobs:
         if: ${{ steps.pin.outputs.moved == 'true' }}
         run: |
           make -j4 prepare
-          # Match the hosted verification job's memory-safe F* concurrency.
-          make -j2 all
+          verify_jobs=$(scripts/ci-jobs.sh 3072)
+          echo "Verifying with $verify_jobs job(s)."
+          make -j"$verify_jobs" verify
+          extract_jobs=$(scripts/ci-jobs.sh 8192)
+          echo "Extracting with $extract_jobs job(s)."
+          make -j"$extract_jobs" extract-all
           make -j4 dist
           git diff --check
 
