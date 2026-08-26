@@ -59,6 +59,26 @@ make -j$(nproc) test-kb-1    # compare one solution with KernelBench on a GPU
 make -j$(nproc) test-kb-all  # compare every solution with KernelBench on a GPU
 ```
 
+## GPU testing
+
+Continuous integration performs formal verification, extraction, and a check
+that the generated `dist/` files are current. It does not compile or execute
+the kernels on a GPU.
+
+Researchers can run the experimental comparisons on their own CUDA-equipped
+systems. Initialize the KernelBench submodule, then run one challenge or the
+complete collection:
+
+```bash
+git submodule update --init KernelBench
+make -j$(nproc) test-kb-1
+make -j$(nproc) test-kb-all
+```
+
+The complete collection may require substantial GPU memory, depending on the
+KernelBench inputs. These comparisons complement the formal results described
+above; they are not part of the repository's CI guarantee.
+
 To check against an existing Kuiper package, set `KUIPER_HOME`:
 
 ```bash

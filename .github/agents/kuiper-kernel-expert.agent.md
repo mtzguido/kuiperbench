@@ -38,8 +38,8 @@ copy package modules into KuiperBench.
    aggregate code.
 6. Run `make -j$(nproc) verify extract-all` without `ADMIT=1`. Refresh `dist/`
    when generated output changes.
-7. Run the relevant `test-kb-N` target on a CUDA runner. CPU verification and
-   extraction do not require a GPU.
+7. Run the relevant `test-kb-N` target on a CUDA-equipped system when one is
+   available. CI performs verification and extraction but not GPU testing.
 
 ## Review standard
 

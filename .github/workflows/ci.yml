@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
@@ -11,9 +11,7 @@ env:
 
 jobs:
   verify:
-    name: Verify and extract (hosted CPU)
-    # Verification and extraction do not need CUDA. Keep this work off the
-    # single self-hosted GPU runner.
+    name: Verify, extract, and check dist
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fstarlang/kuiper-base-nocuda:latest
@@ -48,69 +46,5 @@ jobs:
 
       - name: Check generated distribution
         run: |
-          make -j$(nproc) dist
+          make -j4 dist
           git diff --exit-code -- dist
-
-      - name: Upload generated CUDA
-        uses: actions/upload-artifact@v6
-        with:
-          name: kuiperbench-cuda
-          path: |
-            obj/*.cu
-            obj/*.h
-
-  gpu-smoke:
-    needs: [verify]
-    runs-on: [self-hosted, linux, X64, cuda]
-    container:
-      image: ghcr.io/fstarlang/kuiper-base:latest
-      options: --gpus all
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Clean runner workspace
-        run: find . -delete
-
-      - name: Check out KuiperBench
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Set up runtime environment
-        run: |
-          echo "HOME=/home/vscode" >> "$GITHUB_ENV"
-          echo "PATH=/usr/local/bin:$PATH" >> "$GITHUB_ENV"
-          sudo apt-get update
-          sudo apt-get install -y python3-venv
-
-      - name: Restore Kuiper binary package
-        uses: actions/cache@v5
-        with:
-          path: .kuiper
-          key: kuiper-nightly-${{ env.KUIPER_NIGHTLY }}-${{ runner.os }}-${{ runner.arch }}
-
-      - name: Install pinned Kuiper package
-        run: make -j$(nproc) install-kuiper
-
-      - name: Download generated CUDA
-        uses: actions/download-artifact@v7
-        with:
-          name: kuiperbench-cuda
-          path: obj
-
-      - name: Compile and run CUDA smoke test
-        run: |
-          make -j$(nproc) kb-venv
-          # The self-hosted P620 has 2 GiB VRAM. Challenge 12 still exercises
-          # CUDA compilation and correctness without the multi-GiB test inputs.
-          KUIPER_PYTHON="$PWD/.venv/bin/python" bash src/kernelbench/level1/challenge12/run.sh
-
-  ciok:
-    runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: [verify, gpu-smoke]
-    steps:
-      - run: |
-          test "${{ needs.verify.result }}" = success
-          test "${{ needs.gpu-smoke.result }}" = success

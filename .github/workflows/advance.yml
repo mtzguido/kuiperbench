@@ -1,6 +1,6 @@
 name: Advance Kuiper package
 
-# A KBENCH_ADVANCE_GH_TOKEN PAT is optional but recommended: PRs opened with
+# A KUIPERBENCH_ADVANCE_GH_TOKEN PAT is optional but recommended: PRs opened with
 # GITHUB_TOKEN do not trigger other workflows. The PAT needs Contents and Pull
 # requests read/write access to mtzguido/kuiperbench.
 
@@ -144,8 +144,9 @@ jobs:
 
       - name: Commit and open pull request
         env:
-          GH_TOKEN: ${{ secrets.KBENCH_ADVANCE_GH_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.KUIPERBENCH_ADVANCE_GH_TOKEN || github.token }}
           LATEST: ${{ needs.verify_candidate.outputs.latest }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           branch=advance/kuiper-package
           title="Advance Kuiper package to $LATEST"
@@ -168,5 +169,5 @@ jobs:
           if [ -n "$pr" ]; then
             gh pr edit "$pr" --title "$title" --body "$body"
           else
-            gh pr create --base main --head "$branch" --title "$title" --body "$body"
+            gh pr create --base "$DEFAULT_BRANCH" --head "$branch" --title "$title" --body "$body"
           fi
