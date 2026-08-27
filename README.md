@@ -36,7 +36,7 @@ Z3, extraction plugin, and CUDA headers.
 
 ## Reproducing the verification
 
-The selected Kuiper nightly is recorded by `KUIPER_NIGHTLY` in the `Makefile`.
+The selected Kuiper nightly is recorded in the root-level `kuiper-version.txt` file.
 The first command retrieves it into the ignored `.kuiper/` directory; later
 checks reuse the same version.
 

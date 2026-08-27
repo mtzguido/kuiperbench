@@ -25,7 +25,7 @@ KUIPER_HOME_MANAGED := 1
 else
 KUIPER_HOME_MANAGED := 0
 endif
-KUIPER_NIGHTLY ?= 2026-08-25
+KUIPER_NIGHTLY ?= $(strip $(file <kuiper-version.txt))
 ifeq ($(KUIPER_HOME_MANAGED),1)
 # Encoding the pin in the target makes a nightly change invalidate the
 # installed package. The install recipe also removes outputs checked against

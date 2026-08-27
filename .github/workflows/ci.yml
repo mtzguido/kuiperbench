@@ -6,9 +6,6 @@ on:
   pull_request:
   workflow_dispatch:
 
-env:
-  KUIPER_NIGHTLY: 2026-08-25
-
 jobs:
   verify:
     name: Verify, extract, and check dist
@@ -30,11 +27,18 @@ jobs:
           echo "HOME=/home/vscode" >> "$GITHUB_ENV"
           echo "PATH=/usr/local/bin:$PATH" >> "$GITHUB_ENV"
 
+      - name: Read Kuiper nightly pin
+        id: kuiper_pin
+        run: |
+          nightly=$(<kuiper-version.txt)
+          [[ "$nightly" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
+          echo "nightly=$nightly" >> "$GITHUB_OUTPUT"
+
       - name: Restore Kuiper binary package
         uses: actions/cache@v5
         with:
           path: .kuiper
-          key: kuiper-nightly-${{ env.KUIPER_NIGHTLY }}-${{ runner.os }}-${{ runner.arch }}
+          key: kuiper-nightly-${{ steps.kuiper_pin.outputs.nightly }}-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install fixed verification environment
         run: make -j4 prepare
