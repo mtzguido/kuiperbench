@@ -43,8 +43,7 @@ type cumprod_fw_ty (t:Type0) {| scalar t, real_like t |} =
                { is_global input  })
      (output : array2 t (l2_row_major (SZ.v b) (SZ.v d))
                { is_global output })
-     (#sx  : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
-     (#sy0 : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
+     (#sx #sy0 : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
      requires
        cpu **
        on gpu_loc (input  |-> sx) **

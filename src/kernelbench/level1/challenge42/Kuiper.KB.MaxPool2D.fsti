@@ -50,10 +50,7 @@ val pool_out_len_1d_sz
 inline_for_extraction noextract
 type maxpool2d_axis_fw_ty =
   fn
-  (k : szp)
-  (s : szp)
-  (p : szp)
-  (d : szp)
+  (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp)
   (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) })
@@ -84,10 +81,7 @@ val maxpool2d_axis_fw_f32 : maxpool2d_axis_fw_ty
 inline_for_extraction noextract
 type maxpool2d_axis_fw_rm_ty =
   fn
-  (k : szp)
-  (s : szp)
-  (p : szp)
-  (d : szp)
+  (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) /\
@@ -123,10 +117,7 @@ val maxpool2d_axis_fw_rm_f32 : maxpool2d_axis_fw_rm_ty
 inline_for_extraction noextract
 type maxpool2d_axis_alloc_ty =
   fn
-  (k : szp)
-  (s : szp)
-  (p : szp)
-  (d : szp)
+  (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (input : array2 f32 (l2_row_major bc l) { is_global input })
@@ -170,17 +161,7 @@ val maxpool2d_axis_alloc_f32 : maxpool2d_axis_alloc_ty
 inline_for_extraction noextract
 type maxpool2d_full_alloc_ty =
   fn
-  (kh : szp)
-  (kw : szp)
-  (sh : szp)
-  (sw : szp)
-  (ph : szp)
-  (pw : szp)
-  (dh : szp)
-  (dw : szp)
-  (bc : szp)
-  (h : szp)
-  (w : szp)
+  (kh kw sh sw ph pw dh dw bc h w : szp)
   (#_ : squash (SZ.fits (SZ.v bc * SZ.v h)))
   (input : array2 f32 (l2_row_major (bc *^ h) w) { is_global input })
   (#fIn : perm)

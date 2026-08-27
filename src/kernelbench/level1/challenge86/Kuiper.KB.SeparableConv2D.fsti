@@ -105,16 +105,9 @@ let separable_size_req
 inline_for_extraction noextract
 type separable_alloc_ty =
   fn
-  (b : szp)
-  (c : szp)
-  (h_in : szp)
-  (w_in : szp)
-  (kh : szp)
-  (kw : szp)
-  (stride : szp)
+  (b c h_in w_in kh kw stride : szp)
   (pad : sz)
-  (cout : szp)
-  (h_out : szp)
+  (cout h_out : szp)
   (w_out : szp { separable_size_req b c h_in w_in kh kw stride cout h_out w_out })
   (gx : array1 f32 (l1_forward (b * c * h_in * w_in))
         { is_global gx })
@@ -126,8 +119,7 @@ type separable_alloc_ty =
         { is_global gw_pw })
   (gbias_pw : array1 f32 (l1_forward cout)
         { is_global gbias_pw })
-  (#fx : perm) (#fwd : perm) (#fbd : perm)
-  (#fwp : perm) (#fbp : perm)
+  (#fx #fwd #fbd #fwp #fbp : perm)
   (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
   (#sw_dw : erased (chest1 f32 (c * 1 * kh * kw)))
   (#sbias_dw : erased (chest1 f32 c))

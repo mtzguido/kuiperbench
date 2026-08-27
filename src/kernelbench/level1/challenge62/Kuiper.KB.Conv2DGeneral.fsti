@@ -14,14 +14,7 @@ open Kuiper.Spec.Conv2D
 open Kuiper.Kernel.Conv2D.Naive
 inline_for_extraction noextract
 type conv2d_general_ty (t:Type0) {| scalar t |} =
-  fn (b : szp)
-     (cin : szp)
-     (h_in : szp)
-     (w_in : szp)
-     (cout : szp)
-     (kh : szp)
-     (kw : szp)
-     (stride : szp)
+  fn (b cin h_in w_in cout kh kw stride : szp)
      (pad : sz)
      (h_out : szp)
      (w_out : szp { conv2d_size_req b cin h_in w_in cout kh kw stride h_out w_out })
@@ -33,7 +26,7 @@ type conv2d_general_ty (t:Type0) {| scalar t |} =
            { is_global gbias })
      (gy : array1 t (l1_forward (b * cout * h_out * w_out))
            { is_global gy })
-     (#fx : perm) (#fw : perm) (#fb : perm)
+     (#fx #fw #fb : perm)
      (#sx : erased (chest1 t (b * cin * h_in * w_in)))
      (#sw : erased (chest1 t (cout * cin * kh * kw)))
      (#sbias : erased (chest1 t cout))

@@ -48,11 +48,9 @@ type layernorm_fw_ty (t:Type0) {| floating t, real_like t |} =
      (x     : array1 t (l1_forward (b *^ n)) { is_global x     })
      (gamma : array1 t (l1_forward n)        { is_global gamma })
      (beta  : array1 t (l1_forward n)        { is_global beta  })
-     (#fg : perm)
-     (#fb : perm)
+     (#fg #fb : perm)
      (#sx : erased (chest1 t (b *^ n)))
-     (#sg : erased (chest1 t n))
-     (#sb : erased (chest1 t n))
+     (#sg #sb : erased (chest1 t n))
      requires
        cpu **
        on gpu_loc (x |-> sx) **

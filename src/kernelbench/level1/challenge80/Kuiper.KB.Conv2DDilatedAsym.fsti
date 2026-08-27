@@ -26,20 +26,9 @@ val conv2dd_out_dim_sz
 
 inline_for_extraction noextract
 type conv2d_dilated_asym_ty (t:Type0) {| scalar t |} =
-  fn (b : szp)
-     (cin : szp)
-     (h_in : szp)
-     (w_in : szp)
-     (cout : szp)
-     (kh : szp)
-     (kw : szp)
-     (sh : szp)
-     (sw : szp)
-     (ph : sz)
-     (pw : sz)
-     (dh : szp)
-     (dw : szp)
-     (h_out : szp)
+  fn (b cin h_in w_in cout kh kw sh sw : szp)
+     (ph pw : sz)
+     (dh dw h_out : szp)
      (w_out : szp { conv2dd_size_req b cin h_in w_in cout kh kw sh sw ph pw dh dw
                                      h_out w_out })
      (gx : array1 t (l1_forward (b * cin * h_in * w_in))
@@ -50,7 +39,7 @@ type conv2d_dilated_asym_ty (t:Type0) {| scalar t |} =
            { is_global gbias })
      (gy : array1 t (l1_forward (b * cout * h_out * w_out))
            { is_global gy })
-     (#fx : perm) (#fw : perm) (#fb : perm)
+     (#fx #fw #fb : perm)
      (#sx : erased (chest1 t (b * cin * h_in * w_in)))
      (#sw_ : erased (chest1 t (cout * cin * kh * kw)))
      (#sbias : erased (chest1 t cout))

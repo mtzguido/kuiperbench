@@ -18,9 +18,7 @@ let newgelu_step
 
 inline_for_extraction noextract
 type newgelu_fw_ty (t:Type0) {| floating t |} =
-  fn (half : t)
-     (c : t)
-     (k : t)
+  fn (half c k : t)
      (lena : szp { lena <= max_blocks * max_threads })
      (a : array1 t (l1_forward lena) { is_global a })
      (#s : erased (chest1 t lena))

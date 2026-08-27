@@ -80,9 +80,8 @@ let dwconv2d_size_req
 inline_for_extraction noextract
 fn dwconv2d_naive_gpu
   (#et : Type0) {| scalar et |}
-  (b c h_in w_in : szp)
-  (kh kw : szp)
-  (stride : szp) (pad : sz)
+  (b c h_in w_in kh kw stride : szp)
+  (pad : sz)
   (h_out w_out : szp)
   (#lx : layout1 (b * c * h_in * w_in)) {| ctlayout lx |}
   (#lw : layout1 (c * 1 * kh * kw)) {| ctlayout lw |}

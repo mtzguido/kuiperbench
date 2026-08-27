@@ -51,8 +51,7 @@ type scan1d_inclusive_rowblock_ty =
      (#lout : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lout |}
      (input  : array2 et lin  { is_global input  })
      (output : array2 et lout { is_global output })
-     (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-     (#sout : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+     (#sx #sout : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
      (#fIn  : perm)
      preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
      requires

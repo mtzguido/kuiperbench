@@ -57,12 +57,7 @@ val conv1d_out_dim_ub (n k stride dilation pad : nat)
 inline_for_extraction noextract
 type conv1d_general_alloc_ty =
   fn
-  (b : szp)
-  (cin : szp)
-  (l_in : szp)
-  (cout : szp)
-  (kk : szp)
-  (stride : szp)
+  (b cin l_in cout kk stride : szp)
   (pad : sz)
   (dilation : szp)
   (l_out : szp { conv1d_size_req b cin l_in cout kk stride dilation l_out })
@@ -72,7 +67,7 @@ type conv1d_general_alloc_ty =
         { is_global gw })
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
-  (#fx : perm) (#fw : perm) (#fb : perm)
+  (#fx #fw #fb : perm)
   (#sx : erased (chest1 f32 (b * cin * l_in)))
   (#sw : erased (chest1 f32 (cout * cin * kk)))
   (#sbias : erased (chest1 f32 cout))

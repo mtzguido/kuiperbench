@@ -26,10 +26,7 @@ val pool_out_len_1d_sz
 inline_for_extraction noextract
 type maxpool1d_fw_ty =
   fn
-  (k : szp)
-  (s : szp)
-  (p : szp)
-  (d : szp)
+  (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp)
   (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) })
@@ -60,10 +57,7 @@ val maxpool1d_fw_f32 : maxpool1d_fw_ty
 inline_for_extraction noextract
 type maxpool1d_fw_rm_ty =
   fn
-  (k : szp)
-  (s : szp)
-  (p : szp)
-  (d : szp)
+  (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) /\
@@ -102,10 +96,7 @@ type maxpool1d_alloc_ty =
   (c : szp { SZ.fits (SZ.v b * SZ.v c) /\
              SZ.v b * SZ.v c <= max_blocks * max_threads })
   (l : szp { SZ.fits (SZ.v b * SZ.v c * SZ.v l) })
-  (k : szp)
-  (s : szp)
-  (p : szp)
-  (d : szp)
+  (k s p d : szp)
   (input : array2 f32 (l2_row_major (b *^ c) l) { is_global input })
   (#fIn : perm)
   (#sx  : erased (EM.chest2 f32 (SZ.v (b *^ c)) (SZ.v l)))

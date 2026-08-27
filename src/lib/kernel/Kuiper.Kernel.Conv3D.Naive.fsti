@@ -99,9 +99,8 @@ let conv3d_size_req
 inline_for_extraction noextract
 fn conv3d_naive_gpu
   (#et : Type0) {| scalar et |}
-  (b cin d_in h_in w_in cout : szp)
-  (kd kh kw : szp)
-  (stride : szp) (pad : sz)
+  (b cin d_in h_in w_in cout kd kh kw stride : szp)
+  (pad : sz)
   (d_out h_out w_out : szp)
   (#lx : layout1 (b * cin * d_in * h_in * w_in)) {| ctlayout lx |}
   (#lw : layout1 (cout * cin * kd * kh * kw)) {| ctlayout lw |}

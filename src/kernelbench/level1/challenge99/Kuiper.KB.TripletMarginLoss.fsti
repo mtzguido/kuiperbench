@@ -18,14 +18,11 @@ type triplet_fw_ty =
     (d : szp { d <= max_blocks * max_threads /\
                SZ.fits (d + max_threads) /\
                SZ.fits (b * d) })
-    (margin : f32)
-    (inv_b : f32)
+    (margin inv_b : f32)
     (anchor   : array1 f32 (l1_forward (b *^ d)) { is_global anchor })
     (positive : array1 f32 (l1_forward (b *^ d)) { is_global positive })
     (negative : array1 f32 (l1_forward (b *^ d)) { is_global negative })
-    (#sa : erased (chest1 f32 (b *^ d)))
-    (#sp : erased (chest1 f32 (b *^ d)))
-    (#sn : erased (chest1 f32 (b *^ d)))
+    (#sa #sp #sn : erased (chest1 f32 (b *^ d)))
     (#fanc #fpos #fneg : perm)
     preserves cpu **
               on gpu_loc (anchor   |-> Frac fanc sa) **

@@ -58,8 +58,7 @@ let matmul_scale_residual_post
 
 inline_for_extraction noextract
 type matmul_scale_residual_ty (t:Type0) {| floating t |} =
-  fn (batch : szp)
-     (input : szp)
+  fn (batch input : szp)
      (out : szp {
         SZ.v batch * SZ.v out <= max_blocks * max_threads /\
         SZ.fits (SZ.v batch * SZ.v input) /\

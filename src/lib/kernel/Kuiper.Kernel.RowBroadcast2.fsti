@@ -34,10 +34,8 @@ fn row_broadcast2
   (#_ : squash (is_global a1))
   (#_ : squash (is_global a2))
   (#_ : squash (is_global b))
-  (#fA1 : perm)
-  (#fA2 : perm)
-  (#sa1 : erased (chest1 t m))
-  (#sa2 : erased (chest1 t m))
+  (#fA1 #fA2 : perm)
+  (#sa1 #sa2 : erased (chest1 t m))
   (#sb : chest2 t m n)
   norewrite
   preserves

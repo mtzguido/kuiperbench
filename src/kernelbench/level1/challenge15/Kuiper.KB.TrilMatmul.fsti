@@ -51,11 +51,8 @@ type tril_matmul_ty (t:Type0) {| floating t, real_like t, floating_real_like t |
      (gA : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global gA })
      (gB : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global gB })
      (y  : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global y  })
-     (#sA : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
-     (#sB : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
-     (#sy : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
-     (#rA : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
-     (#rB : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
+     (#sA #sB #sy : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
+     (#rA #rB : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
      requires
        cpu **
        on gpu_loc (gA |-> sA) **

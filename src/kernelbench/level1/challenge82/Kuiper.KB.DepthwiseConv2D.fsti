@@ -41,13 +41,7 @@ val dwconv2d_out_dim_ub (n k stride pad : nat)
 
 inline_for_extraction noextract
 type dwconv2d_ty (t:Type0) {| scalar t |} =
-  fn (b : szp)
-     (c : szp)
-     (h_in : szp)
-     (w_in : szp)
-     (kh : szp)
-     (kw : szp)
-     (stride : szp)
+  fn (b c h_in w_in kh kw stride : szp)
      (pad : sz)
      (h_out : szp)
      (w_out : szp { dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out })
@@ -59,7 +53,7 @@ type dwconv2d_ty (t:Type0) {| scalar t |} =
            { is_global gbias })
      (gy : array1 t (l1_forward (b * c * h_out * w_out))
            { is_global gy })
-     (#fx : perm) (#fw : perm) (#fb : perm)
+     (#fx #fw #fb : perm)
      (#sx : erased (chest1 t (b * c * h_in * w_in)))
      (#sw : erased (chest1 t (c * 1 * kh * kw)))
      (#sbias : erased (chest1 t c))
@@ -94,13 +88,7 @@ val dwconv2d_f32 : dwconv2d_ty f32
 inline_for_extraction noextract
 type dwconv2d_alloc_ty =
   fn
-  (b : szp)
-  (c : szp)
-  (h_in : szp)
-  (w_in : szp)
-  (kh : szp)
-  (kw : szp)
-  (stride : szp)
+  (b c h_in w_in kh kw stride : szp)
   (pad : sz)
   (h_out : szp)
   (w_out : szp { dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out })
@@ -110,7 +98,7 @@ type dwconv2d_alloc_ty =
         { is_global gw })
   (gbias : array1 f32 (l1_forward c)
         { is_global gbias })
-  (#fx : perm) (#fw : perm) (#fb : perm)
+  (#fx #fw #fb : perm)
   (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
   (#sw : erased (chest1 f32 (c * 1 * kh * kw)))
   (#sbias : erased (chest1 f32 c))

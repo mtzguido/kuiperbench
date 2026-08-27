@@ -80,11 +80,9 @@ let conv2dd_size_req
 inline_for_extraction noextract
 fn conv2d_dilated_gpu
   (#et : Type0) {| scalar et |}
-  (b cin h_in w_in cout : szp)
-  (kh kw : szp)
-  (sh sw : szp) (ph pw : sz)
-  (dh dw : szp)
-  (h_out w_out : szp)
+  (b cin h_in w_in cout kh kw sh sw : szp)
+  (ph pw : sz)
+  (dh dw h_out w_out : szp)
   (#lx : layout1 (b * cin * h_in * w_in)) {| ctlayout lx |}
   (#lw : layout1 (cout * cin * kh * kw)) {| ctlayout lw |}
   (#lbias : layout1 cout) {| ctlayout lbias |}

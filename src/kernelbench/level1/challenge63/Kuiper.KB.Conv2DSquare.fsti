@@ -31,11 +31,7 @@ val conv2d_square_out_sz
 
 inline_for_extraction noextract
 type conv2d_square_ty (t:Type0) {| scalar t |} =
-  fn (b : szp)
-     (cin : szp)
-     (h_in : szp)
-     (cout : szp)
-     (k : szp)
+  fn (b cin h_in cout k : szp)
      (h_out : szp { SZ.v h_out == SZ.v h_in - SZ.v k + 1 /\
                     conv2d_size_req b cin h_in h_in cout k k 1 h_out h_out })
      (gx : array1 t (l1_forward (b * cin * h_in * h_in))
@@ -46,7 +42,7 @@ type conv2d_square_ty (t:Type0) {| scalar t |} =
            { is_global gbias })
      (gy : array1 t (l1_forward (b * cout * h_out * h_out))
            { is_global gy })
-     (#fx : perm) (#fw : perm) (#fb : perm)
+     (#fx #fw #fb : perm)
      (#sx : erased (chest1 t (b * cin * h_in * h_in)))
      (#sw : erased (chest1 t (cout * cin * k * k)))
      (#sbias : erased (chest1 t cout))

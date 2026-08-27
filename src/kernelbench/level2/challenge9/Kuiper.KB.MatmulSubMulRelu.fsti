@@ -50,15 +50,13 @@ let matmul_sub_mul_relu_post
 
 inline_for_extraction noextract
 type matmul_sub_mul_relu_ty (t:Type0) {| floating t |} =
-  fn (batch : szp)
-     (input : szp)
+  fn (batch input : szp)
      (out : szp {
         SZ.v batch * SZ.v out <= max_blocks * max_threads /\
         SZ.fits (SZ.v batch * SZ.v input) /\
         SZ.fits (SZ.v input * SZ.v out) /\
         SZ.fits (SZ.v batch * SZ.v out) })
-     (sub_v : t)
-     (mul_v : t)
+     (sub_v mul_v : t)
      (x    : array2 t (l2_row_major (SZ.v batch) (SZ.v input)) { is_global x    })
      (wt   : array2 t (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
      (bias : array1 t (l1_forward (SZ.v out))                  { is_global bias })

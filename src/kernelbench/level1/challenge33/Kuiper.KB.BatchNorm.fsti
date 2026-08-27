@@ -61,11 +61,9 @@ type batchnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
                         { is_global x })
      (gamma : array1 t (l1_forward c) { is_global gamma })
      (beta  : array1 t (l1_forward c) { is_global beta  })
-     (#fg : perm)
-     (#fb : perm)
+     (#fg #fb : perm)
      (#sx : erased (chest2 t (SZ.v c) (n * SZ.v hw)))
-     (#sg : erased (chest1 t (SZ.v c)))
-     (#sb : erased (chest1 t (SZ.v c)))
+     (#sg #sb : erased (chest1 t (SZ.v c)))
      requires
        cpu **
        on gpu_loc (x |-> sx) **

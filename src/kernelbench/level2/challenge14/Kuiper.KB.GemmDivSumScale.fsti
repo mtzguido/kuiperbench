@@ -46,8 +46,7 @@ let gdss_post
 
 inline_for_extraction noextract
 type gemm_div_sum_scale_ty (t:Type0) {| scalar t, real_like t |} =
-  fn (batch : szp)
-     (input : szp)
+  fn (batch input : szp)
      (hidden : szp {
         SZ.v batch <= max_blocks /\
         SZ.v batch * SZ.v hidden <= max_blocks * max_threads /\

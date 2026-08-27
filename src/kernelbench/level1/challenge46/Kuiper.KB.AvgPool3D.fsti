@@ -51,8 +51,7 @@ val avgpool_recip_f32 (k : szp) : f32
 inline_for_extraction noextract
 type avgpool3d_axis_fw_ty =
   fn
-  (k : szp)
-  (s : szp)
+  (k s : szp)
   (p : sz)
   (d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
@@ -85,8 +84,7 @@ val avgpool3d_axis_fw_f32 : avgpool3d_axis_fw_ty
 inline_for_extraction noextract
 type avgpool3d_axis_fw_rm_ty =
   fn
-  (k : szp)
-  (s : szp)
+  (k s : szp)
   (p : sz)
   (d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
@@ -136,8 +134,7 @@ val avgpool3d_axis_fw_rm_f32 : avgpool3d_axis_fw_rm_ty
 inline_for_extraction noextract
 type avgpool3d_axis_alloc_ty =
   fn
-  (k : szp)
-  (s : szp)
+  (k s : szp)
   (p : sz)
   (d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })

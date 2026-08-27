@@ -13,12 +13,7 @@ open Kuiper.Spec.Conv1D
 open Kuiper.Kernel.Conv1D.Naive
 inline_for_extraction noextract
 type conv1d_general_ty (t:Type0) {| scalar t |} =
-  fn (b : szp)
-     (cin : szp)
-     (l_in : szp)
-     (cout : szp)
-     (kk : szp)
-     (stride : szp)
+  fn (b cin l_in cout kk stride : szp)
      (pad : sz)
      (dilation : szp)
      (l_out : szp { conv1d_size_req b cin l_in cout kk stride dilation l_out })
@@ -30,7 +25,7 @@ type conv1d_general_ty (t:Type0) {| scalar t |} =
            { is_global gbias })
      (gy : array1 t (l1_forward (b * cout * l_out))
            { is_global gy })
-     (#fx : perm) (#fw : perm) (#fb : perm)
+     (#fx #fw #fb : perm)
      (#sx : erased (chest1 t (b * cin * l_in)))
      (#sw : erased (chest1 t (cout * cin * kk)))
      (#sbias : erased (chest1 t cout))
