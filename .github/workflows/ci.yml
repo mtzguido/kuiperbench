@@ -41,22 +41,22 @@ jobs:
           key: kuiper-nightly-${{ steps.kuiper_pin.outputs.nightly }}-${{ runner.os }}-${{ runner.arch }}
 
       - name: Install fixed verification environment
-        run: make -j4 prepare
+        run: make -skj4 prepare
 
       - name: Verify
         run: |
           jobs=$(scripts/ci-jobs.sh 3072)
           echo "Verifying with $jobs job(s)."
-          make -j"$jobs" verify
+          make -skj"$jobs" verify
 
       - name: Extract
         run: |
           # Extraction has a higher per-process memory peak than verification.
           jobs=$(scripts/ci-jobs.sh 8192)
           echo "Extracting with $jobs job(s)."
-          make -j"$jobs" extract-all
+          make -skj"$jobs" extract-all
 
       - name: Check generated distribution
         run: |
-          make -j4 dist
+          make -skj4 dist
           git diff --exit-code -- dist
