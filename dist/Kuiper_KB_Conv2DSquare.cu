@@ -28,7 +28,7 @@ __hoisted_conv2d_square_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
         uint32_t ow_s = r2 % h_out;
         float acc = 0.0f;
         uint32_t k1 = 0U;
-        for (; k1 < n_taps; k1 = kk_v + 1U) {
+        for (; k1 < n_taps; k1++) {
             uint32_t kk_v = k1;
             uint32_t ic = kk_v / kh_kw;
             uint32_t r = kk_v % kh_kw;

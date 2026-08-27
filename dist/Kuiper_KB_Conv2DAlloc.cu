@@ -25,7 +25,7 @@ __hoisted_conv2d_general_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
         uint32_t ow_s = r2 % w_out * stride;
         float acc = 0.0f;
         uint32_t k = 0U;
-        for (; k < n_taps; k = kk_v + 1U) {
+        for (; k < n_taps; k++) {
             uint32_t kk_v = k;
             uint32_t ic = kk_v / kh_kw;
             uint32_t r = kk_v % kh_kw;

@@ -1,9 +1,8 @@
 // Bridge for KernelBench L1 #23: Softmax along dim=1.
 // Input shape (B, D). One verified Kuiper call processes all B rows.
-// The extracted Klas_RowSoftmax_row_softmax_rm_f{32,64} runs a host-side
-// for-loop over rows that calls the verified per-row sum reduction +
-// per-row exp/divide kernels — the input tensor stays resident on the
-// GPU end-to-end (one D2H of the per-row sum scalar; never the row data).
+// The extracted Klas_RowSoftmax_row_softmax_rm_f{32,64} performs verified
+// batched max, shift, sum, and divide/exp steps. The tensor and its per-row
+// intermediates remain on the GPU throughout.
 
 #include <torch/extension.h>
 
@@ -22,11 +21,19 @@ torch::Tensor kuiper_softmax_cuda(torch::Tensor X) {
     auto Y = X.contiguous().clone();
     uint32_t B = (uint32_t)Y.size(0);
     uint32_t D = (uint32_t)Y.size(1);
+    constexpr uint32_t threads = 1024;
+
+    TORCH_CHECK(B <= 2097152,
+                "kuiper_softmax: row count exceeds the kernel launch bound");
+    TORCH_CHECK(B <= 2147483648LL / D,
+                "kuiper_softmax: element count exceeds the kernel launch bound");
 
     if (Y.scalar_type() == torch::kFloat32) {
-        Klas_RowSoftmax_row_softmax_rm_f32(B, D, Y.data_ptr<float>());
+        Klas_RowSoftmax_row_softmax_rm_f32(B, D, threads,
+                                           Y.data_ptr<float>());
     } else if (Y.scalar_type() == torch::kFloat64) {
-        Klas_RowSoftmax_row_softmax_rm_f64(B, D, Y.data_ptr<double>());
+        Klas_RowSoftmax_row_softmax_rm_f64(B, D, threads,
+                                           Y.data_ptr<double>());
     } else {
         TORCH_CHECK(false, "kuiper_softmax: unsupported dtype");
     }

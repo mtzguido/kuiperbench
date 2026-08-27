@@ -19,6 +19,14 @@ open Kuiper.Bijection { ( =~ ) }
 module Seq = FStar.Seq
 module SZ = Kuiper.SizeT
 
+let flatten4_index_bound
+  (b cin h w : pos)
+  (bi ic hi wi : nat)
+  : Lemma
+      (requires bi < b /\ ic < cin /\ hi < h /\ wi < w)
+      (ensures (((bi * cin + ic) * h + hi) * w + wi) < b * cin * h * w)
+  = ()
+
 let decreases_after_increment (bound k : nat)
   : Lemma (requires k < bound) (ensures (bound - (k + 1) < bound - k))
   = ()
@@ -130,7 +138,7 @@ let kpost
     Cell gy (idx1 tid) |-> conv2d_out_at b cin h_in w_in cout kh kw stride pad
                                   h_out w_out sx sw sbias tid
 
-#push-options "--z3rlimit 60"
+#push-options "--z3rlimit 120"
 
 (* Inner-loop helper: read a tap [k] from x at [(bi, ic, h_idx, w_idx)],
    with zero-padded out-of-range guards, where [(ic, kh_i, kw_i)] are the
@@ -168,6 +176,8 @@ fn read_x_padded
     let hi = h_signed -^ pad;
     let wi = w_signed -^ pad;
     if (hi <^ h_in && wi <^ w_in) {
+      flatten4_index_bound b cin h_in w_in (SZ.v bi) (SZ.v ic)
+        (SZ.v hi) (SZ.v wi);
       // Compute flat index: ((bi*cin + ic)*h_in + hi)*w_in + wi
       let bcin = bi *^ cin;
       let bcin_ic = bcin +^ ic;
@@ -378,7 +388,7 @@ fn kf
     assert pure (SZ.v n_taps == SZ.v cin * SZ.v kh * SZ.v kw);
     assert pure (SZ.v kk_v < SZ.v cin * SZ.v kh * SZ.v kw);
     decreases_after_increment (SZ.v cin * SZ.v kh * SZ.v kw) (SZ.v kk_v);
-    let next_k = kk_v +^ 1sz;
+    let next_k = !k +^ 1sz;
     assert pure (SZ.v next_k == SZ.v kk_v + 1);
     k := next_k;
   };

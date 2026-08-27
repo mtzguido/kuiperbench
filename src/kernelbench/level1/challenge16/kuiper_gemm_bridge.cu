@@ -1,6 +1,6 @@
 #include <torch/extension.h>
-#include "Klas_GEMM_Naive3.h"
-#include "Klas_GEMM_Naive3.cu"
+#include "Kuiper_KB_TransposedGEMM.h"
+#include "Kuiper_KB_TransposedGEMM.cu"
 
 // KernelBench L1 #16: C = A.T @ B,  A:(K,M), B:(K,N) -> C:(M,N).
 //
@@ -29,7 +29,7 @@ torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B) {
                 "kuiper #16: shape out of range for the verified kernel ABI");
 
     auto C = torch::zeros({M, N}, A_c.options());
-    Klas_GEMM_Naive3_g_matmul_f32_atb(
+    Kuiper_KB_TransposedGEMM_matmul_f32_atb(
         (uint32_t)M, (uint32_t)N, (uint32_t)K,
         A_c.data_ptr<float>(), B_c.data_ptr<float>(), C.data_ptr<float>());
     return C;

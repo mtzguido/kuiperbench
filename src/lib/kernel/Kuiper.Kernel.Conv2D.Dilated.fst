@@ -381,7 +381,7 @@ fn kf
       h_out w_out sx sw_ bi oc oh ow (SZ.v kk_v + 1);
     acc := add acc0 prod;
     decreases_after_increment (cin * kh * kw) (SZ.v kk_v);
-    let next_k = kk_v +^ 1sz;
+    let next_k = !k +^ 1sz;
     assert pure (SZ.v next_k == SZ.v kk_v + 1);
     k := next_k;
   };
