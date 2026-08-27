@@ -78,7 +78,7 @@ let dwconv2d_size_req
     b * c * h_out * w_out <= max_blocks * max_threads
 
 inline_for_extraction noextract
-val dwconv2d_naive_gpu
+fn dwconv2d_naive_gpu
   (#et : Type0) {| scalar et |}
   (b c h_in w_in : szp)
   (kh kw : szp)
@@ -97,24 +97,23 @@ val dwconv2d_naive_gpu
   (#sbias : erased (chest1 et c))
   (#sy0 : erased (chest1 et (b*c*h_out*w_out)))
   (#fx #fw #fb : perm)
-  : stt unit
-    (requires
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      on gpu_loc (gy |-> sy0) **
-      pure (is_global gx /\ is_global gw /\
-            is_global gbias /\ is_global gy /\
-            dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out))
-    (ensures fun _ ->
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      (exists* (sy : chest1 et (b*c*h_out*w_out)).
-        on gpu_loc (gy |-> sy) **
-        pure (forall (tid : nat{tid < b*c*h_out*w_out}).
-                acc1 sy tid ==
-                dwconv2d_out_at b c h_in w_in kh kw stride pad
-                                h_out w_out sx sw sbias tid)))
+  requires
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gy |-> sy0) **
+    pure (is_global gx /\ is_global gw /\
+          is_global gbias /\ is_global gy /\
+          dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out)
+  ensures
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias) **
+    (exists* (sy : chest1 et (b*c*h_out*w_out)).
+       on gpu_loc (gy |-> sy) **
+       pure (forall (tid : nat{tid < b*c*h_out*w_out}).
+               acc1 sy tid ==
+               dwconv2d_out_at b c h_in w_in kh kw stride pad
+                               h_out w_out sx sw sbias tid))

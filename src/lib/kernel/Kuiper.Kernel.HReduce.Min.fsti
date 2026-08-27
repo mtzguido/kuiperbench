@@ -68,7 +68,7 @@ let seq_reduce_rows_fmin
 (* ── reduce_batched_min: one thread per row, simple serial reduction ──── *)
 
 inline_for_extraction noextract
-val reduce_batched_min_f32
+fn reduce_batched_min_f32
      (rows : szp { SZ.v rows <= max_blocks * max_threads })
      (cols : szp)
      (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
@@ -77,11 +77,10 @@ val reduce_batched_min_f32
      (output : array1 f32 lout { is_global output })
      (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
      (#sout : chest1 f32 (SZ.v rows))
-  : stt unit
-      (cpu **
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (output |-> sout))
-      (fun _ ->
-       cpu **
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows_fmin sx)))
+  preserves cpu
+  requires
+    on gpu_loc (x |-> sx) **
+    on gpu_loc (output |-> sout)
+  ensures
+    on gpu_loc (x |-> sx) **
+    on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows_fmin sx))

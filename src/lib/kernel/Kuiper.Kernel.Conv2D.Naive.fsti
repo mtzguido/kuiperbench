@@ -84,7 +84,7 @@ let conv2d_size_req
     b * cout * h_out * w_out <= max_blocks * max_threads
 
 inline_for_extraction noextract
-val conv2d_naive_gpu
+fn conv2d_naive_gpu
   (#et : Type0) {| scalar et |}
   (b cin h_in w_in cout : szp)
   (kh kw : szp)
@@ -103,24 +103,23 @@ val conv2d_naive_gpu
   (#sbias : erased (chest1 et cout))
   (#sy0 : erased (chest1 et (b*cout*h_out*w_out)))
   (#fx #fw #fb : perm)
-  : stt unit
-    (requires
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      on gpu_loc (gy |-> sy0) **
-      pure (is_global gx /\ is_global gw /\
-            is_global gbias /\ is_global gy /\
-            conv2d_size_req b cin h_in w_in cout kh kw stride h_out w_out))
-    (ensures fun _ ->
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      (exists* (sy : chest1 et (b*cout*h_out*w_out)).
-        on gpu_loc (gy |-> sy) **
-        pure (forall (tid : nat{tid < b*cout*h_out*w_out}).
-                acc1 sy tid ==
-                conv2d_out_at b cin h_in w_in cout kh kw stride pad
-                              h_out w_out sx sw sbias tid)))
+  requires
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gy |-> sy0) **
+    pure (is_global gx /\ is_global gw /\
+          is_global gbias /\ is_global gy /\
+          conv2d_size_req b cin h_in w_in cout kh kw stride h_out w_out)
+  ensures
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias) **
+    (exists* (sy : chest1 et (b*cout*h_out*w_out)).
+       on gpu_loc (gy |-> sy) **
+       pure (forall (tid : nat{tid < b*cout*h_out*w_out}).
+               acc1 sy tid ==
+               conv2d_out_at b cin h_in w_in cout kh kw stride pad
+                             h_out w_out sx sw sbias tid))
