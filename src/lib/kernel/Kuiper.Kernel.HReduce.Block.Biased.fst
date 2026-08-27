@@ -308,6 +308,7 @@ fn kf_block
   ()
   requires
     gpu **
+    pure (c_shmems_inv shmem) **
     kpre_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem (SZ.v bid) (SZ.v tid) **
     thread_id nth tid **
     block_id rows bid **

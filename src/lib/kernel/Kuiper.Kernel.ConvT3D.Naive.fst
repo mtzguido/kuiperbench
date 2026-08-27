@@ -27,6 +27,20 @@ let div_lt_product (x b : nat) (d : pos)
     Math.division_definition x d q;
     ()
 
+let output_decode_facts
+  (b cout d h w : pos)
+  (tid : natlt (b * cout * d * h * w))
+  (how dhw cdhw : nat)
+  : Lemma
+      (requires
+        how == h * w /\
+        dhw == d * how /\
+        cdhw == cout * dhw)
+      (ensures
+        cdhw == cout * d * h * w /\
+        tid < b * cdhw)
+  = ()
+
 let named_mul_value
   (x : sz)
   (y : sz{FStar.SizeT.fits (SZ.v x * SZ.v y)})
@@ -44,6 +58,16 @@ let flatten_taps
         kd_kh_kw == kd * kh_kw /\
         n_taps == cin * kd_kh_kw)
       (ensures n_taps == cin * kd * kh * kw)
+  = ()
+
+let flattened_taps_fit
+  (cin kd kh kw kh_kw kd_kh_kw : nat)
+  : Lemma
+      (requires
+        SZ.fits (cin * kd * kh * kw) /\
+        kh_kw == kh * kw /\
+        kd_kh_kw == kd * kh_kw)
+      (ensures SZ.fits (cin * kd_kh_kw))
   = ()
 
 let unrank3_from_steps
@@ -66,6 +90,12 @@ let unrank3_from_steps
 
 let decreases_after_increment (bound k : nat)
   : Lemma (requires k < bound) (ensures (bound - (k + 1) < bound - k))
+  = ()
+
+let reached_bound (k n bound : nat)
+  : Lemma
+      (requires k <= bound /\ n == bound /\ not (k < n))
+      (ensures k == bound)
   = ()
 
 (* [abs (n @| INil)] is definitionally [natlt n & unit]; expose this to the SMT
@@ -390,10 +420,13 @@ fn kf
           #lx #lw #lbias #ly gx gw gbias gy sx sw_l sbias fx fw fb tid
 {
   let how : sz = h_out *^ w_out;
+  named_mul_value h_out w_out how;
   let dhw : sz = d_out *^ how;
+  named_mul_value d_out how dhw;
   let cdhw : sz = cout *^ dhw;
-  assert pure (SZ.v cdhw == SZ.v cout * SZ.v d_out * SZ.v h_out * SZ.v w_out);
-  assert pure (SZ.v tid < SZ.v b * SZ.v cdhw);
+  named_mul_value cout dhw cdhw;
+  output_decode_facts (SZ.v b) (SZ.v cout) (SZ.v d_out) (SZ.v h_out)
+    (SZ.v w_out) (SZ.v tid) (SZ.v how) (SZ.v dhw) (SZ.v cdhw);
   div_lt_product (SZ.v tid) (SZ.v b) (SZ.v cdhw);
   let bi : szlt b = tid /^ cdhw;
   let r1 : szlt cdhw = tid %^ cdhw;
@@ -405,10 +438,11 @@ fn kf
   let ow : szlt w_out = r3 %^ w_out;
 
   let kh_kw : sz = kh *^ kw;
-  let kd_kh_kw : sz = kd *^ kh_kw;
-  let n_taps : sz = cin *^ kd_kh_kw;
   named_mul_value kh kw kh_kw;
+  let kd_kh_kw : sz = kd *^ kh_kw;
   named_mul_value kd kh_kw kd_kh_kw;
+  flattened_taps_fit cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw);
+  let n_taps : sz = cin *^ kd_kh_kw;
   named_mul_value cin kd_kh_kw n_taps;
   flatten_taps cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw) (SZ.v n_taps);
 
@@ -481,7 +515,7 @@ fn kf
     acc := add acc0 prod;
     assert pure (SZ.v kk < cin * kd * kh * kw);
     decreases_after_increment (cin * kd * kh * kw) (SZ.v kk);
-    let knew : sz = kk +^ 1sz;
+    let knew : sz = !k +^ 1sz;
     assert pure (SZ.v knew == SZ.v kk + 1);
     assert pure (SZ.v knew <= cin * kd * kh * kw);
     k := knew;
@@ -493,6 +527,8 @@ fn kf
      equals [convT3d_out_at] applied to [tid] once the kernel-side decode
      of [tid] is shown to match the spec-side decode (modulo associativity
      of [*]).  Same discharge pattern as [Kuiper.Kernel.Conv3D.Naive.kf]. *)
+  let k_done = !k;
+  reached_bound (SZ.v k_done) (SZ.v n_taps) (cin * kd * kh * kw);
   let bias_v = tensor_read gbias (oc, ());
   let result = add bias_v !acc;
 

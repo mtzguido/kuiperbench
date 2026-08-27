@@ -39,7 +39,7 @@ __hoisted_convt3d_general_f32_0(uint32_t b, uint32_t cin, uint32_t d_in,
         uint32_t ow_pw = r3 % w_out + pw;
         float acc = 0.0f;
         uint32_t k = 0U;
-        for (; k < n_taps; k = kk + 1U) {
+        for (; k < n_taps; k++) {
             uint32_t kk = k;
             uint32_t ic = kk / kd_kh_kw;
             uint32_t r = kk % kd_kh_kw;
