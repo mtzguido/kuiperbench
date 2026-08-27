@@ -512,20 +512,12 @@ let mv_loop_invariant_step
       Seq.slice sx_post ((vi + 1) * d) bd ==
         Seq.slice sx ((vi + 1) * d) bd)
   =
-    (* The seq parameters are typed over an EXPLICIT flat length [bd] (with
-       [bd == b * d] a pure hypothesis), rather than over [b * d].  At the
-       Pulse call site [bd] is instantiated to [SZ.v (b *^ d)] -- exactly the
-       length of the [chest1_to_seq _] arguments AND of the loop invariant's
-       own [row_mean_var_normalized]s -- so the requires match the invariant
-       with NO length coercion and, crucially, with the predicate's [#bd]
-       implicit IDENTICAL on both sides.  (When the params were typed over
-       [b * d], that predicate's [#bd] was [SZ.v b * SZ.v d] at the call but
-       [SZ.v (b*^d)] in the invariant; bridging the two under the per-row
-       [forall] made Z3 exhaust its rlimit on the call's requires check.)
-       Every [bd]-indexed helper below is passed [bd] directly; only
+    (* The seq parameters use an explicit flat length [bd], with
+       [bd == b * d] as a pure hypothesis, so every predicate in the loop
+       invariant has an identical type index.  Every [bd]-indexed helper
+       below is passed [bd] directly; only
        [mv_loop_step_lemma] is stated over [b * d], and its seq arguments
-       coerce here via the [bd == b * d] hypothesis -- cheaply, inside this
-       small lemma context rather than in the large Pulse loop body. *)
+       coerce here via that hypothesis inside this small lemma context. *)
     (* suffix preservation + prefix preservation + vi*d+d <= b*d *)
     mv_loop_step_lemma b d sx sx_pre sx_post vi;
     FStar.Math.Lemmas.lemma_mult_le_right d vi b;
@@ -627,20 +619,20 @@ fn t_memcpy_d2d'
 #push-options "--z3rlimit 20 --fuel 1 --ifuel 2"
 inline_for_extraction noextract
 fn mean_var_norm_row
-  (#bd : szp { bd <= max_blocks * max_threads })
+  (b : szp)
   (d : szp { d <= max_blocks * max_threads /\
-             d <= bd })
-  (rv_off : sz { rv_off + d <= bd })
+             b * d <= max_blocks * max_threads })
+  (rv_off : sz { rv_off + d <= b * d })
   (eps : f32)
   (inv_d : f32)
-  (x : array1 f32 (l1_forward bd) { is_global x })
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
   (scratch : array1 f32 (l1_forward d) { is_global scratch })
-  (#sx : chest1 f32 bd)
+  (#sx : chest1 f32 (b * d))
   (#ss : chest1 f32 d)
   preserves cpu
   requires on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
   ensures
-    (exists* (sx' : chest1 f32 bd) (ss' : chest1 f32 d).
+    (exists* (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
        pure (row_mean_var_normalized (chest1_to_seq sx) (chest1_to_seq sx')
          (SZ.v rv_off) (SZ.v d) eps inv_d) **
@@ -709,8 +701,8 @@ fn mean_var_norm_row
   assert pure (var_eps == add var eps);
   assert pure (inv == rsqrt var_eps);
   assert pure (neg_mean_inv == sub zero (mul mean inv));
-  assert pure (Seq.length (chest1_to_seq (reveal vfinal)) == SZ.v bd);
-  assert pure (SZ.v rv_off + SZ.v d <= SZ.v bd);
+  assert pure (Seq.length (chest1_to_seq (reveal vfinal)) == b * d);
+  assert pure (rv_off + d <= b * d);
   (* [vfinal] is the blit of [affine_result] into [sx] at [rv_off]; the slice
      over the blitted region recovers [affine_result].  [blit_slice_inside]
      unfolds [seq_blit] for SMT (the pointwise [lemma_eq_intro] requires that
@@ -724,7 +716,7 @@ fn mean_var_norm_row
     (affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g));
   assert pure (Seq.slice (chest1_to_seq (reveal vfinal)) (SZ.v rv_off) (SZ.v rv_off + SZ.v d) ==
                affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g));
-  row_mean_var_normalized_intro #(SZ.v bd) (SZ.v d)
+  row_mean_var_normalized_intro #(b * d) d
     (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal vfinal))
     (SZ.v rv_off) eps inv_d sum1 sum2 mean m2 var var_eps inv neg_mean_inv;
   assert pure (row_mean_var_normalized (chest1_to_seq (reveal sx))
@@ -745,10 +737,7 @@ inline_for_extraction noextract
    separate Z3 query.  Without this, Z3 4.13 crashes (LP-solver assertion
    violation) when SizeT arithmetic (SZ.add) and a complex forall containing
    row_mean_var_normalized appear in the same combined query.
-   --z3refresh --z3seed 2: match the green L2Norm.l2norm loop -- a fresh Z3
-   state per query is what lets the [chest1_to_seq _ : lseq f32 (SZ.v (b*^d))]
-   argument unify against mv_loop_invariant_step's [lseq f32 (SZ.v b * SZ.v d)]
-   parameter (the type-index equality [SZ.v (b*^d) == SZ.v b * SZ.v d]). *)
+   --z3refresh --z3seed 2: match the green L2Norm.l2norm loop. *)
 #push-options "--z3rlimit 300 --z3refresh --z3seed 2"
 fn mean_var_norm
   (b : szp)
@@ -757,12 +746,12 @@ fn mean_var_norm
              b * d <= max_blocks * max_threads })
   (eps : f32)
   (inv_d : f32)
-  (x : array1 f32 (l1_forward (b *^ d)) { is_global x })
-  (#sx : chest1 f32 (b *^ d))
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
+  (#sx : chest1 f32 (b * d))
   preserves cpu
   requires on gpu_loc (x |-> sx)
   ensures
-    (exists* (sx' : chest1 f32 (b *^ d)).
+    (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
        pure (mean_var_post (SZ.v b) (SZ.v d) eps inv_d (chest1_to_seq sx) (chest1_to_seq sx')))
 {
@@ -776,7 +765,7 @@ fn mean_var_norm
   row_lt_b_bound_forall_lemma (SZ.v d) (SZ.v b);
   while (let i = !idx; SZ.(i <^ b))
     invariant
-      exists* (vi : sz) (sx' : chest1 f32 (b *^ d)) (ss' : chest1 f32 d).
+      exists* (vi : sz) (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
         idx |-> vi **
         on gpu_loc (x |-> sx') **
         on gpu_loc (scratch |-> ss') **
@@ -784,23 +773,17 @@ fn mean_var_norm
         pure (SZ.v vi <= SZ.v b /\
               (forall (r : nat). r < SZ.v vi ==>
                  row_mean_var_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) (SZ.v d) eps inv_d) /\
-              Seq.slice (chest1_to_seq sx') (SZ.v vi * SZ.v d) (SZ.v (b *^ d)) ==
-                Seq.slice (chest1_to_seq sx) (SZ.v vi * SZ.v d) (SZ.v (b *^ d)))
+              Seq.slice (chest1_to_seq sx') (vi * d) (b * d) ==
+                Seq.slice (chest1_to_seq sx) (vi * d) (b * d))
     decreases (SZ.v b - SZ.v !idx)
   {
     let i = !idx;
     let off : sz = SZ.(i *^ d);
     with sx_pre. assert (on gpu_loc (x |-> reveal sx_pre));
-    mean_var_norm_row #(b *^ d) d off eps inv_d x scratch;
+    mean_var_norm_row b d off eps inv_d x scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
-    (* Inject the SizeT multiplication congruences as ground facts so that
-       the per-row offset [SZ.v off = SZ.v i * SZ.v d] (from mean_var_norm_row,
-       stated at [SZ.v off]) and the flat length [SZ.v (b*^d) = SZ.v b * SZ.v d]
-       (needed to unify the [chest1_to_seq _ : lseq f32 (SZ.v (b*^d))] arguments
-       with mv_loop_invariant_step's [lseq f32 (SZ.v b * SZ.v d)] parameters and
-       the [vi * d] indices) are visible to Z3 at the call below. *)
+    (* Expose the runtime row offset as mathematical multiplication. *)
     assert pure (SZ.v off == SZ.v i * SZ.v d);
-    assert pure (SZ.v (b *^ d) == SZ.v b * SZ.v d);
     (* Ground the nonlinear per-row fit bound [forall r<b. r*d+d <= b*d] so
        the requires-[forall]s of the step lemma (whose [row_mean_var_normalized
        sx sx_pre (r*d) d] applications each carry the [(r*d)+d <= bd] subtype
@@ -813,11 +796,9 @@ fn mean_var_norm
        (per-row rmnv forall + suffix-slice equality, over sx_pre = sx' here)
        and mean_var_norm_row's ensures (rmnv sx_pre sx_post at row i + the
        affine_result seq_blit characterisation).  The lemma's flat length is
-       passed EXPLICITLY as [bd := SZ.v (b *^ d)], which is exactly the type
-       index of the [chest1_to_seq _] arguments -- so they need NO length
-       coercion and the per-row [row_mean_var_normalized]s carry the same
-       [#bd] as the loop invariant's, keeping this requires check cheap. *)
-    mv_loop_invariant_step (SZ.v (b *^ d)) (SZ.v b) (SZ.v d) (chest1_to_seq (reveal sx))
+       the mathematical product [b * d], exactly the type index of the
+       [chest1_to_seq _] arguments. *)
+    mv_loop_invariant_step (b * d) b d (chest1_to_seq (reveal sx))
       (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) (SZ.v i) eps inv_d;
     idx := SZ.(!idx +^ 1sz);
   };
@@ -836,12 +817,12 @@ fn mean_var_norm_fw
              SZ.fits (b * d) /\
              b * d <= max_blocks * max_threads })
   (eps : f32)
-  (x : array1 f32 (l1_forward (b *^ d)) { is_global x })
-  (#sx : chest1 f32 (b *^ d))
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
+  (#sx : chest1 f32 (b * d))
   preserves cpu
   requires on gpu_loc (x |-> sx)
   ensures
-    (exists* (sx' : chest1 f32 (b *^ d)).
+    (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
        pure (mean_var_post (SZ.v b) (SZ.v d) eps (mvn_inv_d d) (chest1_to_seq sx) (chest1_to_seq sx')))
 {

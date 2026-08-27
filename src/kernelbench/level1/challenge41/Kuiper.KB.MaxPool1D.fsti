@@ -97,9 +97,9 @@ type maxpool1d_alloc_ty =
              SZ.v b * SZ.v c <= max_blocks * max_threads })
   (l : szp { SZ.fits (SZ.v b * SZ.v c * SZ.v l) })
   (k s p d : szp)
-  (input : array2 f32 (l2_row_major (b *^ c) l) { is_global input })
+  (input : array2 f32 (l2_row_major (b * c) l) { is_global input })
   (#fIn : perm)
-  (#sx  : EM.chest2 f32 (SZ.v (b *^ c)) (SZ.v l))
+  (#sx  : EM.chest2 f32 (b * c) l)
   requires
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **
@@ -110,7 +110,7 @@ type maxpool1d_alloc_ty =
     pure (SZ.fits (SZ.v b * SZ.v c * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v b * SZ.v c * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
   returns r : (lo:sz { SZ.v lo == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) }
-               & array2 f32 (l2_row_major (b *^ c) lo))
+               & array2 f32 (l2_row_major (b * c) lo))
   ensures
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **

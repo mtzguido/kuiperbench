@@ -227,9 +227,9 @@ fn maxpool2d_full_alloc
   (bc : szp)
   (h w : szp)
   (#_ : squash (SZ.fits (SZ.v bc * SZ.v h)))
-  (input : array2 f32 (l2_row_major (bc *^ h) w) { is_global input })
+  (input : array2 f32 (l2_row_major (bc * h) w) { is_global input })
   (#fIn : perm)
-  (#sx  : EM.chest2 f32 (SZ.v (bc *^ h)) (SZ.v w))
+  (#sx  : EM.chest2 f32 (bc * h) w)
   requires
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **

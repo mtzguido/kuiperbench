@@ -44,9 +44,9 @@ type ce_loss_fw_ty =
                SZ.fits (c + max_threads) /\
                SZ.fits (b * c) })
     (inv_b : f32)
-    (predictions : array1 f32 (l1_forward (b *^ c)) { is_global predictions })
+    (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
     (targets : array1 SZ.t (l1_forward b) { is_global targets })
-    (#sp : chest1 f32 (b *^ c))
+    (#sp : chest1 f32 (b * c))
     (#stv : chest1 SZ.t b)
     (#fp #ft : perm)
     preserves cpu **

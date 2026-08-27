@@ -430,18 +430,18 @@ fn t_memcpy_d2d'
 
 inline_for_extraction noextract
 fn l2norm_row
-  (#bd : szp { bd <= max_blocks * max_threads })
+  (b : szp)
   (d : szp { d <= max_blocks * max_threads /\
-             d <= bd })
-  (rv_off : sz { rv_off + d <= bd })
-  (x : array1 f32 (l1_forward bd) { is_global x })
+             b * d <= max_blocks * max_threads })
+  (rv_off : sz { rv_off + d <= b * d })
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
   (scratch : array1 f32 (l1_forward d) { is_global scratch })
-  (#sx : chest1 f32 bd)
+  (#sx : chest1 f32 (b * d))
   (#ss : chest1 f32 d)
   preserves cpu
   requires on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
   ensures
-    (exists* (sx' : chest1 f32 bd) (ss' : chest1 f32 d).
+    (exists* (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
        pure (exists (inv : f32) (sumsq : f32).
          (let row : Seq.lseq f32 (SZ.v d) =
@@ -525,12 +525,12 @@ fn l2norm
   (d : szp { d <= max_blocks * max_threads /\
              SZ.fits (b * d) /\
              b * d <= max_blocks * max_threads })
-  (x : array1 f32 (l1_forward (b *^ d)) { is_global x })
-  (#sx : chest1 f32 (b *^ d))
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
+  (#sx : chest1 f32 (b * d))
   preserves cpu
   requires on gpu_loc (x |-> sx)
   ensures
-    (exists* (sx' : chest1 f32 (b *^ d)).
+    (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
        pure (l2norm_post (SZ.v b) (SZ.v d) (chest1_to_seq sx) (chest1_to_seq sx')))
 {
@@ -538,7 +538,7 @@ fn l2norm
   let mut idx = 0sz;
   while (let i = !idx; SZ.(i <^ b))
     invariant
-      exists* (vi : sz) (sx' : chest1 f32 (b *^ d)) (ss' : chest1 f32 d).
+      exists* (vi : sz) (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
         idx |-> vi **
         on gpu_loc (x |-> sx') **
         on gpu_loc (scratch |-> ss') **
@@ -553,7 +553,7 @@ fn l2norm
     let i = !idx;
     let off : sz = SZ.(i *^ d);
     with sx_pre. assert (on gpu_loc (x |-> reveal sx_pre));
-    l2norm_row #(b *^ d) d off x scratch;
+    l2norm_row b d off x scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
     l2_loop_invariant_step (SZ.v b) (SZ.v d) (chest1_to_seq (reveal sx))
       (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) (SZ.v i);

@@ -27,7 +27,7 @@ let kpre
   (#lb : layout2 m n) {| ctlayout lb |}
   (b : array2 t lb)
   (sb : chest2 t m n)
-  (tid : natlt (m *^ n))
+  (tid : natlt (m * n))
   : slprop
   = Cell b (tid_to_cell m n tid) |-> acc2 sb (tid / n) (tid % n)
 
@@ -38,7 +38,7 @@ let kpost
   (#lb : layout2 m n) {| ctlayout lb |}
   (b : array2 t lb)
   (sb : chest2 t m n)
-  (tid : natlt (m *^ n))
+  (tid : natlt (m * n))
   : slprop
   = Cell b (tid_to_cell m n tid) |-> acc2 (s_tril sb) (tid / n) (tid % n)
 
@@ -46,6 +46,7 @@ ghost
 fn setup
   (#t : Type0) {| scalar t |}
   (m n : szp)
+  (nthr : szp { SZ.v nthr == m * n })
   (#lb : layout2 m n) {| ctlayout lb |}
   (b : array2 t lb)
   (#sb : chest2 t m n)
@@ -54,14 +55,15 @@ fn setup
   requires
     b |-> sb
   ensures
-    (forall+ (tid : natlt (m *^ n)).
+    (forall+ (tid : natlt nthr).
       kpre m n b sb tid) **
     pure (SZ.fits (tlayout_ulen lb))
 {
   tensor_ilower2 b;
-  forevery_unfactor' (m *^ n) m n (fun r c ->
+  forevery_unfactor' (m * n) m n (fun r c ->
     Cell b (idx2 r c) |-> acc2 sb r c);
-  forevery_ext #(natlt (m *^ n)) _ (kpre m n b sb);
+  forevery_ext #(natlt (m * n)) _ (kpre m n b sb);
+  forevery_rw_size (m * n) nthr;
   ()
 }
 
@@ -69,24 +71,26 @@ ghost
 fn teardown
   (#t : Type0) {| scalar t |}
   (m n : szp)
+  (nthr : szp { SZ.v nthr == m * n })
   (#lb : layout2 m n) {| ctlayout lb |}
   (b : array2 t lb)
   (#sb : chest2 t m n)
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (m *^ n)).
+    (forall+ (tid : natlt nthr).
       kpost m n b sb tid) **
     pure (SZ.fits (tlayout_ulen lb))
   ensures
     b |-> s_tril sb
 {
-  forevery_ext #(natlt (m *^ n))
+  forevery_rw_size nthr (m * n);
+  forevery_ext #(natlt (m * n))
     (kpost m n b sb)
-    (fun (tid : natlt (m *^ n)) ->
+    (fun (tid : natlt (m * n)) ->
        Cell b (idx2 ((tid / n) <: natlt m) ((tid % n) <: natlt n))
          |-> acc2 (s_tril sb) (tid / n) (tid % n));
-  forevery_factor' (m *^ n) m n (fun r c ->
+  forevery_factor' (m * n) m n (fun r c ->
     Cell b (idx2 r c) |-> acc2 (s_tril sb) r c);
   tensor_iraise2 b;
   ()
@@ -99,7 +103,7 @@ fn kf
   (#lb : layout2 m n) {| ctlayout lb |}
   (b : array2 t lb)
   (#sb : chest2 t m n)
-  (tid : szlt (m *^ n))
+  (tid : szlt (m * n))
   ()
   requires
     gpu **
@@ -129,12 +133,12 @@ let kdesc
   (#sb : chest2 t m n)
   : kernel_desc (requires b |-> sb)
                 (ensures  b |-> s_tril sb)
-  = {
-    nthr = m *^ n;
-    f = kf m n b #sb;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == m * n }) = m *^ n in {
+    nthr = nthr;
+    f = (fun (tid : szlt nthr) -> kf m n b #sb tid);
     frame = pure (SZ.fits (tlayout_ulen lb));
-    teardown = teardown m n b #sb;
-    setup    = setup    m n b #sb;
+    teardown = teardown m n nthr b #sb;
+    setup    = setup    m n nthr b #sb;
     kpre  = kpre #t m n #lb b sb;
     kpost = kpost #t m n #lb b sb;
     kpre_sendable = solve;

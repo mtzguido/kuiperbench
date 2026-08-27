@@ -208,7 +208,7 @@ fn kf
   (#_ : squash (SZ.v k >= 1 /\ SZ.v s >= 1 /\ SZ.v d >= 1))
   (#_ : squash (SZ.v l >= 1))
   (#_ : squash (sz_fits_window (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo)))
-  (gid : szlt (rows *^ lo))
+  (gid : szlt (rows * lo))
   ()
   requires
     gpu **
@@ -236,7 +236,7 @@ fn kf
       di_ref |-> di_v **
       acc |-> acc_v **
       v_ref |-> v_v **
-      input |-> Frac (fIn /. (SZ.v (rows *^ lo))) sx **
+      input |-> Frac (fIn /. (rows * lo)) sx **
       tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt (SZ.v rows)) (SZ.v j_sz <: natlt (SZ.v lo)))
         (acc2 sout (SZ.v r_sz) (SZ.v j_sz)) **
       pure (SZ.v di_v <= SZ.v k /\
@@ -515,19 +515,7 @@ fn teardown_windowreduce
   ()
 }
 
-(* ──────────────────────────────────────────────────────────────────────
- * Section 4b: kdesc setup/teardown bridges
- *
- * The [kernel_desc_n] [setup]/[teardown] fields expect the per-thread
- * [forall+] indexed by [natlt (SZ.v (rows *^ lo))] (the size_t product
- * used for [nthr]), whereas the verified helpers [setup_windowreduce] /
- * [teardown_windowreduce] above produce/consume it indexed by the
- * multiplied-out nat [natlt (SZ.v rows * SZ.v lo)].  These two nat bounds
- * are provably equal (the [( *^ )] spec under no-overflow, which holds
- * because [SZ.v rows * SZ.v lo <= max_blocks * max_threads]).  These thin
- * wrappers establish that equality and [rewrite] the [forall+] slprop
- * across it, so the kdesc fields can plug the helpers in directly with no
- * proof holes. *)
+(* Adapt the setup and teardown helpers to the descriptor fields. *)
 ghost
 fn kdesc_setup
   (#et : Type0) {| scalar et |}
@@ -535,6 +523,7 @@ fn kdesc_setup
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
+  (nthr : szp { SZ.v nthr == rows * lo })
   (#lin  : layout2 (SZ.v rows) (SZ.v l))
   (#lout : layout2 (SZ.v rows) (SZ.v lo))
   (input  : array2 et lin)
@@ -547,20 +536,11 @@ fn kdesc_setup
   requires
     input |-> Frac fIn sx ** output |-> sout
   ensures
-    (forall+ (tid : natlt (SZ.v (rows *^ lo))).
+    (forall+ (tid : natlt nthr).
        kpre m input output sx sout fIn tid) ** emp
 {
   setup_windowreduce m rows l lo input output #sx #sout #fIn #() ();
-  assert pure (SZ.v (rows *^ lo) == SZ.v rows * SZ.v lo);
-  forevery_map'
-    (fun (tid : natlt (SZ.v rows * SZ.v lo)) ->
-       kpre m input output sx sout fIn tid)
-    (fun (tid : natlt (SZ.v (rows *^ lo))) ->
-       kpre m input output sx sout fIn tid)
-    fn tid tid' {
-       rewrite (kpre m input output sx sout fIn tid)
-            as (kpre m input output sx sout fIn tid');
-    };
+  forevery_rw_size (rows * lo) nthr;
   ()
 }
 
@@ -572,6 +552,7 @@ fn kdesc_teardown
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
+  (nthr : szp { SZ.v nthr == rows * lo })
   (#lin  : layout2 (SZ.v rows) (SZ.v l))
   (#lout : layout2 (SZ.v rows) (SZ.v lo))
   (input  : array2 et lin)
@@ -581,22 +562,13 @@ fn kdesc_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (SZ.v (rows *^ lo))).
+    (forall+ (tid : natlt nthr).
        kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid) ** emp
   ensures
     input |-> Frac fIn sx **
     output |-> windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo)
 {
-  assert pure (SZ.v (rows *^ lo) == SZ.v rows * SZ.v lo);
-  forevery_map'
-    (fun (tid : natlt (SZ.v (rows *^ lo))) ->
-       kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid)
-    (fun (tid : natlt (SZ.v rows * SZ.v lo)) ->
-       kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid)
-    fn tid tid' {
-       rewrite (kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid)
-            as (kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid');
-    };
+  forevery_rw_size nthr (rows * lo);
   teardown_windowreduce m k s p d rows l lo input output #sx #fIn #() ();
   ()
 }
@@ -628,15 +600,15 @@ let kdesc
       (ensures
         input  |-> Frac fIn sx **
         output |-> windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo))
-  = {
-    nthr = rows *^ lo;
-    f = (fun (gid : szlt (rows *^ lo)) ->
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == rows * lo }) = rows *^ lo in {
+    nthr = nthr;
+    f = (fun (gid : szlt nthr) ->
            kf m k s p d input output #sx
               #sout
               #fIn gid);
     frame = emp;
-    teardown = kdesc_teardown m k s p d rows l lo input output;
-    setup    = kdesc_setup m rows l lo input output;
+    teardown = kdesc_teardown m k s p d rows l lo nthr input output;
+    setup    = kdesc_setup m rows l lo nthr input output;
     kpre  = (fun (tid : natlt (SZ.v rows * SZ.v lo)) ->
               kpre m input output sx sout fIn tid);
     kpost = (fun (tid : natlt (SZ.v rows * SZ.v lo)) ->

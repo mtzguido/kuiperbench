@@ -45,11 +45,11 @@ type layernorm_fw_ty (t:Type0) {| floating t, real_like t |} =
                 SZ.fits (b * n) /\
                 b * n <= max_blocks * max_threads })
      (eps : t)
-     (x     : array1 t (l1_forward (b *^ n)) { is_global x     })
+     (x     : array1 t (l1_forward (b * n)) { is_global x     })
      (gamma : array1 t (l1_forward n)        { is_global gamma })
      (beta  : array1 t (l1_forward n)        { is_global beta  })
      (#fg #fb : perm)
-     (#sx : chest1 t (b *^ n))
+     (#sx : chest1 t (b * n))
      (#sg #sb : chest1 t n)
      requires
        cpu **
@@ -60,7 +60,7 @@ type layernorm_fw_ty (t:Type0) {| floating t, real_like t |} =
        cpu **
        on gpu_loc (gamma |-> Frac fg sg) **
        on gpu_loc (beta  |-> Frac fb sb) **
-       (exists* (sx' : chest1 t (b *^ n)).
+       (exists* (sx' : chest1 t (b * n)).
           on gpu_loc (x |-> sx') **
           pure (layernorm_post (SZ.v b) (SZ.v n) eps (ln_inv_n n)
                   (chest1_to_seq sg) (chest1_to_seq sb)

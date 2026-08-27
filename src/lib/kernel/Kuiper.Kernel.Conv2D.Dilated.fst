@@ -406,6 +406,7 @@ fn conv2d_dilated_setup
   (sh sw : szp) (ph pw : sz)
   (dh dw : szp)
   (h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * h_out * w_out })
   (#lx : layout1 (b * cin * h_in * w_in))
   (#lw : layout1 (cout * cin * kh * kw))
   (#lbias : layout1 cout)
@@ -429,7 +430,7 @@ fn conv2d_dilated_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ cout *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b cin h_in w_in cout kh kw h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw_ sbias sy0 fx fw fb tid) **
@@ -466,8 +467,7 @@ fn conv2d_dilated_setup
        (gw |-> Frac (fw /. (b * cout * h_out * w_out)) sw_) **
        (gbias |-> Frac (fb /. (b * cout * h_out * w_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * cout * h_out * w_out)
-                   (SZ.v (b *^ cout *^ h_out *^ w_out));
+  forevery_rw_size (b * cout * h_out * w_out) nthr;
   ()
 }
 
@@ -481,6 +481,7 @@ fn conv2d_dilated_teardown
   (sh sw : szp) (ph pw : sz)
   (dh dw : szp)
   (h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * h_out * w_out })
   (#lx : layout1 (b * cin * h_in * w_in))
   (#lw : layout1 (cout * cin * kh * kw))
   (#lbias : layout1 cout)
@@ -498,7 +499,7 @@ fn conv2d_dilated_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ cout *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b cin h_in w_in cout kh kw sh sw ph pw dh dw h_out w_out
              #lx #lw #lbias #ly
              gx gw gbias gy sx sw_ sbias fx fw fb tid) **
@@ -514,8 +515,7 @@ fn conv2d_dilated_teardown
                conv2dd_out_at b cin h_in w_in cout kh kw sh sw ph pw dh dw
                               h_out w_out sx sw_ sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ cout *^ h_out *^ w_out))
-                   (b * cout * h_out * w_out)
+  forevery_rw_size nthr (b * cout * h_out * w_out)
     #(kpost #et b cin h_in w_in cout kh kw sh sw ph pw dh dw h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw_ sbias fx fw fb);
@@ -604,14 +604,14 @@ let kdesc
                  acc1 sy tid ==
                  conv2dd_out_at b cin h_in w_in cout kh kw sh sw ph pw dh dw
                                 h_out w_out sx sw_ sbias tid)))
-=
-{
-  nthr = b *^ cout *^ h_out *^ w_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * cout * h_out * w_out }) =
+      b *^ cout *^ h_out *^ w_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
   setup    = conv2d_dilated_setup b cin h_in w_in cout kh kw sh sw ph pw dh dw
-                                  h_out w_out gx gw gbias gy;
+                                  h_out w_out nthr gx gw gbias gy;
   teardown = conv2d_dilated_teardown b cin h_in w_in cout kh kw sh sw ph pw dh dw
-                                     h_out w_out gx gw gbias gy;
+                                     h_out w_out nthr gx gw gbias gy;
   kpre  = kpre #et b cin h_in w_in cout kh kw h_out w_out #lx #lw #lbias #ly gx gw gbias gy sx sw_ sbias sy0 fx fw fb;
   kpost = kpost #et b cin h_in w_in cout kh kw sh sw ph pw dh dw h_out w_out #lx #lw #lbias #ly gx gw gbias gy sx sw_ sbias fx fw fb;
   f = kf b cin h_in w_in cout kh kw sh sw ph pw dh dw h_out w_out gx gw gbias gy;

@@ -70,8 +70,8 @@ let from_to3
 (* ----------------------------------------------------------------------- *)
 (* Spec glue.  The 4-D flatten [flat4to2] (= [flat3to2] of [flat4to3]) is   *)
 (* exactly the row-major linearization of all leading dims.  These two pure *)
-(* lemmas bridge the pre/post conditions across the [SZ.v (b*^i)] vs [b*i]  *)
-(* dimension gap.                                                           *)
+(* lemmas bridge the pre/post conditions across the runtime and             *)
+(* mathematical product dimensions.                                         *)
 (* ----------------------------------------------------------------------- *)
 
 (* Forward: the [flat3to2] of the (p,j,ll) 3-D view of [s] equals [flat4to2 s]

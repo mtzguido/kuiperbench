@@ -341,6 +341,7 @@ fn conv1d_naive_setup
   (b cin l_in cout : szp) (kk : szp)
   (stride : szp) (dilation : szp)
   (l_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * l_out })
   (#lx : layout1 (b * cin * l_in))
   (#lw : layout1 (cout * cin * kk))
   (#lbias : layout1 cout)
@@ -363,7 +364,7 @@ fn conv1d_naive_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ cout *^ l_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b cin l_in cout kk l_out #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias sy0 fx fw fb tid) **
     pure (SZ.fits (tlayout_ulen ly))
@@ -399,7 +400,7 @@ fn conv1d_naive_setup
        (gw |-> Frac (fw /. (b * cout * l_out)) sw) **
        (gbias |-> Frac (fb /. (b * cout * l_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * cout * l_out) (SZ.v (b *^ cout *^ l_out));
+  forevery_rw_size (b * cout * l_out) nthr;
   ()
 }
 
@@ -414,6 +415,7 @@ fn conv1d_naive_teardown
   (b cin l_in cout : szp) (kk : szp)
   (stride : szp) (pad : sz) (dilation : szp)
   (l_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * l_out })
   (#lx : layout1 (b * cin * l_in))
   (#lw : layout1 (cout * cin * kk))
   (#lbias : layout1 cout)
@@ -430,7 +432,7 @@ fn conv1d_naive_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ cout *^ l_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b cin l_in cout kk stride pad dilation l_out
              #lx #lw #lbias #ly
              gx gw gbias gy sx sw sbias fx fw fb tid) **
@@ -446,7 +448,7 @@ fn conv1d_naive_teardown
                conv1d_out_at b cin l_in cout kk stride pad dilation
                              l_out sx sw sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ cout *^ l_out)) (b * cout * l_out)
+  forevery_rw_size nthr (b * cout * l_out)
     #(kpost #et b cin l_in cout kk stride pad dilation l_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias fx fw fb);
@@ -530,13 +532,13 @@ let kdesc
                  acc1 sy tid ==
                  conv1d_out_at b cin l_in cout kk stride pad dilation
                                l_out sx sw sbias tid)))
-=
-{
-  nthr = b *^ cout *^ l_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * cout * l_out }) =
+      b *^ cout *^ l_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
-  setup    = conv1d_naive_setup b cin l_in cout kk stride dilation l_out
+  setup    = conv1d_naive_setup b cin l_in cout kk stride dilation l_out nthr
                                 gx gw gbias gy;
-  teardown = conv1d_naive_teardown b cin l_in cout kk stride pad dilation l_out
+  teardown = conv1d_naive_teardown b cin l_in cout kk stride pad dilation l_out nthr
                                    gx gw gbias gy;
   kpre  = kpre #et b cin l_in cout kk l_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias sy0 fx fw fb;
   kpost = kpost #et b cin l_in cout kk stride pad dilation l_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias fx fw fb;

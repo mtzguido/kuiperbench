@@ -351,6 +351,7 @@ fn dwconv2d_setup
   (kh kw : szp)
   (stride : szp)
   (h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * c * h_out * w_out })
   (#lx : layout1 (b * c * h_in * w_in))
   (#lw : layout1 (c * 1 * kh * kw))
   (#lbias : layout1 c)
@@ -373,7 +374,7 @@ fn dwconv2d_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ c *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b c h_in w_in kh kw h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias sy0 fx fw fb tid) **
@@ -410,8 +411,7 @@ fn dwconv2d_setup
        (gw |-> Frac (fw /. (b * c * h_out * w_out)) sw) **
        (gbias |-> Frac (fb /. (b * c * h_out * w_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * c * h_out * w_out)
-                   (SZ.v (b *^ c *^ h_out *^ w_out));
+  forevery_rw_size (b * c * h_out * w_out) nthr;
   ()
 }
 
@@ -424,6 +424,7 @@ fn dwconv2d_teardown
   (kh kw : szp)
   (stride : szp) (pad : sz)
   (h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * c * h_out * w_out })
   (#lx : layout1 (b * c * h_in * w_in))
   (#lw : layout1 (c * 1 * kh * kw))
   (#lbias : layout1 c)
@@ -440,7 +441,7 @@ fn dwconv2d_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ c *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b c h_in w_in kh kw stride pad h_out w_out
              #lx #lw #lbias #ly
              gx gw gbias gy sx sw sbias fx fw fb tid) **
@@ -456,8 +457,7 @@ fn dwconv2d_teardown
                dwconv2d_out_at b c h_in w_in kh kw stride pad
                                h_out w_out sx sw sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ c *^ h_out *^ w_out))
-                   (b * c * h_out * w_out)
+  forevery_rw_size nthr (b * c * h_out * w_out)
     #(kpost #et b c h_in w_in kh kw stride pad h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias fx fw fb);
@@ -544,14 +544,14 @@ let kdesc
                  acc1 sy tid ==
                  dwconv2d_out_at b c h_in w_in kh kw stride pad
                                  h_out w_out sx sw sbias tid)))
-=
-{
-  nthr = b *^ c *^ h_out *^ w_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * c * h_out * w_out }) =
+      b *^ c *^ h_out *^ w_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
-  setup    = dwconv2d_setup b c h_in w_in kh kw stride h_out w_out
+  setup    = dwconv2d_setup b c h_in w_in kh kw stride h_out w_out nthr
                             gx gw gbias gy;
   teardown = dwconv2d_teardown b c h_in w_in kh kw stride pad h_out w_out
-                               gx gw gbias gy;
+                               nthr gx gw gbias gy;
   kpre  = kpre #et b c h_in w_in kh kw h_out w_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias sy0 fx fw fb;
   kpost = kpost #et b c h_in w_in kh kw stride pad h_out w_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias fx fw fb;
   f = kf b c h_in w_in kh kw stride pad h_out w_out gx gw gbias gy;

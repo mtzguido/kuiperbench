@@ -197,18 +197,18 @@ let row_layer_normalized_intro
 #push-options "--z3rlimit 200"
 inline_for_extraction noextract
 fn layer_norm_row
-  (#bn : szp { bn <= max_blocks * max_threads })
+  (b : szp)
   (n : szp { n <= max_blocks * max_threads /\
-             n <= bn })
-  (rv_off : sz { rv_off + n <= bn })
+             b * n <= max_blocks * max_threads })
+  (rv_off : sz { rv_off + n <= b * n })
   (eps : f32)
   (inv_n : f32)
-  (x : array1 f32 (l1_forward bn) { is_global x })
+  (x : array1 f32 (l1_forward (b * n)) { is_global x })
   (gamma : array1 f32 (l1_forward n) { is_global gamma })
   (beta  : array1 f32 (l1_forward n) { is_global beta  })
   (scratch : array1 f32 (l1_forward n) { is_global scratch })
   (#fg #fb : perm)
-  (#sx : chest1 f32 bn)
+  (#sx : chest1 f32 (b * n))
   (#sg : chest1 f32 n)
   (#sbeta : chest1 f32 n)
   (#ss : chest1 f32 n)
@@ -219,7 +219,7 @@ fn layer_norm_row
   requires
     on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
   ensures
-    (exists* (sx' : chest1 f32 bn) (ss' : chest1 f32 n).
+    (exists* (sx' : chest1 f32 (b * n)) (ss' : chest1 f32 n).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
        pure (row_layer_normalized #_ #_ #_ #_ #_ #(SZ.v n)
                (chest1_to_seq sx) (chest1_to_seq sx')
@@ -310,8 +310,8 @@ fn layer_norm_row
      [rv_off] (proven just above), so slicing [vfinal] back out at
      [rv_off, rv_off+n] recovers [ln_row_result].  Use the standalone
      [blit_self_slice] lemma so this holds robustly. *)
-  assert pure (Seq.length (chest1_to_seq (reveal vfinal)) == SZ.v bn);
-  assert pure (SZ.v rv_off + SZ.v n <= SZ.v bn);
+  assert pure (Seq.length (chest1_to_seq (reveal vfinal)) == b * n);
+  assert pure (rv_off + n <= b * n);
   blit_self_slice (chest1_to_seq (reveal sx)) (SZ.v rv_off)
     (ln_row_result #_ #_ #(SZ.v n) inv neg_mean_inv
        (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta)) (reveal row_g));
@@ -323,12 +323,12 @@ fn layer_norm_row
   (* Introduce row_layer_normalized. *)
   (* Tie [reveal row_g] to the slice the lemma's [requires] is stated over, so
      the [%~] facts and the slice equality line up with the lemma conjuncts. *)
-  assert pure (SZ.v rv_off + SZ.v n <= SZ.v bn);
+  assert pure (rv_off + n <= b * n);
   assert pure (reveal row_g ==
                Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v rv_off + SZ.v n));
   assert pure (sum1 %~ rsum (to_real_seq (reveal row_g)));
   assert pure (sum2 %~ frobenius_sumsq_r (to_real_seq (reveal row_g)));
-  row_layer_normalized_intro #(SZ.v bn) (SZ.v n)
+  row_layer_normalized_intro #(b * n) n
     (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
     (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal vfinal))
     (SZ.v rv_off) eps inv_n
@@ -635,11 +635,11 @@ fn layer_norm
              b * n <= max_blocks * max_threads })
   (eps : f32)
   (inv_n : f32)
-  (x : array1 f32 (l1_forward (b *^ n)) { is_global x })
+  (x : array1 f32 (l1_forward (b * n)) { is_global x })
   (gamma : array1 f32 (l1_forward n) { is_global gamma })
   (beta  : array1 f32 (l1_forward n) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : chest1 f32 (b *^ n))
+  (#sx : chest1 f32 (b * n))
   (#sg : chest1 f32 n)
   (#sbeta : chest1 f32 n)
   preserves cpu
@@ -650,7 +650,7 @@ fn layer_norm
   ensures
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta) **
-    (exists* (sx' : chest1 f32 (b *^ n)).
+    (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
        pure (layernorm_post (SZ.v b) (SZ.v n) eps inv_n
                (chest1_to_seq sg) (chest1_to_seq sbeta)
@@ -664,7 +664,7 @@ fn layer_norm
   row_lt_b_bound_forall_lemma (SZ.v n) (SZ.v b);
   while (let i = !idx; SZ.(i <^ b))
     invariant
-      exists* (vi : sz) (sx' : chest1 f32 (b *^ n)) (ss' : chest1 f32 n).
+      exists* (vi : sz) (sx' : chest1 f32 (b * n)) (ss' : chest1 f32 n).
         idx |-> vi **
         on gpu_loc (x |-> sx') **
         on gpu_loc (scratch |-> ss') **
@@ -694,7 +694,7 @@ fn layer_norm
         (r * SZ.v n) eps inv_n);
     (* Re-establish the bound fact inside the loop body. *)
     row_lt_b_bound_forall_lemma (SZ.v n) (SZ.v b);
-    layer_norm_row #(b *^ n) n off eps inv_n x gamma beta scratch;
+    layer_norm_row b n off eps inv_n x gamma beta scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
     (* From the row postcondition: row is normalized w.r.t. sx_pre,
        and sx_post is the blit.  Use ln_loop_step_lemma to get
@@ -715,16 +715,16 @@ fn layer_norm
        per-row normalisation forall) was already captured pre-row-call
        above and persists here. *)
     assert pure (forall (r : nat). r < SZ.v i ==>
-      r * SZ.v n + SZ.v n <= SZ.v (b *^ n) /\
+      r * n + n <= b * n /\
       Seq.slice (chest1_to_seq (reveal sx_post)) (r * SZ.v n) (r * SZ.v n + SZ.v n) ==
       Seq.slice (chest1_to_seq (reveal sx_pre)) (r * SZ.v n) (r * SZ.v n + SZ.v n));
     (* Transfer row_layer_normalized from sx_pre to sx_post for all
        rows r < i.  Uses a pure F* lemma in a clean context. *)
-    transfer_rln_forall (SZ.v (b *^ n)) (SZ.v n) (SZ.v i)
+    transfer_rln_forall (b * n) n i
       (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
       (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) eps inv_n;
     (* Extend the invariant from i rows to i+1. *)
-    extend_row_ln_forall (SZ.v (b *^ n)) (SZ.v n) (SZ.v b) (SZ.v i)
+    extend_row_ln_forall (b * n) n b i
       (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
       (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_post)) eps inv_n;
     assert pure (SZ.v i + 1 == SZ.v (SZ.add i 1sz));
@@ -745,11 +745,11 @@ fn layernorm_fw
              SZ.fits (b * n) /\
              b * n <= max_blocks * max_threads })
   (eps : f32)
-  (x : array1 f32 (l1_forward (b *^ n)) { is_global x })
+  (x : array1 f32 (l1_forward (b * n)) { is_global x })
   (gamma : array1 f32 (l1_forward n) { is_global gamma })
   (beta  : array1 f32 (l1_forward n) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : chest1 f32 (b *^ n))
+  (#sx : chest1 f32 (b * n))
   (#sg : chest1 f32 n)
   (#sbeta : chest1 f32 n)
   preserves cpu
@@ -760,7 +760,7 @@ fn layernorm_fw
   ensures
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta) **
-    (exists* (sx' : chest1 f32 (b *^ n)).
+    (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
        pure (layernorm_post (SZ.v b) (SZ.v n) eps (ln_inv_n n)
                (chest1_to_seq sg) (chest1_to_seq sbeta)

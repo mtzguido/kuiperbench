@@ -465,12 +465,12 @@ fn triplet_loss_impl
              SZ.fits (b * d) })
   (margin : f32)
   (inv_b : f32)
-  (anchor   : array1 f32 (l1_forward (b *^ d)) { is_global anchor })
-  (positive : array1 f32 (l1_forward (b *^ d)) { is_global positive })
-  (negative : array1 f32 (l1_forward (b *^ d)) { is_global negative })
-  (#sa : chest1 f32 (b *^ d))
-  (#sp : chest1 f32 (b *^ d))
-  (#sn : chest1 f32 (b *^ d))
+  (anchor   : array1 f32 (l1_forward (b * d)) { is_global anchor })
+  (positive : array1 f32 (l1_forward (b * d)) { is_global positive })
+  (negative : array1 f32 (l1_forward (b * d)) { is_global negative })
+  (#sa : chest1 f32 (b * d))
+  (#sp : chest1 f32 (b * d))
+  (#sn : chest1 f32 (b * d))
   (#fanc #fpos #fneg : perm)
   norewrite
   preserves cpu **
@@ -487,7 +487,6 @@ fn triplet_loss_impl
 {
   (* The flat-length nat coincides with [b * d]; rebind the inputs at
      that length so all spec-level uses line up with [triplet_post]. *)
-  assert pure (SZ.v (b *^ d) == SZ.v b * SZ.v d);
   let sa_c : erased (Seq.lseq f32 (SZ.v b * SZ.v d)) =
     hide (chest1_to_seq (reveal sa) <: Seq.lseq f32 (SZ.v b * SZ.v d));
   let sp_c : erased (Seq.lseq f32 (SZ.v b * SZ.v d)) =
@@ -532,7 +531,7 @@ fn triplet_loss_impl
     assert pure (SZ.v i * SZ.v d + SZ.v d <= SZ.v b * SZ.v d);
 
     (* ── per-row squared distances via the factored helper ──────── *)
-    assert pure (SZ.v i * SZ.v d + SZ.v d <= SZ.v (b *^ d));
+    assert pure (i * d + d <= b * d);
 
     let sumsq_p = dist_sq_row d anchor positive scratch_a scratch_b off (hide (SZ.v i));
     assert pure (trow (chest1_to_seq (reveal sa)) (SZ.v d) (SZ.v i) == trow (reveal sa_c) (SZ.v d) (SZ.v i));

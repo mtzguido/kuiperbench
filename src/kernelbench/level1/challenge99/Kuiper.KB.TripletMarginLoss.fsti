@@ -19,10 +19,10 @@ type triplet_fw_ty =
                SZ.fits (d + max_threads) /\
                SZ.fits (b * d) })
     (margin inv_b : f32)
-    (anchor   : array1 f32 (l1_forward (b *^ d)) { is_global anchor })
-    (positive : array1 f32 (l1_forward (b *^ d)) { is_global positive })
-    (negative : array1 f32 (l1_forward (b *^ d)) { is_global negative })
-    (#sa #sp #sn : chest1 f32 (b *^ d))
+    (anchor   : array1 f32 (l1_forward (b * d)) { is_global anchor })
+    (positive : array1 f32 (l1_forward (b * d)) { is_global positive })
+    (negative : array1 f32 (l1_forward (b * d)) { is_global negative })
+    (#sa #sp #sn : chest1 f32 (b * d))
     (#fanc #fpos #fneg : perm)
     preserves cpu **
               on gpu_loc (anchor   |-> Frac fanc sa) **

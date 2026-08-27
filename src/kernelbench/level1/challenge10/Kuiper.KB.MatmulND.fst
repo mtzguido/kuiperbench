@@ -152,8 +152,8 @@ let from_to2
     EMatrix.lemma_equal_intro lhs s;
     Kuiper.Chest.ext lhs s
 
-(* Per-entry bridge across the [SZ.v (n*^m)] vs [n*m] dimension gap.  The GEMM
-   output [eGemm] is typed at the szp-product dimension [pnm == n*m]; this lemma
+(* Per-entry bridge between the runtime product and its mathematical value.
+   The GEMM output [eGemm] is typed at [pnm == n*m]; this lemma
    shows that the (n,m,l)-tensor re-interpretation, flattened back via [flat3to2]
    (whose row dimension is the NAT product [n*m]), has the SAME entries as
    [eGemm].  Reasoning is purely at the scalar [acc2] level (no [%~] typeclass),

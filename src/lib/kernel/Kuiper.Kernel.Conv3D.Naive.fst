@@ -553,6 +553,7 @@ fn conv3d_naive_setup
   (kd kh kw : szp)
   (stride : szp)
   (d_out h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * d_out * h_out * w_out })
   (#lx : layout1 (b * cin * d_in * h_in * w_in))
   (#lw : layout1 (cout * cin * kd * kh * kw))
   (#lbias : layout1 cout)
@@ -576,7 +577,7 @@ fn conv3d_naive_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ cout *^ d_out *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b cin d_in h_in w_in cout kd kh kw d_out h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias sy0 fx fw fb tid) **
@@ -613,8 +614,7 @@ fn conv3d_naive_setup
        (gw |-> Frac (fw /. (b * cout * d_out * h_out * w_out)) sw) **
        (gbias |-> Frac (fb /. (b * cout * d_out * h_out * w_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * cout * d_out * h_out * w_out)
-                   (SZ.v (b *^ cout *^ d_out *^ h_out *^ w_out));
+  forevery_rw_size (b * cout * d_out * h_out * w_out) nthr;
   ()
 }
 
@@ -627,6 +627,7 @@ fn conv3d_naive_teardown
   (kd kh kw : szp)
   (stride : szp) (pad : sz)
   (d_out h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * d_out * h_out * w_out })
   (#lx : layout1 (b * cin * d_in * h_in * w_in))
   (#lw : layout1 (cout * cin * kd * kh * kw))
   (#lbias : layout1 cout)
@@ -644,7 +645,7 @@ fn conv3d_naive_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ cout *^ d_out *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b cin d_in h_in w_in cout kd kh kw stride pad
              d_out h_out w_out
              #lx #lw #lbias #ly
@@ -661,8 +662,7 @@ fn conv3d_naive_teardown
                conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
                              d_out h_out w_out sx sw sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ cout *^ d_out *^ h_out *^ w_out))
-                   (b * cout * d_out * h_out * w_out)
+  forevery_rw_size nthr (b * cout * d_out * h_out * w_out)
     #(kpost #et b cin d_in h_in w_in cout kd kh kw stride pad
             d_out h_out w_out
             #lx #lw #lbias #ly
@@ -755,14 +755,14 @@ let kdesc
                  acc1 sy tid ==
                  conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
                                d_out h_out w_out sx sw sbias tid)))
-=
-{
-  nthr = b *^ cout *^ d_out *^ h_out *^ w_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * cout * d_out * h_out * w_out }) =
+      b *^ cout *^ d_out *^ h_out *^ w_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
   setup    = conv3d_naive_setup b cin d_in h_in w_in cout kd kh kw stride
-                                d_out h_out w_out gx gw gbias gy;
+                                d_out h_out w_out nthr gx gw gbias gy;
   teardown = conv3d_naive_teardown b cin d_in h_in w_in cout kd kh kw stride pad
-                                   d_out h_out w_out gx gw gbias gy;
+                                   d_out h_out w_out nthr gx gw gbias gy;
   kpre  = kpre #et b cin d_in h_in w_in cout kd kh kw d_out h_out w_out
                #lx #lw #lbias #ly gx gw gbias gy sx sw sbias sy0 fx fw fb;
   kpost = kpost #et b cin d_in h_in w_in cout kd kh kw stride pad

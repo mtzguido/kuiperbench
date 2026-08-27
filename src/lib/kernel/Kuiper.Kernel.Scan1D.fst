@@ -156,7 +156,7 @@ fn kf
   (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
   (#sout : chest2 et (SZ.v rows) (SZ.v cols))
   (#fIn : perm)
-  (gid : szlt (rows *^ cols))
+  (gid : szlt (rows * cols))
   ()
   requires
     gpu **
@@ -184,7 +184,7 @@ fn kf
     invariant exists* (di_v : SZ.t) (acc_v : et).
       di_ref |-> di_v **
       acc |-> acc_v **
-      input |-> Frac (fIn /. (SZ.v (rows *^ cols))) sx **
+      input |-> Frac (fIn /. (rows * cols)) sx **
       tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt (SZ.v rows)) (SZ.v j_sz <: natlt (SZ.v cols)))
         (acc2 sout (SZ.v r_sz) (SZ.v j_sz)) **
       pure (SZ.v di_v <= SZ.v bound /\
@@ -222,11 +222,8 @@ fn kf
  * ([setup_fold_kpre_step]) bridges the resulting forall+'s into the
  * [kpre] forall+ form using [forevery_unfactor'] / [forevery_zip] /
  * [forevery_ext].  Teardown is symmetric.  The kernel_desc
- * setup/teardown fields plug these helpers in via the thin
- * [kdesc_setup] / [kdesc_teardown] bridges, which use [forevery_map']
- * to rebind the [forall+] from [natlt (SZ.v rows * SZ.v cols)] (helper
- * form) to [natlt (SZ.v (rows *^ cols))] (the [kernel_desc_n] form);
- * the two index bounds are provably equal.
+ * setup/teardown fields plug these helpers in via thin adapters with
+ * the same mathematical [rows * cols] index bound.
  * ────────────────────────────────────────────────────────────────────── *)
 
 (* Local helpers (mirror of [Kuiper.Kernel.WindowReduce1D]'s opaque
@@ -418,24 +415,14 @@ fn teardown_scan
   ()
 }
 
-(* ──────────────────────────────────────────────────────────────────────
- * Section 4b: kdesc setup/teardown bridges
- *
- * The [kernel_desc_n] [setup]/[teardown] fields index the per-thread
- * [forall+] by [natlt (SZ.v (rows *^ cols))] (the size_t product used for
- * [nthr]), whereas the verified helpers [setup_scan] / [teardown_scan]
- * produce/consume it indexed by the multiplied-out nat
- * [natlt (SZ.v rows * SZ.v cols)].  These bounds are provably equal (the
- * [( *^ )] spec under no-overflow, which holds because
- * [SZ.v rows * SZ.v cols <= max_blocks * max_threads]).  [forevery_map']
- * rebinds the [forall+] across the type equality, so the kdesc fields can
- * plug the helpers in directly with no proof holes. *)
+(* Adapt the setup and teardown helpers to the descriptor fields. *)
 ghost
 fn kdesc_setup
   (#et : Type0) {| scalar et |}
   (m : cmonoid et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v rows * SZ.v cols <= max_blocks * max_threads })
+  (nthr : szp { SZ.v nthr == rows * cols })
   (#lin  : layout2 (SZ.v rows) (SZ.v cols))
   (#lout : layout2 (SZ.v rows) (SZ.v cols))
   (input  : array2 et lin)
@@ -448,20 +435,11 @@ fn kdesc_setup
   requires
     input |-> Frac fIn sx ** output |-> sout
   ensures
-    (forall+ (tid : natlt (SZ.v (rows *^ cols))).
+    (forall+ (tid : natlt nthr).
        kpre m input output sx sout fIn tid) ** emp
 {
   setup_scan m rows cols input output #sx #sout #fIn ();
-  assert pure (SZ.v (rows *^ cols) == SZ.v rows * SZ.v cols);
-  forevery_map'
-    (fun (tid : natlt (SZ.v rows * SZ.v cols)) ->
-       kpre m input output sx sout fIn tid)
-    (fun (tid : natlt (SZ.v (rows *^ cols))) ->
-       kpre m input output sx sout fIn tid)
-    fn tid tid' {
-       rewrite (kpre m input output sx sout fIn tid)
-            as (kpre m input output sx sout fIn tid');
-    };
+  forevery_rw_size (rows * cols) nthr;
   ()
 }
 
@@ -471,6 +449,7 @@ fn kdesc_teardown
   (m : cmonoid et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v rows * SZ.v cols <= max_blocks * max_threads })
+  (nthr : szp { SZ.v nthr == rows * cols })
   (#lin  : layout2 (SZ.v rows) (SZ.v cols))
   (#lout : layout2 (SZ.v rows) (SZ.v cols))
   (input  : array2 et lin)
@@ -480,22 +459,13 @@ fn kdesc_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (SZ.v (rows *^ cols))).
+    (forall+ (tid : natlt nthr).
        kpost m input output sx fIn tid) ** emp
   ensures
     input |-> Frac fIn sx **
     output |-> scan2d_inclusive_result m sx
 {
-  assert pure (SZ.v (rows *^ cols) == SZ.v rows * SZ.v cols);
-  forevery_map'
-    (fun (tid : natlt (SZ.v (rows *^ cols))) ->
-       kpost m input output sx fIn tid)
-    (fun (tid : natlt (SZ.v rows * SZ.v cols)) ->
-       kpost m input output sx fIn tid)
-    fn tid tid' {
-       rewrite (kpost m input output sx fIn tid)
-            as (kpost m input output sx fIn tid');
-    };
+  forevery_rw_size nthr (rows * cols);
   teardown_scan m rows cols input output #sx #fIn ();
   ()
 }
@@ -523,13 +493,13 @@ let kdesc
       (ensures
         input  |-> Frac fIn sx **
         output |-> scan2d_inclusive_result m sx)
-  = {
-    nthr = rows *^ cols;
-    f = (fun (gid : szlt (rows *^ cols)) ->
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == rows * cols }) = rows *^ cols in {
+    nthr = nthr;
+    f = (fun (gid : szlt nthr) ->
            kf m input output #sx #sout #fIn gid);
     frame = emp;
-    teardown = kdesc_teardown m rows cols input output;
-    setup    = kdesc_setup m rows cols input output;
+    teardown = kdesc_teardown m rows cols nthr input output;
+    setup    = kdesc_setup m rows cols nthr input output;
     kpre  = (fun (tid : natlt (SZ.v rows * SZ.v cols)) ->
               kpre m input output sx sout fIn tid);
     kpost = (fun (tid : natlt (SZ.v rows * SZ.v cols)) ->

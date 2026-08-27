@@ -133,6 +133,7 @@ ghost
 fn bias_add_setup
   (#t : Type0) {| scalar t |}
   (m n : szp)
+  (nthr : szp { SZ.v nthr == m * n })
   (#lC : layout2 m n)
   (#lbias : layout1 n)
   (#ly : layout1 (m * n))
@@ -151,7 +152,7 @@ fn bias_add_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (m *^ n)).
+    (forall+ (tid : natlt nthr).
        kpre #t m n #lC #lbias #ly gC gbias gy eC sbias sy0 fc fb tid) **
     pure (SZ.fits (tlayout_ulen ly))
 {
@@ -175,7 +176,7 @@ fn bias_add_setup
     (fun (i : natlt (m * n)) ->
        (gbias |-> Frac (fb /. (m * n)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (m * n) (SZ.v (m *^ n));
+  forevery_rw_size (m * n) nthr;
   ()
 }
 
@@ -188,6 +189,7 @@ ghost
 fn bias_add_teardown
   (#t : Type0) {| scalar t |}
   (m n : szp)
+  (nthr : szp { SZ.v nthr == m * n })
   (#lC : layout2 m n)
   (#lbias : layout1 n)
   (#ly : layout1 (m * n))
@@ -201,7 +203,7 @@ fn bias_add_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (m *^ n)).
+    (forall+ (tid : natlt nthr).
        kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb tid) **
     pure (SZ.fits (tlayout_ulen ly))
   ensures
@@ -212,7 +214,7 @@ fn bias_add_teardown
        pure (forall (tid : nat{tid < m * n}).
                acc1 sy tid == bias_add_at m n eC sbias tid))
 {
-  forevery_rw_size (SZ.v (m *^ n)) (m * n)
+  forevery_rw_size nthr (m * n)
     #(kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb);
   forevery_unzip
     (fun (_ : natlt (m * n)) ->
@@ -279,12 +281,11 @@ let kdesc
           (gy |-> sy) **
           pure (forall (tid : nat{tid < m * n}).
                   acc1 sy tid == bias_add_at m n eC sbias tid)))
-=
-{
-  nthr = m *^ n;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == m * n }) = m *^ n in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
-  setup    = bias_add_setup m n gC gbias gy;
-  teardown = bias_add_teardown m n gC gbias gy;
+  setup    = bias_add_setup m n nthr gC gbias gy;
+  teardown = bias_add_teardown m n nthr gC gbias gy;
   kpre  = kpre #t m n #lC #lbias #ly gC gbias gy eC sbias sy0 fc fb;
   kpost = kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb;
   f = kf m n gC gbias gy;

@@ -281,9 +281,9 @@ fn ce_loss_impl
              SZ.fits (c + max_threads) /\
              SZ.fits (b * c) })
   (inv_b : f32)
-  (predictions : array1 f32 (l1_forward (b *^ c)) { is_global predictions })
+  (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
   (targets : array1 SZ.t (l1_forward b) { is_global targets })
-  (#sp : chest1 f32 (b *^ c))
+  (#sp : chest1 f32 (b * c))
   (#stv : chest1 SZ.t b)
   (#fp #ft : perm)
   norewrite
@@ -299,10 +299,9 @@ fn ce_loss_impl
             (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t (SZ.v b))
             res)
 {
-  assert pure (SZ.v (b *^ c) == SZ.v b * SZ.v c);
-  let sp_c : erased (Seq.lseq f32 (SZ.v b * SZ.v c)) =
-    hide (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v c));
-  let stv_s : erased (Seq.lseq SZ.t (SZ.v b)) =
+  let sp_c : erased (Seq.lseq f32 (b * c)) =
+    hide (chest1_to_seq (reveal sp) <: Seq.lseq f32 (b * c));
+  let stv_s : erased (Seq.lseq SZ.t b) =
     hide (chest1_to_seq (reveal stv));
   assert pure ((reveal sp_c <: Seq.seq f32) == (chest1_to_seq (reveal sp) <: Seq.seq f32));
 
@@ -334,7 +333,7 @@ fn ce_loss_impl
     assert pure (SZ.v off == SZ.v i * SZ.v c);
     FStar.Math.Lemmas.lemma_mult_le_right (SZ.v c) (SZ.v i + 1) (SZ.v b);
     assert pure (SZ.v i * SZ.v c + SZ.v c <= SZ.v b * SZ.v c);
-    assert pure (SZ.v i * SZ.v c + SZ.v c <= SZ.v (b *^ c));
+    assert pure (i * c + c <= b * c);
 
     (* ── copy row [i] into scratch ──────────────────────────────── *)
     with va_prev. assert (on gpu_loc (scratch |-> reveal va_prev));
@@ -343,11 +342,11 @@ fn ce_loss_impl
     assert pure (chest1_to_seq (reveal sca) ==
                  KS.seq_blit (chest1_to_seq (reveal va_prev)) 0
                              (chest1_to_seq (reveal sp)) (SZ.v off) (SZ.v c));
-    memcpy_row_eq #(SZ.v (b *^ c)) (SZ.v c)
-      (chest1_to_seq (reveal va_prev)) (chest1_to_seq (reveal sp)) (SZ.v i) (SZ.v off);
+    memcpy_row_eq #(b * c) c
+      (chest1_to_seq (reveal va_prev)) (chest1_to_seq (reveal sp)) i off;
     assert pure (chest1_to_seq (reveal sca) == crow (chest1_to_seq (reveal sp)) (SZ.v c) (SZ.v i));
-    crow_coerce #(SZ.v (b *^ c)) #(SZ.v b * SZ.v c)
-      (chest1_to_seq (reveal sp)) (reveal sp_c) (SZ.v c) (SZ.v i);
+    crow_coerce #(b * c) #(b * c)
+      (chest1_to_seq (reveal sp)) (reveal sp_c) c i;
     assert pure (chest1_to_seq (reveal sca) == crow (reveal sp_c) (SZ.v c) (SZ.v i));
 
     (* ── verified numerically-stable log-softmax in place ───────── *)
