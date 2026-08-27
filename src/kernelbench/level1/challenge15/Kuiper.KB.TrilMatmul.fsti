@@ -36,8 +36,8 @@ module MS = Kuiper.Spec.GEMM
 let tril_matmul_post
   (#t:Type0) {| scalar t, real_like t |}
   (n : nat)
-  (rA rB : EM.chest2 real n n)
-  (sy' : EM.chest2 t n n)
+  (rA rB : chest2 real n n)
+  (sy' : chest2 t n n)
   : prop
   = forall (i j : natlt n).
       acc2 sy' i j %~
@@ -50,8 +50,8 @@ fn tril_matmul_f32
   (gA : array2 f32 (l2_row_major n n) { is_global gA })
   (gB : array2 f32 (l2_row_major n n) { is_global gB })
   (y  : array2 f32 (l2_row_major n n) { is_global y  })
-  (#sA #sB #sy : EM.chest2 f32 n n)
-  (#rA #rB : EM.chest2 real n n)
+  (#sA #sB #sy : chest2 f32 n n)
+  (#rA #rB : chest2 real n n)
   preserves
     cpu **
     on gpu_loc (gA |-> sA) **
@@ -60,6 +60,6 @@ fn tril_matmul_f32
     on gpu_loc (y  |-> sy) **
     pure (reveal sA %~ reveal rA /\ reveal sB %~ reveal rB)
   ensures
-    (exists* (sy' : EM.chest2 f32 n n).
+    (exists* (sy' : chest2 f32 n n).
        on gpu_loc (y |-> sy') **
        pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))

@@ -25,6 +25,7 @@ module Kuiper.Spec.MaxReduceDim
        value. *)
 
 open Kuiper
+open Kuiper.Chest
 open Kuiper.Approximates
 open Kuiper.Math.OnlineSoftmax { seq_max }
 module Seq = FStar.Seq
@@ -36,7 +37,7 @@ module EM  = Kuiper.EMatrix
 let maxreduce_post
   (#t:Type0) {| scalar t, real_like t |}
   (n_rows : nat) (n_cols : nat{n_cols > 0})
-  (sx : EM.chest2 t n_rows n_cols)
+  (sx : chest2 t n_rows n_cols)
   (sy : Seq.lseq t n_rows)
   : prop =
   forall (r : nat). r < n_rows ==>

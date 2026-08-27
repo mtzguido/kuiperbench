@@ -37,8 +37,8 @@ fn avgpool1d_fw_f32
 (input  : array2 f32 lin  { is_global input  })
 (output : array2 f32 lout { is_global output })
 (#fIn  : perm)
-(#sx   : EM.chest2 f32 bc l)
-(#sout : EM.chest2 f32 bc l_out)
+(#sx   : chest2 f32 bc l)
+(#sout : chest2 f32 bc l_out)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)
@@ -62,8 +62,8 @@ fn avgpool1d_fw_rm_f32
 (input  : array2 f32 (l2_row_major bc l)     { is_global input  })
 (output : array2 f32 (l2_row_major bc l_out) { is_global output })
 (#fIn  : perm)
-(#sx   : EM.chest2 f32 bc l)
-(#sout : EM.chest2 f32 bc l_out)
+(#sx   : chest2 f32 bc l)
+(#sout : chest2 f32 bc l_out)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)
@@ -99,7 +99,7 @@ fn avgpool1d_alloc_f32
 (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
 (input : array2 f32 (l2_row_major bc l) { is_global input })
 (#fIn : perm)
-(#sx  : EM.chest2 f32 bc l)
+(#sx  : chest2 f32 bc l)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)

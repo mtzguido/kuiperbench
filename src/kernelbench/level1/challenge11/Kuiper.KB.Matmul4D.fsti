@@ -48,7 +48,7 @@ let l4_row_major (d0 d1 d2 d3 : nat) : tlayout (d0 @| d1 @| d2 @| d3 @| INil) =
 inline_for_extraction noextract
 let row_pair_slice (#et:Type) (#b #i #j #l:nat)
   (a : chest4 et b i j l) (b_:natlt b) (i_:natlt i)
-  : EMatrix.chest2 et j l
+  : chest2 et j l
   = mk2 (fun (j_:natlt j) (l_:natlt l) -> acc4 a b_ i_ j_ l_)
 
 (* DIRECT 4-D matmul product (einsum "bijl,lk->bijk"): the SAME matrix [bm]
@@ -56,7 +56,7 @@ let row_pair_slice (#et:Type) (#b #i #j #l:nat)
    does not have to mention any flatten. *)
 inline_for_extraction noextract
 let ematmul4 (#et:Type) {| Kuiper.scalar et |} (#b #i #j #l #k:nat)
-  (a : chest4 et b i j l) (bm : EMatrix.chest2 et l k)
+  (a : chest4 et b i j l) (bm : chest2 et l k)
   : chest4 et b i j k
   = mk4 (fun (b_:natlt b) (i_:natlt i) (j_:natlt j) (k_:natlt k) ->
       acc2 (MS.matmul (row_pair_slice a b_ i_) bm) j_ k_)
@@ -67,9 +67,9 @@ fn matmul4d_f32
   (gB : array2 f32 (l2_row_major l k)     { is_global gB })
   (gC : array4 f32 (l4_row_major b i j k) { is_global gC })
   (rA : chest4 real b i j l)
-  (rB : EMatrix.chest2 real l k)
+  (rB : chest2 real l k)
   (#eA : chest4 f32 b i j l)
-  (#eB : EMatrix.chest2 f32 l k)
+  (#eB : chest2 f32 l k)
   (#eC : chest4 f32 b i j k)
   (#fA #fB : perm)
   preserves

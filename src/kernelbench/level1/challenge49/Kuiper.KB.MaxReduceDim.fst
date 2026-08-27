@@ -29,7 +29,7 @@ let clamp_threads (nth lena : szp)
 let row_to_real_eq
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : nat { r < rows })
   : Lemma (Seq.equal
              (EM.ematrix_row (EM.to_real_matrix sx) r)
@@ -46,7 +46,7 @@ let row_to_real_eq
 let row_post_eq
   (#t:Type0) {| scalar t, real_like t |}
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : nat { r < rows })
   : Lemma
       (seq_max (KS.lseq_map id (EM.ematrix_row (EM.to_real_matrix sx) r))
@@ -74,7 +74,7 @@ let chest1_max_is_seq_max (#n : nat { n > 0 }) (c : chest1 real n)
 let max_row_bridge
   (pre_map_r : real -> real)
   (#rows : nat) (#cols : nat { cols > 0 })
-  (vr : EM.chest2 real rows cols) (r : natlt rows)
+  (vr : chest2 real rows cols) (r : natlt rows)
   : Lemma (ensures seq_max (KS.lseq_map pre_map_r (EM.ematrix_row vr r))
                    == chest1_max (chest_map pre_map_r (chest2_row vr r)))
   = Seq.lemma_eq_elim (chest1_to_seq (chest_map pre_map_r (chest2_row vr r)))
@@ -90,7 +90,7 @@ let approximates_subst (x : f32) (a b : real)
 (* Turn the chest-native launch postcondition into [maxreduce_post]. *)
 let maxreduce_post_from_chest
   (#rows : nat) (#cols : nat { cols > 0 })
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (sy' : chest1 f32 rows)
   : Lemma
       (requires (forall (r : nat). r < rows ==>
@@ -119,7 +119,7 @@ fn maxreduce_dim_fw_f32_impl
              SZ.fits (SZ.v d + max_threads) })
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves
     cpu **
@@ -134,10 +134,10 @@ fn maxreduce_dim_fw_f32_impl
   let bm : szp = b *^ m;
   assert pure (SZ.v bm == SZ.v b * SZ.v m);
   (* Build the real-valued ghost chest2 and the sx %~ vr witness. *)
-  let vr : EM.chest2 real (SZ.v b * SZ.v m) d =
+  let vr : chest2 real (SZ.v b * SZ.v m) d =
     hide (EM.to_real_matrix (reveal sx));
   assert pure (reveal sx %~ reveal vr);
-  let vr' : EM.chest2 real bm d = vr;
+  let vr' : chest2 real bm d = vr;
   (* Clamp the block thread count so every strided bucket is non-empty
      (max has no real-number identity, so [nth <= cols] is required). *)
   let nthm : szp = clamp_threads max_threads d;
@@ -162,7 +162,7 @@ fn maxreduce_dim_fw_f32
              SZ.fits (SZ.v d + max_threads) })
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires

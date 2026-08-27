@@ -19,8 +19,8 @@ module P = Kuiper.Kernel.GEMM.Naive3
 #push-options "--z3rlimit 50"
 let tril_row_aux
   (n : nat)
-  (eC' : EM.chest2 f32 n n)
-  (rAB : EM.chest2 real n n)
+  (eC' : chest2 f32 n n)
+  (rAB : chest2 real n n)
   (h_approx : squash (eC' %~ rAB))
   (i j : natlt n)
   : Lemma
@@ -39,11 +39,11 @@ fn tril_matmul_f32_impl
   (gA : array2 f32 (l2_row_major n n) { is_global gA })
   (gB : array2 f32 (l2_row_major n n) { is_global gB })
   (y  : array2 f32 (l2_row_major n n) { is_global y  })
-  (#sA : EM.chest2 f32 n n)
-  (#sB : EM.chest2 f32 n n)
-  (#sy : EM.chest2 f32 n n)
-  (#rA : EM.chest2 real n n)
-  (#rB : EM.chest2 real n n)
+  (#sA : chest2 f32 n n)
+  (#sB : chest2 f32 n n)
+  (#sy : chest2 f32 n n)
+  (#rA : chest2 real n n)
+  (#rB : chest2 real n n)
   preserves
     cpu **
     on gpu_loc (gA |-> sA) **
@@ -52,7 +52,7 @@ fn tril_matmul_f32_impl
     on gpu_loc (y  |-> sy) **
     pure (reveal sA %~ reveal rA /\ reveal sB %~ reveal rB)
   ensures
-    (exists* (sy' : EM.chest2 f32 n n).
+    (exists* (sy' : chest2 f32 n n).
        on gpu_loc (y |-> sy') **
        pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))
 {
@@ -62,7 +62,7 @@ fn tril_matmul_f32_impl
 
   (* Real witness for the output buffer's initial content (the operand real
      witnesses [rA]/[rB] come from the caller via [sA %~ rA /\ sB %~ rB]). *)
-  let rC : EM.chest2 real n n =
+  let rC : chest2 real n n =
     hide (EM.to_real_matrix (reveal sy));
 
   assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
@@ -83,7 +83,7 @@ fn tril_matmul_f32_impl
   assert pure (reveal sy' == Tril.s_tril (reveal eC'));
 
   (* Discharge per-(i,j) [tril_matmul_post]. *)
-  let rAB : EM.chest2 real n n =
+  let rAB : chest2 real n n =
     hide (MS.matmul (reveal rA) (reveal rB));
   Classical.forall_intro_2
     (tril_row_aux n (reveal eC') (reveal rAB) ());

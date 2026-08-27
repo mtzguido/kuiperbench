@@ -34,8 +34,8 @@ let gdss_post
   (#t:Type0) {| scalar t, real_like t |}
   (#batch #input #hidden : nat)
   (k : t)
-  (sx  : EM.chest2 t batch input)
-  (swt : EM.chest2 t input hidden)
+  (sx  : chest2 t batch input)
+  (swt : chest2 t input hidden)
   (sy' : chest1 t batch)
   : prop
   = forall (r:nat). r < batch ==>
@@ -57,8 +57,8 @@ fn gemm_div_sum_scale_f32
   (x  : array2 f32 (l2_row_major batch input)  { is_global x  })
   (wt : array2 f32 (l2_row_major input hidden) { is_global wt })
   (y  : array1 f32 (l1_forward batch)                 { is_global y  })
-  (#sx  : EM.chest2 f32 batch input)
-  (#swt : EM.chest2 f32 input hidden)
+  (#sx  : chest2 f32 batch input)
+  (#swt : chest2 f32 input hidden)
   (#sy  : chest1 f32 batch)
   preserves
     cpu **

@@ -17,7 +17,7 @@ module PApprox = Kuiper.Kernel.GEMM.Naive3
 (* [lseq_map id s == s], hence the two rsums agree. *)
 let row_simpl
   (#rows #cols : nat)
-  (vr : EM.chest2 real rows cols)
+  (vr : chest2 real rows cols)
   (r : natlt rows)
   : Lemma (rsum (KS.lseq_map id (EM.ematrix_row vr r))
            == rsum (EM.ematrix_row vr r))
@@ -32,7 +32,7 @@ let row_simpl
 let final_row_aux
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (vr : EM.chest2 real rows cols)
+  (vr : chest2 real rows cols)
   (k : t)
   (sout : chest1 t rows)
   (r : natlt rows)
@@ -61,8 +61,8 @@ fn gemm_div_sum_scale_f32_impl
   (x  : array2 f32 (l2_row_major batch input)  { is_global x  })
   (wt : array2 f32 (l2_row_major input hidden) { is_global wt })
   (y  : array1 f32 (l1_forward batch)                 { is_global y  })
-  (#sx  : EM.chest2 f32 batch input)
-  (#swt : EM.chest2 f32 input hidden)
+  (#sx  : chest2 f32 batch input)
+  (#swt : chest2 f32 input hidden)
   (#sy  : chest1 f32 batch)
   preserves
     cpu **
@@ -82,11 +82,11 @@ fn gemm_div_sum_scale_f32_impl
   with sc0. assert on gpu_loc (gC |-> sc0);
 
   (* Real witnesses for the approximate GEMM spec. *)
-  let rA : EM.chest2 real batch input  =
+  let rA : chest2 real batch input  =
     hide (EM.to_real_matrix (reveal sx));
-  let rB : EM.chest2 real input hidden =
+  let rB : chest2 real input hidden =
     hide (EM.to_real_matrix (reveal swt));
-  let rC : EM.chest2 real batch hidden =
+  let rC : chest2 real batch hidden =
     hide (EM.to_real_matrix (reveal sc0));
 
   assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
@@ -102,7 +102,7 @@ fn gemm_div_sum_scale_f32_impl
 
   (* Launch 2: per-row tree reduction (sum over hidden). cols = hidden is
      NOT capped at max_threads in reduce_batched_block; only nth (=1024) is. *)
-  let vr : EM.chest2 real batch hidden =
+  let vr : chest2 real batch hidden =
     hide (MS.matmul (reveal rA) (reveal rB));
   HRedB.reduce_batched_block #f32 id id batch hidden 1024sz
     #_ #(c_l2_row_major (SZ.v batch) hidden)

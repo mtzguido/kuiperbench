@@ -38,7 +38,7 @@ fn minreduce_dim_fw_f32
              SZ.v b * SZ.v m <= max_blocks * max_threads })
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires on gpu_loc (y |-> sy)

@@ -18,6 +18,7 @@ module Kuiper.Spec.ArgmaxReduceDim
    unblock path and implementation options. *)
 
 open Kuiper
+open Kuiper.Chest
 open Kuiper.Math.Fmax
 module Seq = FStar.Seq
 module EM  = Kuiper.EMatrix
@@ -39,7 +40,7 @@ let is_seq_argmax (s : Seq.seq f32) (k : nat) : prop =
    will witness the bound [sy @! r < n_cols]. *)
 let argmaxreduce_post
   (n_rows : nat) (n_cols : nat{n_cols > 0})
-  (sx : EM.chest2 f32 n_rows n_cols)
+  (sx : chest2 f32 n_rows n_cols)
   (sy : Seq.lseq nat n_rows)
   : prop =
   forall (r : nat). r < n_rows ==>

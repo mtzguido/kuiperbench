@@ -41,7 +41,7 @@ let l1_scale_fn (dim_f : f32) (s : f32) : f32 = div dim_f s
 let l1norm_row_aux
   (b_n d_n : nat)
   (dim_f : f32)
-  (sx : EM.chest2 f32 b_n d_n)
+  (sx : chest2 f32 b_n d_n)
   (r : nat)
   : Lemma (requires r < b_n)
           (ensures  row_l1_normalized dim_f sx
@@ -63,7 +63,7 @@ let l1norm_row_aux
 let l1norm_post_aux
   (b_n d_n : nat)
   (dim_f : f32)
-  (sx : EM.chest2 f32 b_n d_n)
+  (sx : chest2 f32 b_n d_n)
   : Lemma (l1norm_post b_n d_n dim_f sx
              (Kuiper.Kernel.RowScale.s_row_scale
                 (chest_map (l1_scale_fn dim_f)
@@ -87,7 +87,7 @@ fn l1norm_fw_f32_impl
   (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
   (dim_f : f32)
   (x : array2 f32 (l2_row_major b d) { is_global x })
-  (#sx : EM.chest2 f32 b d)
+  (#sx : chest2 f32 b d)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -96,7 +96,7 @@ fn l1norm_fw_f32_impl
       SZ.v b * SZ.v d <= max_blocks * max_threads
     )
   ensures
-    exists* (sx' : EM.chest2 f32 b d).
+    exists* (sx' : chest2 f32 b d).
       on gpu_loc (x |-> sx') **
       pure (l1norm_post b d dim_f sx sx')
 {
@@ -135,7 +135,7 @@ fn l1norm_fw
   (b : szp)
   (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
   (x : array2 f32 (l2_row_major b d) { is_global x })
-  (#sx : EM.chest2 f32 b d)
+  (#sx : chest2 f32 b d)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -144,7 +144,7 @@ fn l1norm_fw
       SZ.v b * SZ.v d <= max_blocks * max_threads
     )
   ensures
-    exists* (sx' : EM.chest2 f32 b d).
+    exists* (sx' : chest2 f32 b d).
       on gpu_loc (x |-> sx') **
       pure (l1norm_post b d (l1_dim_f d) sx sx')
 {

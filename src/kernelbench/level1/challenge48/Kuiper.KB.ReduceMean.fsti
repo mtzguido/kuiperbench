@@ -40,7 +40,7 @@ fn reduce_mean_fw_f32
   (inv_d : f32)
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves
     cpu **

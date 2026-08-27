@@ -42,7 +42,7 @@ fn rmsnorm_fw_f32
   (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
   (eps : f32)
   (x : array2 f32 (l2_bcm_pages b hw c) { is_global x })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) c)
+  (#sx : chest2 f32 (SZ.v b * SZ.v hw) c)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -51,6 +51,6 @@ fn rmsnorm_fw_f32
       SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
     )
   ensures
-    (exists* (sx' : EM.chest2 f32 (SZ.v b * SZ.v hw) c).
+    (exists* (sx' : chest2 f32 (SZ.v b * SZ.v hw) c).
        on gpu_loc (x |-> sx') **
        pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx'))

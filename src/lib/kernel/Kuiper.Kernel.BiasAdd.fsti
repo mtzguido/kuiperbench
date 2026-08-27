@@ -36,7 +36,7 @@ module SZ = Kuiper.SizeT
 let bias_add_at
   (#t:Type0) {| scalar t |}
   (m n : nat)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (tid : nat{tid < m * n})
   : GTot t
@@ -49,7 +49,7 @@ let bias_add_at
 val bias_add_at_ij
   (#t:Type0) {| scalar t |}
   (m n : nat)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (i : natlt m) (j : natlt n)
   : Lemma (bias_add_at m n eC sbias (i * n + j) == add (acc2 eC i j) (acc1 sbias j))
@@ -71,7 +71,7 @@ fn bias_add_gpu
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : EM.chest2 t m n)
+  (#eC : chest2 t m n)
   (#sbias : chest1 t n)
   (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
@@ -95,7 +95,7 @@ fn bias_add_f32
   (gC : array2 f32 (l2_row_major m n) { is_global gC })
   (gbias : array1 f32 (l1_forward n) { is_global gbias })
   (gy : array1 f32 (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
-  (#eC : EM.chest2 f32 m n)
+  (#eC : chest2 f32 m n)
   (#sbias : chest1 f32 n)
   (#sy0 : chest1 f32 (SZ.v m * SZ.v n))
   (#fc #fb : perm)

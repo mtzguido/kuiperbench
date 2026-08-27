@@ -41,8 +41,8 @@ module Seq = FStar.Seq
 let cumsum_exclusive_post
   (#t : Type0) {| scalar t, real_like t |}
   (b d : nat)
-  (sx : EM.chest2 t b d)
-  (sy : EM.chest2 t b d)
+  (sx : chest2 t b d)
+  (sy : chest2 t b d)
   : prop
   = forall (r : nat) (i : nat).
       r < b /\ i < d ==>
@@ -56,14 +56,14 @@ fn cumsum_exclusive_fw_f32
             { is_global input  })
   (output : array2 f32 (l2_row_major b d)
             { is_global output })
-  (#sx #sy0 : EM.chest2 f32 b d)
+  (#sx #sy0 : chest2 f32 b d)
   preserves
     cpu **
     on gpu_loc (input  |-> sx)
   requires
     on gpu_loc (output |-> sy0)
   ensures
-    (exists* (sy : EM.chest2 f32 b d).
+    (exists* (sy : chest2 f32 b d).
        on gpu_loc (output |-> sy) **
        pure (cumsum_exclusive_post b d sx sy))
 

@@ -12,6 +12,7 @@ module Kuiper.Spec.ArgminReduceDim
    No kernel ships; see STATUS-narrowing.txt for the unblock path. *)
 
 open Kuiper
+open Kuiper.Chest
 open Kuiper.Math.Fmin
 module Seq = FStar.Seq
 module EM  = Kuiper.EMatrix
@@ -27,7 +28,7 @@ let is_seq_argmin (s : Seq.seq f32) (k : nat) : prop =
 
 let argminreduce_post
   (n_rows : nat) (n_cols : nat{n_cols > 0})
-  (sx : EM.chest2 f32 n_rows n_cols)
+  (sx : chest2 f32 n_rows n_cols)
   (sy : Seq.lseq nat n_rows)
   : prop =
   forall (r : nat). r < n_rows ==>

@@ -112,7 +112,7 @@ let content_ok
 let from_to2
   (#et:Type) (#m #n:nat)
   (l : full_layout2 m n)
-  (s : EMatrix.chest2 et m n)
+  (s : chest2 et m n)
   : Lemma (ensures from_seq l (to_seq l s) == s)
   = let lhs = from_seq l (to_seq l s) in
     let aux (i:natlt m) (j:natlt n)
@@ -133,7 +133,7 @@ let from_to2
 #push-options "--z3rlimit 50"
 let entry_eq
   (#t:Type) (n m k l : nat) (pnm:nat) (_:squash (pnm == n * m))
-  (eGemm : EMatrix.chest2 t pnm l)
+  (eGemm : chest2 t pnm l)
   (i:natlt (n*m)) (j:natlt l)
   : Lemma
     (acc2
@@ -203,7 +203,7 @@ fn reshape2to3_eq
   (a3 : array3 et (l3_batched_row_major n m k))
   (#s3 : chest3 et n m k)
   (#f : perm)
-  (#e : EMatrix.chest2 et p k)
+  (#e : chest2 et p k)
   (#_ : squash (
      e == from_seq (l2_row_major p k)
             (to_seq (l3_batched_row_major n m k) s3)))
@@ -233,10 +233,10 @@ fn matmul_nd
   (gA : array3 t (l3_batched_row_major n m k) { is_global gA })
   (gB : array2 t (l2_row_major k l)           { is_global gB })
   (gC : array3 t (l3_batched_row_major n m l) { is_global gC })
-  (rA : EMatrix.chest2 real (n*m) k)
-  (rB : EMatrix.chest2 real k l)
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
   (#eA : chest3 t n m k)
-  (#eB : EMatrix.chest2 t k l)
+  (#eB : chest2 t k l)
   (#eC : chest3 t n m l)
   (#fA #fB : perm)
   preserves

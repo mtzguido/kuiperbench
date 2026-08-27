@@ -45,7 +45,7 @@ let rec sfl_append
 let row_sq_prefix
   (#t:Type0) {| scalar t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.seq t)
@@ -58,7 +58,7 @@ let row_sq_prefix
 let rec row_reduce_partial_eq_fold
   (#t:Type0) {| scalar t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures
@@ -98,7 +98,7 @@ let sq_step_approx_pt
 let row_sq_prefix_approx
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   : Lemma (row_sq_prefix sx r cols
            %~ KS.seq_map sq_step_r (to_real_seq (EM.ematrix_row sx r)))
@@ -123,7 +123,7 @@ let row_sq_prefix_approx
 let row_reduce_partial_sq_approx
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial (sq_step #t) sx r cols
            %~ frobenius_sumsq_r (to_real_seq (EM.ematrix_row sx r)))

@@ -31,7 +31,7 @@ module K = Kuiper.Kernel.GEMM.Naive3
    performed by the kernel ([reshape3to2]). *)
 inline_for_extraction noextract
 let flat3to2 (#et:Type) (#a #b #c:nat) (s : chest3 et a b c)
-  : EMatrix.chest2 et (a*b) c
+  : chest2 et (a*b) c
   = from_seq (l2_row_major (a*b) c)
        (to_seq (l3_batched_row_major a b c) s)
 
@@ -60,10 +60,10 @@ fn matmul_nd
   (gA : array3 t (l3_batched_row_major n m k) { is_global gA })
   (gB : array2 t (l2_row_major k l)           { is_global gB })
   (gC : array3 t (l3_batched_row_major n m l) { is_global gC })
-  (rA : EMatrix.chest2 real (n*m) k)
-  (rB : EMatrix.chest2 real k l)
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
   (#eA : chest3 t n m k)
-  (#eB : EMatrix.chest2 t k l)
+  (#eB : chest2 t k l)
   (#eC : chest3 t n m l)
   (#fA #fB : perm)
   preserves
@@ -84,10 +84,10 @@ fn matmul_nd_f32
   (gA : array3 f32 (l3_batched_row_major n m k) { is_global gA })
   (gB : array2 f32 (l2_row_major k l)           { is_global gB })
   (gC : array3 f32 (l3_batched_row_major n m l) { is_global gC })
-  (rA : EMatrix.chest2 real (n*m) k)
-  (rB : EMatrix.chest2 real k l)
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
   (#eA : chest3 f32 n m k)
-  (#eB : EMatrix.chest2 f32 k l)
+  (#eB : chest2 f32 k l)
   (#eC : chest3 f32 n m l)
   (#fA #fB : perm)
   preserves

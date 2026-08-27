@@ -1136,7 +1136,7 @@ let row_reduce_partial_zero
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial pre_map sx r 0 == zero)
           [SMTPat (row_reduce_partial pre_map sx r 0)]
@@ -1147,7 +1147,7 @@ let row_reduce_partial_succ
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_reduce_partial pre_map sx r (k + 1) ==
@@ -1168,7 +1168,7 @@ let kpre_batched
   (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (sx   : EM.chest2 et rows cols)
+  (sx   : chest2 et rows cols)
   (sout : chest1 et rows)
   (r : natlt rows)
   : slprop
@@ -1185,7 +1185,7 @@ let kpost_batched
   (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (sx   : EM.chest2 et rows cols)
+  (sx   : chest2 et rows cols)
   (sout : chest1 et rows)
   (r : natlt rows)
   : slprop
@@ -1205,7 +1205,7 @@ fn kf_batched
   (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : EM.chest2 et rows cols)
+  (#sx   : chest2 et rows cols)
   (#sout : chest1 et rows)
   (gid : szlt rows)
   ()
@@ -1262,7 +1262,7 @@ fn setup_batched
   (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : EM.chest2 et rows cols)
+  (#sx   : chest2 et rows cols)
   (#sout : chest1 et rows)
   ()
   norewrite
@@ -1308,7 +1308,7 @@ fn teardown_batched
   (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : EM.chest2 et rows cols)
+  (#sx   : chest2 et rows cols)
   (#sout : chest1 et rows)
   ()
   norewrite
@@ -1360,7 +1360,7 @@ let kdesc_batched
   (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : EM.chest2 et rows cols)
+  (#sx   : chest2 et rows cols)
   (#sout : chest1 et rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
@@ -1390,7 +1390,7 @@ fn reduce_batched
   (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : EM.chest2 et rows cols)
+  (#sx   : chest2 et rows cols)
   (#sout : chest1 et rows)
   preserves
     cpu **

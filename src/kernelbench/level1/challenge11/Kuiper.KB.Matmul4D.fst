@@ -42,7 +42,7 @@ let flat4to3 (#et:Type) (#b #i #j #l:nat) (s : chest4 et b i j l)
        (to_seq (l4_row_major b i j l) s)
 
 let flat4to2 (#et:Type) (#b #i #j #l:nat) (s : chest4 et b i j l)
-  : EMatrix.chest2 et (b*i*j) l
+  : chest2 et (b*i*j) l
   = flat3to2 (flat4to3 s)
 
 (* ----------------------------------------------------------------------- *)
@@ -278,7 +278,7 @@ let flat_of_approx4
 let ematmul4_flat_lemma
   (#b #i #j #l #k : nat)
   (a : chest4 real b i j l)
-  (bm : EMatrix.chest2 real l k)
+  (bm : chest2 real l k)
   : Lemma (flat4to2 (ematmul4 a bm) == MS.matmul (flat4to2 a) bm)
   = let lhs = flat4to2 (ematmul4 a bm) in
     let rhs = MS.matmul (flat4to2 a) bm in
@@ -436,9 +436,9 @@ fn matmul4d
   (gB : array2 t (l2_row_major l k)     { is_global gB })
   (gC : array4 t (l4_row_major b i j k) { is_global gC })
   (rA : chest4 real b i j l)
-  (rB : EMatrix.chest2 real l k)
+  (rB : chest2 real l k)
   (#eA : chest4 t b i j l)
-  (#eB : EMatrix.chest2 t l k)
+  (#eB : chest2 t l k)
   (#eC : chest4 t b i j k)
   (#fA #fB : perm)
   preserves
@@ -490,7 +490,7 @@ fn matmul4d
 
   (* The flattened (b*i*j, l) real operand: the spec-level mirror of the buffer
      re-interpretation, defined directly from the 4-D real model [rA]. *)
-  let rA_flat : EMatrix.chest2 real (SZ.v b * SZ.v i * SZ.v j) l = flat4to2 rA;
+  let rA_flat : chest2 real (SZ.v b * SZ.v i * SZ.v j) l = flat4to2 rA;
 
   (* 1. Forward-reshape gA : (b,i,j,l) -> 3-D view (b*i,j,l) over same buffer. *)
   map_loc gpu_loc (fun () -> reshape4to3 pbi gA);

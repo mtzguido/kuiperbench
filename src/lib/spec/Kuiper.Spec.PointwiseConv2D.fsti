@@ -36,7 +36,7 @@ module Kuiper.Spec.PointwiseConv2D
 
    This module reuses the [etensor4] and [tacc] vocabulary from
    [Kuiper.Spec.Conv2D] for [x] / [y], and the existing
-   [Kuiper.EMatrix.chest2] vocabulary for the [(C_out, C_in)]
+   [chest2] vocabulary for the [(C_out, C_in)]
    weight matrix — that is the natural shape that GEMM kernels
    already consume. *)
 

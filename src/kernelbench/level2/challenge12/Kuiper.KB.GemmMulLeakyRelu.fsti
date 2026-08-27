@@ -47,8 +47,8 @@ let gemm_mul_lrelu_post
   (#t:Type0) {| floating t |}
   (#batch #input #out : nat)
   (mult slope : t)
-  (sx  : EM.chest2 t batch input)
-  (swt : EM.chest2 t input out)
+  (sx  : chest2 t batch input)
+  (swt : chest2 t input out)
   (sbias : chest1 t out)
   (sy' : chest1 t (batch * out))
   : prop
@@ -68,8 +68,8 @@ fn gemm_mul_leaky_relu_f32
   (wt   : array2 f32 (l2_row_major input out)   { is_global wt   })
   (bias : array1 f32 (l1_forward out)                  { is_global bias })
   (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-  (#sx   : EM.chest2 f32 batch input)
-  (#swt  : EM.chest2 f32 input out)
+  (#sx   : chest2 f32 batch input)
+  (#swt  : chest2 f32 input out)
   (#sbias: chest1 f32 out)
   (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
   preserves

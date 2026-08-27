@@ -42,7 +42,7 @@ let rec sfl_append
 let row_fabs_prefix
   (#t:Type0) {| scalar t, floating t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.seq t)
@@ -55,7 +55,7 @@ let row_fabs_prefix
 let rec row_reduce_partial_eq_fold
   (#t:Type0) {| scalar t, floating t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures
@@ -86,7 +86,7 @@ let rec row_reduce_partial_eq_fold
 let row_reduce_partial_fabs_approx
   (#t:Type0) {| scalar t, real_like t, floating t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial (fabs #t) sx r cols
            %~ l1_sum_r (EM.ematrix_row sx r))

@@ -21,7 +21,7 @@ module Seq = FStar.Seq
 [@@"opaque_to_smt"]
 let rec row_fmin_partial
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot f32
@@ -31,14 +31,14 @@ let rec row_fmin_partial
 
 val row_fmin_partial_zero
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_fmin_partial sx r 0 == pos_inf)
           [SMTPat (row_fmin_partial sx r 0)]
 
 val row_fmin_partial_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_fmin_partial sx r (k + 1) ==
@@ -48,20 +48,20 @@ val row_fmin_partial_succ
 (* Full reduction = [seq_fmin] of the row. *)
 val row_fmin_eq_seq_fmin
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_fmin_partial sx r cols == seq_fmin (EM.ematrix_row sx r))
 
 let row_fmin
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : GTot f32
   = row_fmin_partial sx r cols
 
 let seq_reduce_rows_fmin
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   : GTot (Seq.lseq f32 rows)
   = Seq.init_ghost rows (fun r -> row_fmin sx r)
 
@@ -75,7 +75,7 @@ fn reduce_batched_min_f32
      (#lout : layout1 rows)             {| ctlayout lout |}
      (x      : array2 f32 lin  { is_global x      })
      (output : array1 f32 lout { is_global output })
-     (#sx   : EM.chest2 f32 rows cols)
+     (#sx   : chest2 f32 rows cols)
      (#sout : chest1 f32 rows)
   preserves
     cpu **

@@ -36,7 +36,7 @@ module I64 = FStar.Int64
    first-occurrence argmin tie-break. *)
 let argminreduce_post
   (n_rows : nat) (n_cols : nat{n_cols > 0})
-  (sx : EM.chest2 f32 n_rows n_cols)
+  (sx : chest2 f32 n_rows n_cols)
   (sy : Seq.lseq I64.t n_rows)
   : prop =
   forall (r : nat). r < n_rows ==>
@@ -55,7 +55,7 @@ fn argminreduce_dim_fw_f32
              SZ.v d < pow2 63 })
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 I64.t (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 I64.t (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires on gpu_loc (y |-> sy)

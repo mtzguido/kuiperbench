@@ -16,6 +16,7 @@ module Kuiper.Spec.MeanReduceDim
    mul inv_d sumr] for some [sumr %~ rsum (to_real_seq row)]. *)
 
 open Kuiper.Common
+open Kuiper.Chest
 open Kuiper.Scalars
 open Kuiper.Real
 open Kuiper.Approximates
@@ -30,7 +31,7 @@ let row_mean
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
   (inv_d : t)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (sout' : Seq.lseq t rows)
   (r : natlt rows)
   : prop =
@@ -43,7 +44,7 @@ let meanreduce_post
   (#t:Type0) {| scalar t, real_like t |}
   (rows cols : nat)
   (inv_d : t)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (sout' : Seq.lseq t rows)
   : prop =
   forall (r : nat). r < rows ==> row_mean inv_d sx sout' r

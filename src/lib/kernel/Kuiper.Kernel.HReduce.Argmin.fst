@@ -26,7 +26,7 @@ module HRMin = Kuiper.Kernel.HReduce.Min
 [@@"opaque_to_smt"]
 let rec row_argmin_partial
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (nat & f32)
@@ -39,7 +39,7 @@ let rec row_argmin_partial
 
 let row_argmin_partial_zero
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_argmin_partial sx r 0 == (0, pos_inf))
           [SMTPat (row_argmin_partial sx r 0)]
@@ -48,7 +48,7 @@ let row_argmin_partial_zero
 #push-options "--fuel 2 --ifuel 1"
 let row_argmin_partial_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma
@@ -64,7 +64,7 @@ let row_argmin_partial_succ
    from the verified Max primitive. *)
 let rec row_argmin_val_eq_fmin
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures snd (row_argmin_partial sx r k) ==
@@ -94,7 +94,7 @@ let rec row_argmin_val_eq_fmin
 (* The selected idx is in range and points to its value. *)
 let rec row_argmin_idx_inv
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures (let (bi, bv) = row_argmin_partial sx r k in
@@ -128,7 +128,7 @@ let rec row_argmin_idx_inv
    prefixes. *)
 let arg_row_prefix
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.lseq f32 k)
@@ -136,7 +136,7 @@ let arg_row_prefix
 
 let rec arg_row_fmin_eq
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures HRMin.row_fmin_partial sx r k == seq_fmin (arg_row_prefix sx r k))
@@ -165,7 +165,7 @@ let rec arg_row_fmin_eq
    the keep branch the property is inherited unchanged. *)
 let rec row_argmin_first_inv
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures (let (bi, bv) = row_argmin_partial sx r k in
@@ -197,7 +197,7 @@ let rec row_argmin_first_inv
    Max primitive's row_fmin_eq_seq_fmin. *)
 let row_argmin_at_full
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (let (bi, bv) = row_argmin_partial sx r cols in
            bi < cols /\
@@ -212,7 +212,7 @@ let row_argmin_at_full
    is exactly the PyTorch first-occurrence argmin tie-break. *)
 let row_argmin_first_at_full
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (let (bi, bv) = row_argmin_partial sx r cols in
            bi < cols /\
@@ -238,7 +238,7 @@ let abs_bij (#len : nat) : (abs (len @| INil) =~ natlt len) =
 noextract
 let argmin_i64
   (#rows : nat) (cols : szp { SZ.v cols < pow2 63 })
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : GTot I64.t
   = row_argmin_idx_inv sx r cols;
@@ -255,7 +255,7 @@ let kpre_batched_argmin
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (sx   : EM.chest2 f32 rows cols)
+  (sx   : chest2 f32 rows cols)
   (sout : chest1 i64 rows)
   (r : natlt rows)
   : slprop
@@ -270,7 +270,7 @@ let kpost_batched_argmin
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (sx   : EM.chest2 f32 rows cols)
+  (sx   : chest2 f32 rows cols)
   (sout : chest1 i64 rows)
   (r : natlt rows)
   : slprop
@@ -289,7 +289,7 @@ fn kf_batched_argmin
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   (gid : szlt rows)
   ()
@@ -349,7 +349,7 @@ fn kf_batched_argmin
 
 let seq_reduce_rows_argmin
   (#rows : nat) (cols : szp { SZ.v cols < pow2 63 })
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   : GTot (Seq.lseq i64 rows)
   = Seq.init_ghost rows (fun r -> argmin_i64 cols sx r)
 
@@ -363,7 +363,7 @@ fn setup_batched_argmin
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   ()
   norewrite
@@ -400,7 +400,7 @@ fn teardown_batched_argmin
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   ()
   norewrite
@@ -447,7 +447,7 @@ let kdesc_batched_argmin
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 i64 lout { is_global output })
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
@@ -475,7 +475,7 @@ fn reduce_batched_argmin_f32
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 i64 lout { is_global output })
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   preserves
     cpu **

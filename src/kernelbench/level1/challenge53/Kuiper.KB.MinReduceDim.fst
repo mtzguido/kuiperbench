@@ -16,7 +16,7 @@ module Seq = FStar.Seq
    opaque) to [minreduce_post] (per-row [seq_fmin] of the row). *)
 let bridge_post
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (sy : chest1 f32 rows)
   : Lemma
       (requires sy == seq_to_chest1 (HRMin.seq_reduce_rows_fmin sx))
@@ -41,7 +41,7 @@ fn minreduce_dim_fw_f32_impl
              SZ.v b * SZ.v m <= max_blocks * max_threads })
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves
     cpu **
@@ -75,7 +75,7 @@ fn minreduce_dim_fw_f32
              SZ.v b * SZ.v m <= max_blocks * max_threads })
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires on gpu_loc (y |-> sy)

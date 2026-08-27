@@ -52,8 +52,8 @@ fn avgpool3d_axis_fw
   (input  : array2 t lin  { is_global input  })
   (output : array2 t lout { is_global output })
   (#fIn  : perm)
-  (#sx   : EM.chest2 t bc l)
-  (#sout : EM.chest2 t bc l_out)
+  (#sx   : chest2 t bc l)
+  (#sout : chest2 t bc l_out)
   preserves
     cpu **
     on gpu_loc (input  |-> Frac fIn sx)
@@ -92,7 +92,7 @@ fn reshape2to1
   (#et:Type) (#m #cn:nat)
   (p:nat) (#_ : squash (p == m * cn))
   (a2 : array2 et (l2_row_major m cn))
-  (#s2 : EM.chest2 et m cn)
+  (#s2 : chest2 et m cn)
   (#f : perm)
   requires
     a2 |-> Frac f s2
@@ -110,7 +110,7 @@ fn reshape1to2
   (#et:Type) (#m #cn:nat)
   (p:nat) (#_ : squash (p == m * cn))
   (a2 : array2 et (l2_row_major m cn))
-  (#s2 : EM.chest2 et m cn)
+  (#s2 : chest2 et m cn)
   (#f : perm)
   requires
     from_array (l1_forward p) (core a2)
@@ -139,7 +139,7 @@ fn reshape1to2_eq
   (#et:Type) (#m #cn:nat)
   (p:nat) (#_ : squash (p == m * cn))
   (a2 : array2 et (l2_row_major m cn))
-  (#s2 : EM.chest2 et m cn)
+  (#s2 : chest2 et m cn)
   (#f : perm)
   (#e : chest1 et p)
   (#_ : squash (
@@ -164,7 +164,7 @@ fn reshape1to2_eq
 #push-options ""
 let smul_reshape_eq2
   (c : f32) (#m #cn : nat) (p:nat) (_:squash (p == m * cn))
-  (s2 : EM.chest2 f32 m cn)
+  (s2 : chest2 f32 m cn)
   : Lemma
     (chest_map (mul c)
         (from_seq (l1_forward p) (to_seq (l2_row_major m cn) s2))
@@ -187,7 +187,7 @@ let smul_reshape_eq2
 
 (* Congruence: scaling-matrices built from equal scalars and equal source
    matrices are equal. *)
-let scale_matrix_cong (#m #cn:nat) (c1 c2 : f32) (e1 e2 : EM.chest2 f32 m cn)
+let scale_matrix_cong (#m #cn:nat) (c1 c2 : f32) (e1 e2 : chest2 f32 m cn)
   : Lemma (requires c1 == c2 /\ e1 == e2)
           (ensures mk2 (fun (i:natlt m) (j:natlt cn) -> mul c1 (acc2 e1 i j))
                 == mk2 (fun (i:natlt m) (j:natlt cn) -> mul c2 (acc2 e2 i j)))
@@ -202,7 +202,7 @@ fn avgpool3d_axis_alloc
   (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (input : array2 f32 (l2_row_major bc l) { is_global input })
   (#fIn : perm)
-  (#sx  : EM.chest2 f32 bc l)
+  (#sx  : chest2 f32 bc l)
   preserves
     cpu **
     on gpu_loc (input |-> Frac fIn sx)
@@ -236,7 +236,7 @@ fn avgpool3d_axis_alloc
   let n : szp = bc *^ l_out;
   assert pure (SZ.v n == SZ.v bc * SZ.v l_out);
   let pp : erased nat = SZ.v n;
-  let wr : EM.chest2 f32 bc l_out =
+  let wr : chest2 f32 bc l_out =
     hide (windowreduce_result cmonoid_fadd_f32 sx
             k s p d l_out);
   (* View the row-major output buffer as a flat array1 over the same store. *)

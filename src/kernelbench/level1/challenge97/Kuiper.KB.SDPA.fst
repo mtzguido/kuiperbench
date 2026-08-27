@@ -121,7 +121,7 @@ let content_ok
 let from_to2
   (#et:Type) (#m #n:nat)
   (l : full_layout2 m n)
-  (s : EM.chest2 et m n)
+  (s : chest2 et m n)
   : Lemma (ensures from_seq l (to_seq l s) == s)
   = let lhs = from_seq l (to_seq l s) in
     let aux (i:natlt m) (j:natlt n)
@@ -193,7 +193,7 @@ fn reshape2to3_eq
   (a3 : array3 et (l3_batched_row_major n m k))
   (#s3 : chest3 et n m k)
   (#f : perm)
-  (#e : EM.chest2 et p k)
+  (#e : chest2 et p k)
   (#_ : squash (
      e == from_seq (l2_row_major p k)
             (to_seq (l3_batched_row_major n m k) s3)))
@@ -417,7 +417,7 @@ let lemma_approximates_intro3
 let softmax_corr
   (#bh : nat) (#s : nat{s > 0}) (p:nat) (_:squash (p == bh * s))
   (scaled : chest3 f32 bh s s)
-  (sa' : EM.chest2 f32 p s)
+  (sa' : chest2 f32 p s)
   (probs : chest3 f32 bh s s)
   (_ : squash (
      sa' %~ RS.row_softmax_real

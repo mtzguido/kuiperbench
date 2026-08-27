@@ -58,8 +58,8 @@ fn maxpool2d_axis_fw_f32
 (input  : array2 f32 lin  { is_global input  })
 (output : array2 f32 lout { is_global output })
 (#fIn  : perm)
-(#sx   : EM.chest2 f32 bc l)
-(#sout : EM.chest2 f32 bc l_out)
+(#sx   : chest2 f32 bc l)
+(#sout : chest2 f32 bc l_out)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)
@@ -83,8 +83,8 @@ fn maxpool2d_axis_fw_rm_f32
 (input  : array2 f32 (l2_row_major bc l)     { is_global input  })
 (output : array2 f32 (l2_row_major bc l_out) { is_global output })
 (#fIn  : perm)
-(#sx   : EM.chest2 f32 bc l)
-(#sout : EM.chest2 f32 bc l_out)
+(#sx   : chest2 f32 bc l)
+(#sout : chest2 f32 bc l_out)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)
@@ -112,7 +112,7 @@ fn maxpool2d_axis_alloc_f32
 (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
 (input : array2 f32 (l2_row_major bc l) { is_global input })
 (#fIn : perm)
-(#sx  : EM.chest2 f32 bc l)
+(#sx  : chest2 f32 bc l)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)
@@ -151,7 +151,7 @@ fn maxpool2d_full_alloc_f32
 (#_ : squash (SZ.fits (SZ.v bc * SZ.v h)))
 (input : array2 f32 (l2_row_major (bc * h) w) { is_global input })
 (#fIn : perm)
-(#sx  : EM.chest2 f32 (bc * h) w)
+(#sx  : chest2 f32 (bc * h) w)
 preserves
  cpu **
  on gpu_loc (input |-> Frac fIn sx)
@@ -173,7 +173,7 @@ returns r : (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw
                          /\ SZ.v ho > 0 }
                & array2 f32 (l2_bcm_pages bc wo ho)))
 ensures
- (exists* (sx2 : EM.chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
+ (exists* (sx2 : chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
     on gpu_loc ((dsnd (dsnd r)) |->
       windowreduce_result cmonoid_fmax_f32 sx2
         kh sh ph dh (dfst (dsnd r))))

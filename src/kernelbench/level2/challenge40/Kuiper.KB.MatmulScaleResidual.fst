@@ -20,7 +20,7 @@ module P = Kuiper.Kernel.GEMM.Naive2
 let msr_row_aux
   (batch out : nat)
   (sf : f32)
-  (mm : EM.chest2 f32 batch out)
+  (mm : chest2 f32 batch out)
   (sbias : chest1 f32 out)
   (sy_b : chest1 f32 (batch * out))
   (hyp : squash
@@ -52,8 +52,8 @@ fn matmul_scale_residual_f32_impl
   (wt   : array2 f32 (l2_row_major input out)   { is_global wt   })
   (bias : array1 f32 (l1_forward out)                  { is_global bias })
   (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-  (#sx   : EM.chest2 f32 batch input)
-  (#swt  : EM.chest2 f32 input out)
+  (#sx   : chest2 f32 batch input)
+  (#swt  : chest2 f32 input out)
   (#sbias: chest1 f32 out)
   (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
   preserves
@@ -82,7 +82,7 @@ fn matmul_scale_residual_f32_impl
   with eC'. assert on gpu_loc (gC |-> eC');
   assert pure (reveal eC' == MS.matmul (reveal sx) (reveal swt));
 
-  let mm : EM.chest2 f32 batch out =
+  let mm : chest2 f32 batch out =
     hide (MS.matmul (reveal sx) (reveal swt));
   assert pure (eC' == mm);
 

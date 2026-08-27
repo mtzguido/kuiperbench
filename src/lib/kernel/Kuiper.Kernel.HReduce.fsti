@@ -53,7 +53,7 @@ let rec row_reduce_partial
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot et
@@ -66,7 +66,7 @@ val row_reduce_partial_zero
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial pre_map sx r 0 == zero)
           [SMTPat (row_reduce_partial pre_map sx r 0)]
@@ -75,7 +75,7 @@ val row_reduce_partial_succ
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_reduce_partial pre_map sx r (k + 1) ==
@@ -87,7 +87,7 @@ let row_reduce
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   : GTot et
   = row_reduce_partial pre_map sx r cols
@@ -97,7 +97,7 @@ let seq_reduce_rows
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   : GTot (lseq et rows)
   = Seq.init_ghost rows (fun r -> row_reduce pre_map sx r)
 
@@ -113,7 +113,7 @@ fn reduce_batched
   (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : EM.chest2 et rows cols)
+  (#sx   : chest2 et rows cols)
   (#sout : chest1 et rows)
   preserves
     cpu **

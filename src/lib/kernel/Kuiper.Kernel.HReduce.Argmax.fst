@@ -26,7 +26,7 @@ module HRM = Kuiper.Kernel.HReduce.Max.RowFmax
 [@@"opaque_to_smt"]
 let rec row_argmax_partial
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (nat & f32)
@@ -39,7 +39,7 @@ let rec row_argmax_partial
 
 let row_argmax_partial_zero
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_argmax_partial sx r 0 == (0, neg_inf))
           [SMTPat (row_argmax_partial sx r 0)]
@@ -48,7 +48,7 @@ let row_argmax_partial_zero
 #push-options "--fuel 2 --ifuel 1"
 let row_argmax_partial_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma
@@ -64,7 +64,7 @@ let row_argmax_partial_succ
    from the verified Max primitive. *)
 let rec row_argmax_val_eq_fmax
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures snd (row_argmax_partial sx r k) ==
@@ -94,7 +94,7 @@ let rec row_argmax_val_eq_fmax
 (* The selected idx is in range and points to its value. *)
 let rec row_argmax_idx_inv
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures (let (bi, bv) = row_argmax_partial sx r k in
@@ -127,7 +127,7 @@ let rec row_argmax_idx_inv
    running-max prefixes (mirrors the un-exported helpers in RowFmax). *)
 let arg_row_prefix
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.lseq f32 k)
@@ -135,7 +135,7 @@ let arg_row_prefix
 
 let rec arg_row_fmax_eq
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures HRM.row_fmax_partial sx r k == seq_fmax (arg_row_prefix sx r k))
@@ -164,7 +164,7 @@ let rec arg_row_fmax_eq
    the keep branch the property is inherited unchanged. *)
 let rec row_argmax_first_inv
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures (let (bi, bv) = row_argmax_partial sx r k in
@@ -196,7 +196,7 @@ let rec row_argmax_first_inv
    Max primitive's row_fmax_eq_seq_fmax. *)
 let row_argmax_at_full
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (let (bi, bv) = row_argmax_partial sx r cols in
            bi < cols /\
@@ -211,7 +211,7 @@ let row_argmax_at_full
    is exactly the PyTorch first-occurrence argmax tie-break. *)
 let row_argmax_first_at_full
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (let (bi, bv) = row_argmax_partial sx r cols in
            bi < cols /\
@@ -229,7 +229,7 @@ let row_argmax_first_at_full
 noextract
 let argmax_i64
   (#rows : nat) (cols : szp { SZ.v cols < pow2 63 })
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : GTot I64.t
   = row_argmax_idx_inv sx r cols;
@@ -254,7 +254,7 @@ let kpre_batched_argmax
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (sx   : EM.chest2 f32 rows cols)
+  (sx   : chest2 f32 rows cols)
   (sout : chest1 i64 rows)
   (r : natlt rows)
   : slprop
@@ -269,7 +269,7 @@ let kpost_batched_argmax
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (sx   : EM.chest2 f32 rows cols)
+  (sx   : chest2 f32 rows cols)
   (sout : chest1 i64 rows)
   (r : natlt rows)
   : slprop
@@ -288,7 +288,7 @@ fn kf_batched_argmax
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   (gid : szlt rows)
   ()
@@ -348,7 +348,7 @@ fn kf_batched_argmax
 
 let seq_reduce_rows_argmax
   (#rows : nat) (cols : szp { SZ.v cols < pow2 63 })
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   : GTot (Seq.lseq i64 rows)
   = Seq.init_ghost rows (fun r -> argmax_i64 cols sx r)
 
@@ -362,7 +362,7 @@ fn setup_batched_argmax
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   ()
   norewrite
@@ -399,7 +399,7 @@ fn teardown_batched_argmax
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   ()
   norewrite
@@ -446,7 +446,7 @@ let kdesc_batched_argmax
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 i64 lout { is_global output })
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
@@ -474,7 +474,7 @@ fn reduce_batched_argmax_f32
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 i64 lout { is_global output })
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
   preserves
     cpu **

@@ -68,16 +68,16 @@ let window_red
   = seq_fold_left m.rop m.rid (oob_window m row k s p d j)
 
 let ematrix_to_row (#t : Type0) (#rows #l : nat)
-  (sx : EM.chest2 t rows l) (r : natlt rows)
+  (sx : chest2 t rows l) (r : natlt rows)
   : GTot (Seq.lseq t l)
   = Seq.init_ghost l (fun c -> acc2 sx r c)
 
 let windowreduce_result
   (#t : Type0) (m : cmonoid t)
   (#rows #l : nat)
-  (sx : EM.chest2 t rows l)
+  (sx : chest2 t rows l)
   (k s p d lo : nat)
-  : EM.chest2 t rows lo
+  : chest2 t rows lo
   = mk2 (fun (r : natlt rows) (j : natlt lo) ->
       window_red m (ematrix_to_row sx r) k s p d j)
 
@@ -111,8 +111,8 @@ type windowreduce_ty =
      (#lout : layout2 rows l_out) {| ctlayout lout |}
      (input  : array2 et lin  { is_global input  })
      (output : array2 et lout { is_global output })
-     (#sx   : EM.chest2 et rows l)
-     (#sout : EM.chest2 et rows l_out)
+     (#sx   : chest2 et rows l)
+     (#sout : chest2 et rows l_out)
      (#fIn  : perm)
      preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
      requires

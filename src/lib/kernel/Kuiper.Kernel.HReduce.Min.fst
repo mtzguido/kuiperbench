@@ -15,7 +15,7 @@ module Seq = FStar.Seq
 
 let row_fmin_partial_zero
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_fmin_partial sx r 0 == pos_inf)
           [SMTPat (row_fmin_partial sx r 0)]
@@ -24,7 +24,7 @@ let row_fmin_partial_zero
 #push-options "--fuel 2 --ifuel 1"
 let row_fmin_partial_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_fmin_partial sx r (k + 1) ==
@@ -39,7 +39,7 @@ let row_fmin_partial_succ
 
 let row_prefix
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.lseq f32 k)
@@ -47,14 +47,14 @@ let row_prefix
 
 let row_prefix_full
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (Seq.equal (row_prefix sx r cols) (EM.ematrix_row sx r))
   = ()
 
 let row_prefix_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (Seq.equal
@@ -65,7 +65,7 @@ let row_prefix_succ
 
 let rec row_fmin_partial_eq_seq_fmin_aux
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures row_fmin_partial sx r k == seq_fmin (row_prefix sx r k))
@@ -85,7 +85,7 @@ let rec row_fmin_partial_eq_seq_fmin_aux
 
 let row_fmin_eq_seq_fmin
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_fmin_partial sx r cols == seq_fmin (EM.ematrix_row sx r))
   = row_fmin_partial_eq_seq_fmin_aux sx r cols;
@@ -110,7 +110,7 @@ let kpre_batched_min
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (sx   : EM.chest2 f32 rows cols)
+  (sx   : chest2 f32 rows cols)
   (sout : chest1 f32 rows)
   (r : natlt rows)
   : slprop
@@ -125,7 +125,7 @@ let kpost_batched_min
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (sx   : EM.chest2 f32 rows cols)
+  (sx   : chest2 f32 rows cols)
   (sout : chest1 f32 rows)
   (r : natlt rows)
   : slprop
@@ -143,7 +143,7 @@ fn kf_batched_min
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 f32 rows)
   (gid : szlt rows)
   ()
@@ -198,7 +198,7 @@ fn setup_batched_min
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 f32 rows)
   ()
   norewrite
@@ -235,7 +235,7 @@ fn teardown_batched_min
   (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 f32 rows)
   ()
   norewrite
@@ -280,7 +280,7 @@ let kdesc_batched_min
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 f32 lout { is_global output })
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 f32 rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
@@ -308,7 +308,7 @@ fn reduce_batched_min_f32
   (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 f32 lout { is_global output })
-  (#sx   : EM.chest2 f32 rows cols)
+  (#sx   : chest2 f32 rows cols)
   (#sout : chest1 f32 rows)
   preserves
     cpu **

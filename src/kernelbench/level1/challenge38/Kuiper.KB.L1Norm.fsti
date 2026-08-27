@@ -51,7 +51,7 @@ fn l1norm_fw_f32
   (b : szp)
   (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
   (x : array2 f32 (l2_row_major b d) { is_global x })
-  (#sx : EM.chest2 f32 b d)
+  (#sx : chest2 f32 b d)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -60,6 +60,6 @@ fn l1norm_fw_f32
       SZ.v b * SZ.v d <= max_blocks * max_threads
     )
   ensures
-    (exists* (sx' : EM.chest2 f32 b d).
+    (exists* (sx' : chest2 f32 b d).
        on gpu_loc (x |-> sx') **
        pure (l1norm_post b d (l1_dim_f d) sx sx'))

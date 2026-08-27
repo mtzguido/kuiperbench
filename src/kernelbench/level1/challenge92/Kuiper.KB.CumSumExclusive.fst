@@ -40,7 +40,7 @@ let slice_is_approx
    not exported via that module's .fsti. *)
 let macc_scan2d_exclusive_result_f32
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows) (i : natlt cols)
   : Lemma (acc2 (scan2d_exclusive_result cmonoid_fadd_f32 sx) r i
            == scan_exclusive_at cmonoid_fadd_f32 (EM.ematrix_row sx r) i)
@@ -52,7 +52,7 @@ let macc_scan2d_exclusive_result_f32
 #push-options " --z3rlimit 60"
 let cell_post_eq
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (i : natlt cols)
   : Lemma
@@ -83,15 +83,15 @@ fn cumsum_exclusive_fw_f32_impl
             { is_global input  })
   (output : array2 f32 (l2_row_major b d)
             { is_global output })
-  (#sx  : EM.chest2 f32 b d)
-  (#sy0 : EM.chest2 f32 b d)
+  (#sx  : chest2 f32 b d)
+  (#sy0 : chest2 f32 b d)
   preserves
     cpu **
     on gpu_loc (input  |-> sx)
   requires
     on gpu_loc (output |-> sy0)
   ensures
-    (exists* (sy : EM.chest2 f32 b d).
+    (exists* (sy : chest2 f32 b d).
        on gpu_loc (output |-> sy) **
        pure (cumsum_exclusive_post b d sx sy))
 {

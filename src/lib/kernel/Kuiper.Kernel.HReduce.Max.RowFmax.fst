@@ -12,7 +12,7 @@ module Seq = FStar.Seq
 
 let row_fmax_partial_zero
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_fmax_partial sx r 0 == neg_inf)
           [SMTPat (row_fmax_partial sx r 0)]
@@ -21,7 +21,7 @@ let row_fmax_partial_zero
 #push-options "--fuel 2 --ifuel 1"
 let row_fmax_partial_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_fmax_partial sx r (k + 1) ==
@@ -36,7 +36,7 @@ let row_fmax_partial_succ
 
 let row_prefix
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.lseq f32 k)
@@ -44,14 +44,14 @@ let row_prefix
 
 let row_prefix_full
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (Seq.equal (row_prefix sx r cols) (EM.ematrix_row sx r))
   = ()
 
 let row_prefix_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (Seq.equal
@@ -62,7 +62,7 @@ let row_prefix_succ
 
 let rec row_fmax_partial_eq_seq_fmax_aux
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures row_fmax_partial sx r k == seq_fmax (row_prefix sx r k))
@@ -82,7 +82,7 @@ let rec row_fmax_partial_eq_seq_fmax_aux
 
 let row_fmax_eq_seq_fmax
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_fmax_partial sx r cols == seq_fmax (EM.ematrix_row sx r))
   = row_fmax_partial_eq_seq_fmax_aux sx r cols;
