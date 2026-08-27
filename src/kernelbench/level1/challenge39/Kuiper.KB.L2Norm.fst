@@ -395,14 +395,14 @@ fn t_memcpy_d2d'
   (src_off : SZ.t)
   (cnt : SZ.t { SZ.v dst_off + SZ.v cnt <= dst_sz /\ SZ.v src_off + SZ.v cnt <= src_sz })
   (#f : perm)
-  (#v : erased (chest1 a src_sz))
-  (#gv : erased (chest1 a dst_sz))
+  (#v : chest1 a src_sz)
+  (#gv : chest1 a dst_sz)
   preserves cpu ** on gpu_loc (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv)
   ensures exists* (s' : chest1 a dst_sz).
       on gpu_loc (dst |-> s') **
       pure (chest1_to_seq s' ==
-            KS.seq_blit (chest1_to_seq gv) (SZ.v dst_off) (chest1_to_seq v) (SZ.v src_off) (SZ.v cnt))
+            KS.seq_blit (chest1_to_seq gv) dst_off (chest1_to_seq v) src_off cnt)
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward dst_sz) gv)
     fn _ { tensor_concr dst; };
@@ -430,27 +430,27 @@ fn t_memcpy_d2d'
 
 inline_for_extraction noextract
 fn l2norm_row
-  (#bd : szp { bd <= max_blocks * max_threads })
+  (b : szp)
   (d : szp { d <= max_blocks * max_threads /\
-             d <= bd })
-  (rv_off : sz { rv_off + d <= bd })
-  (x : array1 f32 (l1_forward bd) { is_global x })
+             b * d <= max_blocks * max_threads })
+  (rv_off : sz { rv_off + d <= b * d })
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
   (scratch : array1 f32 (l1_forward d) { is_global scratch })
-  (#sx : erased (chest1 f32 bd))
-  (#ss : erased (chest1 f32 d))
+  (#sx : chest1 f32 (b * d))
+  (#ss : chest1 f32 d)
   preserves cpu
   requires on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
   ensures
-    (exists* (sx' : chest1 f32 bd) (ss' : chest1 f32 d).
+    (exists* (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
        pure (exists (inv : f32) (sumsq : f32).
-         (let row : Seq.lseq f32 (SZ.v d) =
-            Seq.slice (chest1_to_seq sx) (SZ.v rv_off) (SZ.v rv_off + SZ.v d) in
+         (let row : Seq.lseq f32 d =
+            Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d) in
           sumsq %~ frobenius_sumsq_r (to_real_seq row) /\
           inv == rsqrt sumsq /\
           chest1_to_seq sx' ==
-            KS.seq_blit (chest1_to_seq sx) (SZ.v rv_off)
-              (frobenius_result #f32 inv #(SZ.v d) row) 0 (SZ.v d))))
+            KS.seq_blit (chest1_to_seq sx) rv_off
+              (frobenius_result #f32 inv #d row) 0 d)))
 {
   (* Copy the row x[rv_off .. rv_off+d) into scratch[0 .. d). *)
   t_memcpy_d2d' scratch 0sz x rv_off d;
@@ -458,16 +458,16 @@ fn l2norm_row
   (* [seq_blit ss 0 sx rv_off d] fully overwrites the length-d scratch,
      so it equals [slice sx rv_off (rv_off+d)] -- the row. *)
   let row_g : erased (lseq f32 d) =
-    hide (Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v rv_off + SZ.v d));
+    hide (Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d));
   Seq.lemma_eq_intro
-    (KS.seq_blit (chest1_to_seq (reveal ss)) 0 (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v d))
+    (KS.seq_blit (chest1_to_seq ss) 0 (chest1_to_seq sx) rv_off d)
     (reveal row_g);
   assert pure (chest1_to_seq (reveal ss1) == reveal row_g);
 
   (* Sum of squares over the row (device tree-reduce with a square pre-map). *)
   sq_step_approx_forall #f32 ();
-  let vr : erased (chest1 real d) = hide (to_real_chest (reveal ss1));
-  assert pure (reveal ss1 %~ reveal vr);
+  let vr : chest1 real d = to_real_chest (reveal ss1);
+  assert pure (reveal ss1 %~ vr);
   let sumsq = HRed.reduce #f32 square sq_step_r 1024sz d scratch #ss1 vr;
   let inv = rsqrt sumsq;
 
@@ -483,34 +483,34 @@ fn l2norm_row
      frobenius_result inv row, and the reduce's sum-of-squares over
      [to_real_chest ss1] flattens to frobenius_sumsq_r (to_real_seq row). *)
   chest_map_to_seq (smul_step inv) (reveal ss1);
-  chest_map_to_seq sq_step_r (reveal vr);
+  chest_map_to_seq sq_step_r vr;
   to_real_chest_to_seq (reveal ss1);
-  assert pure (chest1_to_seq (reveal vr) == to_real_seq (reveal row_g));
+  assert pure (chest1_to_seq vr == to_real_seq (reveal row_g));
   assert pure (sumsq %~ frobenius_sumsq_r (to_real_seq (reveal row_g)));
   assert pure (
     chest1_to_seq (chest_map (smul_step inv) (reveal ss1)) ==
-    frobenius_result #f32 inv #(SZ.v d) (reveal row_g));
+    frobenius_result #f32 inv #d (reveal row_g));
   FStar.Classical.exists_intro
     (fun (sumsq' : f32) ->
       sumsq' %~ frobenius_sumsq_r (to_real_seq (reveal row_g)) /\
       inv == rsqrt sumsq' /\
       chest1_to_seq (reveal sx') ==
-        KS.seq_blit (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-          (frobenius_result #f32 inv #(SZ.v d) (reveal row_g)) 0 (SZ.v d))
+        KS.seq_blit (chest1_to_seq sx) rv_off
+          (frobenius_result #f32 inv #d (reveal row_g)) 0 d)
     sumsq;
   FStar.Classical.exists_intro
     (fun (inv' : f32) -> exists (sumsq' : f32).
       sumsq' %~ frobenius_sumsq_r (to_real_seq (reveal row_g)) /\
       inv' == rsqrt sumsq' /\
       chest1_to_seq (reveal sx') ==
-        KS.seq_blit (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-          (frobenius_result #f32 inv' #(SZ.v d) (reveal row_g)) 0 (SZ.v d))
+        KS.seq_blit (chest1_to_seq sx) rv_off
+          (frobenius_result #f32 inv' #d (reveal row_g)) 0 d)
     inv;
-  FStar.Seq.lemma_len_slice (chest1_to_seq (reveal sx))
-    (SZ.v rv_off) (SZ.v rv_off + SZ.v d);
+  FStar.Seq.lemma_len_slice (chest1_to_seq sx)
+    rv_off (SZ.v rv_off + SZ.v d);
   assert pure (SZ.v rv_off + SZ.v d - SZ.v rv_off == SZ.v d);
-  assert pure (Seq.length (Seq.slice (chest1_to_seq (reveal sx))
-    (SZ.v rv_off) (SZ.v rv_off + SZ.v d)) == SZ.v d);
+  assert pure (Seq.length (Seq.slice (chest1_to_seq sx)
+    rv_off (SZ.v rv_off + SZ.v d)) == SZ.v d);
   ()
 }
 
@@ -521,27 +521,27 @@ fn l2norm
   (d : szp { d <= max_blocks * max_threads /\
              SZ.fits (b * d) /\
              b * d <= max_blocks * max_threads })
-  (x : array1 f32 (l1_forward (b *^ d)) { is_global x })
-  (#sx : erased (chest1 f32 (b *^ d)))
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
+  (#sx : chest1 f32 (b * d))
   preserves cpu
   requires on gpu_loc (x |-> sx)
   ensures
-    (exists* (sx' : chest1 f32 (b *^ d)).
+    (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
-       pure (l2norm_post (SZ.v b) (SZ.v d) (chest1_to_seq sx) (chest1_to_seq sx')))
+       pure (l2norm_post b d (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let scratch = alloc0 #f32 d (l1_forward d);
   let mut idx = 0sz;
   while (let i = !idx; SZ.(i <^ b))
     invariant
-      exists* (vi : sz) (sx' : chest1 f32 (b *^ d)) (ss' : chest1 f32 d).
+      exists* (vi : sz) (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
         idx |-> vi **
         on gpu_loc (x |-> sx') **
         on gpu_loc (scratch |-> ss') **
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               (forall (r : nat). r < SZ.v vi ==>
-                 row_l2_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) (SZ.v d)) /\
+                 row_l2_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) d) /\
               Seq.slice (chest1_to_seq sx') (SZ.v vi * SZ.v d) (SZ.v b * SZ.v d) ==
                 Seq.slice (chest1_to_seq sx) (SZ.v vi * SZ.v d) (SZ.v b * SZ.v d))
     decreases (SZ.v b - SZ.v !idx)
@@ -549,10 +549,10 @@ fn l2norm
     let i = !idx;
     let off : sz = SZ.(i *^ d);
     with sx_pre. assert (on gpu_loc (x |-> reveal sx_pre));
-    l2norm_row #(b *^ d) d off x scratch;
+    l2norm_row b d off x scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
-    l2_loop_invariant_step (SZ.v b) (SZ.v d) (chest1_to_seq (reveal sx))
-      (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) (SZ.v i);
+    l2_loop_invariant_step b d (chest1_to_seq (reveal sx))
+      (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) i;
     idx := SZ.(!idx +^ 1sz);
   };
   free scratch;

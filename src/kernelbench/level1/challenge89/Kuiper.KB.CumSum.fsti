@@ -35,35 +35,31 @@ module Seq = FStar.Seq
 let cumsum_post
   (#t : Type0) {| scalar t, real_like t |}
   (b d : nat)
-  (sx : EM.chest2 t b d)
-  (sy : EM.chest2 t b d)
+  (sx : chest2 t b d)
+  (sy : chest2 t b d)
   : prop
   = forall (r : nat) (i : nat).
       r < b /\ i < d ==>
       acc2 sy r i %~
         rsum (Seq.slice (to_real_seq (EM.ematrix_row sx r)) 0 (i + 1))
 
-inline_for_extraction noextract
-type cumsum_fw_ty (t:Type0) {| scalar t, real_like t |} =
-  fn (b : szp { b <= max_blocks })
-     (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-     (input  : array2 t (l2_row_major (SZ.v b) (SZ.v d))
-               { is_global input  })
-     (output : array2 t (l2_row_major (SZ.v b) (SZ.v d))
-               { is_global output })
-     (#sx  : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
-     (#sy0 : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
-     requires
-       cpu **
-       on gpu_loc (input  |-> sx) **
-       on gpu_loc (output |-> sy0)
-     ensures
-       cpu **
-       on gpu_loc (input |-> sx) **
-       (exists* (sy : EM.chest2 t (SZ.v b) (SZ.v d)).
-          on gpu_loc (output |-> sy) **
-          pure (cumsum_post (SZ.v b) (SZ.v d) sx sy))
+fn cumsum_fw_f32
+  (b : szp { b <= max_blocks })
+  (d : szp { SZ.fits (SZ.v b * SZ.v d) })
+  (input  : array2 f32 (l2_row_major b d)
+            { is_global input  })
+  (output : array2 f32 (l2_row_major b d)
+            { is_global output })
+  (#sx #sy0 : chest2 f32 b d)
+  preserves
+    cpu **
+    on gpu_loc (input  |-> sx)
+  requires
+    on gpu_loc (output |-> sy0)
+  ensures
+    (exists* (sy : chest2 f32 b d).
+       on gpu_loc (output |-> sy) **
+       pure (cumsum_post b d sx sy))
 
-val cumsum_fw_f32 : cumsum_fw_ty f32
 
 inline_for_extraction let () = ()

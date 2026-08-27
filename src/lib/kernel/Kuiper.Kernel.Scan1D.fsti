@@ -48,8 +48,8 @@ let scan2d_inclusive_result
   (#t : Type0)
   (m : cmonoid t)
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
-  : EM.chest2 t rows cols
+  (sx : chest2 t rows cols)
+  : chest2 t rows cols
   = mk2 (fun (r : natlt rows) (j : natlt cols) ->
       scan_inclusive_at m (EM.ematrix_row sx r) j)
 
@@ -59,14 +59,12 @@ unfold inline_for_extraction
 type scan1d_inclusive_ty =
   fn (#et : Type0) {| scalar et |}
      (m : cmonoid et)
-     (rows : szp)
-     (cols : szp)
-     (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-     (#lout : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lout |}
+     (rows cols : szp)
+     (#lin  : layout2 rows cols) {| ctlayout lin  |}
+     (#lout : layout2 rows cols) {| ctlayout lout |}
      (input  : array2 et lin  { is_global input  })
      (output : array2 et lout { is_global output })
-     (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-     (#sout : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+     (#sx #sout : chest2 et rows cols)
      (#fIn  : perm)
      preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
      requires

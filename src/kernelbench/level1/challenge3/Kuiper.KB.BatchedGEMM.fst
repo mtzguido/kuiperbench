@@ -22,9 +22,9 @@ fn batched_gemm_f32
   (a : array3 f32 (l3_batched_row_major batch rows shared) { is_global a })
   (b : array3 f32 (l3_batched_row_major batch shared cols) { is_global b })
   (c : array3 f32 (l3_batched_row_major batch rows cols) { is_global c })
-  (#sa : erased (chest3 f32 batch rows shared))
-  (#sb : erased (chest3 f32 batch shared cols))
-  (#sc0 : erased (chest3 f32 batch rows cols))
+  (#sa : chest3 f32 batch rows shared)
+  (#sb : chest3 f32 batch shared cols)
+  (#sc0 : chest3 f32 batch rows cols)
   (#fA #fB : perm)
   norewrite
   preserves

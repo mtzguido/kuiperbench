@@ -19,8 +19,8 @@ fn smul_out_impl (#t:Type0) {| scalar t |}
   (lena : szp { lena <= max_blocks * max_threads })
   (c : array1 t (l1_forward lena) { is_global c })
   (a : array1 t (l1_forward lena) { is_global a })
-  (#sc : erased (chest1 t lena))
-  (#sa : erased (chest1 t lena))
+  (#sc : chest1 t lena)
+  (#sa : chest1 t lena)
   (#fa : perm)
   norewrite
   preserves cpu ** on gpu_loc (a |-> Frac fa sa)

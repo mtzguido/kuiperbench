@@ -47,23 +47,19 @@ let l1_dim_f (#t:Type0) {| floating t |} (d : SZ.t) : t =
   of_int (FStar.Int.Cast.uint64_to_int64
             (FStar.SizeT.sizet_to_uint64 d))
 
-inline_for_extraction noextract
-type l1norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
-  fn (b : szp)
-     (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
-     (x : array2 t (l2_row_major (SZ.v b) (SZ.v d)) { is_global x })
-     (#sx : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
-     requires
-       cpu **
-       on gpu_loc (x |-> sx) **
-       pure (
-         SZ.v b > 0 /\
-         SZ.v b * SZ.v d <= max_blocks * max_threads
-       )
-     ensures
-       cpu **
-       (exists* (sx' : EM.chest2 t (SZ.v b) (SZ.v d)).
-          on gpu_loc (x |-> sx') **
-          pure (l1norm_post (SZ.v b) (SZ.v d) (l1_dim_f d) sx sx'))
-
-val l1norm_fw_f32 : l1norm_fw_ty f32
+fn l1norm_fw_f32
+  (b : szp)
+  (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
+  (x : array2 f32 (l2_row_major b d) { is_global x })
+  (#sx : chest2 f32 b d)
+  preserves cpu
+  requires
+    on gpu_loc (x |-> sx) **
+    pure (
+      SZ.v b > 0 /\
+      SZ.v b * SZ.v d <= max_blocks * max_threads
+    )
+  ensures
+    (exists* (sx' : chest2 f32 b d).
+       on gpu_loc (x |-> sx') **
+       pure (l1norm_post b d (l1_dim_f d) sx sx'))

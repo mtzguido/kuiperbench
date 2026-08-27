@@ -38,34 +38,27 @@ let ln_inv_n (#t:Type0) {| floating t |} (n : SZ.t) : t =
   div one (of_int (FStar.Int.Cast.uint64_to_int64
                      (FStar.SizeT.sizet_to_uint64 n)))
 
-inline_for_extraction noextract
-type layernorm_fw_ty (t:Type0) {| floating t, real_like t |} =
-  fn (b : szp)
-     (n : szp { n <= max_blocks * max_threads /\
-                SZ.fits (b * n) /\
-                b * n <= max_blocks * max_threads })
-     (eps : t)
-     (x     : array1 t (l1_forward (b *^ n)) { is_global x     })
-     (gamma : array1 t (l1_forward n)        { is_global gamma })
-     (beta  : array1 t (l1_forward n)        { is_global beta  })
-     (#fg : perm)
-     (#fb : perm)
-     (#sx : erased (chest1 t (b *^ n)))
-     (#sg : erased (chest1 t n))
-     (#sb : erased (chest1 t n))
-     requires
-       cpu **
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (gamma |-> Frac fg sg) **
-       on gpu_loc (beta  |-> Frac fb sb)
-     ensures
-       cpu **
-       on gpu_loc (gamma |-> Frac fg sg) **
-       on gpu_loc (beta  |-> Frac fb sb) **
-       (exists* (sx' : chest1 t (b *^ n)).
-          on gpu_loc (x |-> sx') **
-          pure (layernorm_post (SZ.v b) (SZ.v n) eps (ln_inv_n n)
-                  (chest1_to_seq sg) (chest1_to_seq sb)
-                  (chest1_to_seq sx) (chest1_to_seq sx')))
-
-val layernorm_fw_f32 : layernorm_fw_ty f32
+fn layernorm_fw_f32
+  (b : szp)
+  (n : szp { n <= max_blocks * max_threads /\
+             SZ.fits (b * n) /\
+             b * n <= max_blocks * max_threads })
+  (eps : f32)
+  (x     : array1 f32 (l1_forward (b * n)) { is_global x     })
+  (gamma : array1 f32 (l1_forward n)        { is_global gamma })
+  (beta  : array1 f32 (l1_forward n)        { is_global beta  })
+  (#fg #fb : perm)
+  (#sx : chest1 f32 (b * n))
+  (#sg #sb : chest1 f32 n)
+  preserves
+    cpu **
+    on gpu_loc (gamma |-> Frac fg sg) **
+    on gpu_loc (beta  |-> Frac fb sb)
+  requires
+    on gpu_loc (x |-> sx)
+  ensures
+    (exists* (sx' : chest1 f32 (b * n)).
+       on gpu_loc (x |-> sx') **
+       pure (layernorm_post b n eps (ln_inv_n n)
+               (chest1_to_seq sg) (chest1_to_seq sb)
+               (chest1_to_seq sx) (chest1_to_seq sx')))

@@ -23,22 +23,19 @@ fn conv1d_general_impl
   (gy : array1 et (l1_forward (b * cout * l_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * l_in)))
-  (#sw : erased (chest1 et (cout * cin * kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * l_out)))
+  (#sx : chest1 et (b * cin * l_in))
+  (#sw : chest1 et (cout * cin * kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * l_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * cout * l_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * l_out}).
@@ -51,6 +48,6 @@ fn conv1d_general_impl
   ()
 }
 
-let conv1d_general_f32 : conv1d_general_ty f32 = conv1d_general_impl #f32
+let conv1d_general_f32 = conv1d_general_impl #f32
 
 inline_for_extraction let () = ()

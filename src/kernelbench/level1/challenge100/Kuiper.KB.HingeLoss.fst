@@ -55,8 +55,8 @@ fn hinge_loss
   (predictions : array1 t lp { is_global predictions })
   (#lt : layout1 n) {| ctlayout lt |}
   (targets     : array1 t lt { is_global targets })
-  (#sp : erased (chest1 t n))
-  (#st : erased (chest1 t n))
+  (#sp : chest1 t n)
+  (#st : chest1 t n)
   (rp : erased (lseq real n))
   (rt : erased (lseq real n))
   (#fb : perm)
@@ -74,7 +74,7 @@ fn hinge_loss
 {
   Map.map_gpu2 hinge_step n predictions targets;
 
-  let vr : erased (chest1 real n) =
+  let vr : chest1 real n =
     hide (seq_to_chest1 (KBMap.lseq_map2 real_hinge_step rp rt));
   hinge_map_approx #t (reveal sp) (reveal st) (reveal rp) (reveal rt);
   assert pure (Map.chest1_map2 hinge_step (reveal sp) (reveal st) %~ reveal vr);

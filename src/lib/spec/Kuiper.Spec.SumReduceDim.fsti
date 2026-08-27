@@ -24,6 +24,7 @@ module Kuiper.Spec.SumReduceDim
        value. *)
 
 open Kuiper
+open Kuiper.Chest
 open Kuiper.Approximates
 module Seq = FStar.Seq
 module EM  = Kuiper.EMatrix
@@ -34,7 +35,7 @@ module EM  = Kuiper.EMatrix
 let sumreduce_post
   (#t:Type0) {| scalar t, real_like t |}
   (n_rows : nat) (n_cols : nat)
-  (sx : EM.chest2 t n_rows n_cols)
+  (sx : chest2 t n_rows n_cols)
   (sy : Seq.lseq t n_rows)
   : prop =
   forall (r : nat). r < n_rows ==>

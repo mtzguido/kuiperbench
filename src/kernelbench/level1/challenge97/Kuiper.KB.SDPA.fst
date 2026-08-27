@@ -121,7 +121,7 @@ let content_ok
 let from_to2
   (#et:Type) (#m #n:nat)
   (l : full_layout2 m n)
-  (s : EM.chest2 et m n)
+  (s : chest2 et m n)
   : Lemma (ensures from_seq l (to_seq l s) == s)
   = let lhs = from_seq l (to_seq l s) in
     let aux (i:natlt m) (j:natlt n)
@@ -193,7 +193,7 @@ fn reshape2to3_eq
   (a3 : array3 et (l3_batched_row_major n m k))
   (#s3 : chest3 et n m k)
   (#f : perm)
-  (#e : EM.chest2 et p k)
+  (#e : chest2 et p k)
   (#_ : squash (
      e == from_seq (l2_row_major p k)
             (to_seq (l3_batched_row_major n m k) s3)))
@@ -417,7 +417,7 @@ let lemma_approximates_intro3
 let softmax_corr
   (#bh : nat) (#s : nat{s > 0}) (p:nat) (_:squash (p == bh * s))
   (scaled : chest3 f32 bh s s)
-  (sa' : EM.chest2 f32 p s)
+  (sa' : chest2 f32 p s)
   (probs : chest3 f32 bh s s)
   (_ : squash (
      sa' %~ RS.row_softmax_real
@@ -464,15 +464,16 @@ fn sdpa
   (gV  : array3 f32 (l3_batched_row_major bh s d) { is_global gV })
   (gScores : array3 f32 (l3_batched_row_major bh s s) { is_global gScores })
   (gOut : array3 f32 (l3_batched_row_major bh s d) { is_global gOut })
-  (#sQ  : erased (chest3 f32 bh s d))
-  (#sKT : erased (chest3 f32 bh d s))
-  (#sV  : erased (chest3 f32 bh s d))
-  (#sScores0 : erased (chest3 f32 bh s s))
-  (#sOut0 : erased (chest3 f32 bh s d))
+  (#sQ  : chest3 f32 bh s d)
+  (#sKT : chest3 f32 bh d s)
+  (#sV  : chest3 f32 bh s d)
+  (#sScores0 : chest3 f32 bh s s)
+  (#sOut0 : chest3 f32 bh s d)
   (#fQ #fKT #fV : perm)
-  requires
+  preserves
     cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
+    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV)
+  requires
     on gpu_loc (gScores |-> sScores0) **
     on gpu_loc (gOut |-> sOut0) **
     pure (
@@ -486,8 +487,6 @@ fn sdpa
       bh * (s * d) <= max_blocks * max_threads
     )
   ensures
-    cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
     (exists* (probs : chest3 f32 bh s s) (eOut : chest3 f32 bh s d).
       on gpu_loc (gScores |-> probs) **
       on gpu_loc (gOut |-> eOut) **
@@ -517,7 +516,7 @@ fn sdpa
   SMul.smul_fw_f32 scale bhss (from_array (l1_forward p1) (core gScores));
   (* view |-> lseq_map (mul scale) (from1 (to3 (batched_matmul sQ sKT))) *)
 
-  smul_reshape_eq scale #(SZ.v bh) #(SZ.v s) #(SZ.v s) p1 () (batched_matmul sQ sKT);
+  smul_reshape_eq scale #bh #s #s p1 () (batched_matmul sQ sKT);
   map_loc gpu_loc (fun () ->
     reshape1to3_eq p1 gScores
       #(mscale scale (batched_matmul sQ sKT))
@@ -548,7 +547,7 @@ fn sdpa
   (* from_to2: from2 (to2 sa') == sa', and to3 probs == to2 sa' (A3.to_from),
      so flat3to2 probs == sa'. *)
   from_to2 (l2_row_major p2 s) sa';
-  softmax_corr #(SZ.v bh) #(SZ.v s) p2 ()
+  softmax_corr #bh #s p2 ()
     (mscale scale (batched_matmul sQ sKT)) sa' probs () ();
   map_loc gpu_loc (fun () -> reshape2to3_eq p2 gScores #probs #_ #sa');
   (* on gpu_loc (gScores |-> probs)

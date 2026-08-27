@@ -67,20 +67,16 @@ fn conv1d_general_alloc
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 f32 (b * cin * l_in)))
-  (#sw : erased (chest1 f32 (cout * cin * kk)))
-  (#sbias : erased (chest1 f32 cout))
-  requires
+  (#sx : chest1 f32 (b * cin * l_in))
+  (#sw : chest1 f32 (cout * cin * kk))
+  (#sbias : chest1 f32 cout)
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
     on gpu_loc (gbias |-> Frac fb sbias)
   returns gy : array1 f32 (l1_forward (b * cout * l_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (b * cout * l_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * l_out}).
@@ -91,7 +87,7 @@ fn conv1d_general_alloc
   (* The partial product [b*cout] is bounded by the full product
      [b*cout*l_out] (every factor is [>= 1]), which fits per
      [conv1d_size_req]. *)
-  ML.lemma_mult_le_left (SZ.v b * SZ.v cout) 1 (SZ.v l_out);
+  ML.lemma_mult_le_left (SZ.v b * SZ.v cout) 1 l_out;
   let len_y : szp = SZ.(b *^ cout *^ l_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   with em. assert (on gpu_loc (gy |-> em));
@@ -100,7 +96,7 @@ fn conv1d_general_alloc
   gy
 }
 
-let conv1d_general_alloc_f32 : conv1d_general_alloc_ty =
+let conv1d_general_alloc_f32 =
   fun b cin l_in cout kk stride pad dilation l_out
       gx gw gbias #fx #fw #fb #sx #sw #sbias ->
     conv1d_general_alloc b cin l_in cout kk stride pad dilation l_out

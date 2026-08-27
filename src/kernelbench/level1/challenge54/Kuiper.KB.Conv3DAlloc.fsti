@@ -48,49 +48,32 @@ val conv3d_out_dim_ub (n k stride pad : nat)
    caller (the bridge wraps it in a torch tensor with a cudaFree deleter).
    The post is the SAME per-thread [conv3d_out_at] functional spec the
    underlying kernel guarantees. *)
-inline_for_extraction noextract
-type conv3d_general_alloc_ty =
-  (b : szp) ->
-  (cin : szp) ->
-  (d_in : szp) ->
-  (h_in : szp) ->
-  (w_in : szp) ->
-  (cout : szp) ->
-  (kd : szp) ->
-  (kh : szp) ->
-  (kw : szp) ->
-  (stride : szp) ->
-  (pad : sz) ->
-  (d_out : szp) ->
-  (h_out : szp) ->
-  (w_out : szp { conv3d_size_req b cin d_in h_in w_in cout kd kh kw stride
-                                  d_out h_out w_out }) ->
-  (gx : array1 f32 (l1_forward (b * cin * d_in * h_in * w_in))
-        { is_global gx }) ->
-  (gw : array1 f32 (l1_forward (cout * cin * kd * kh * kw))
-        { is_global gw }) ->
-  (gbias : array1 f32 (l1_forward cout)
-        { is_global gbias }) ->
-  (#fx : perm) -> (#fw : perm) -> (#fb : perm) ->
-  (#sx : erased (chest1 f32 (b * cin * d_in * h_in * w_in))) ->
-  (#sw : erased (chest1 f32 (cout * cin * kd * kh * kw))) ->
-  (#sbias : erased (chest1 f32 cout)) ->
-  stt (array1 f32 (l1_forward (b * cout * d_out * h_out * w_out)))
-    (requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias))
-    (ensures fun gy ->
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 f32 (b * cout * d_out * h_out * w_out)).
-          on gpu_loc (gy |-> sy) **
-          pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
-                  acc1 sy tid ==
-                  conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
-                                d_out h_out w_out sx sw sbias tid)))
-
-val conv3d_general_alloc_f32 : conv3d_general_alloc_ty
+fn conv3d_general_alloc_f32
+  (b cin d_in h_in w_in cout kd kh kw stride : szp)
+(pad : sz)
+(d_out h_out : szp)
+(w_out : szp { conv3d_size_req b cin d_in h_in w_in cout kd kh kw stride
+                               d_out h_out w_out })
+(gx : array1 f32 (l1_forward (b * cin * d_in * h_in * w_in))
+     { is_global gx })
+(gw : array1 f32 (l1_forward (cout * cin * kd * kh * kw))
+     { is_global gw })
+(gbias : array1 f32 (l1_forward cout)
+     { is_global gbias })
+(#fx #fw #fb : perm)
+(#sx : chest1 f32 (b * cin * d_in * h_in * w_in))
+(#sw : chest1 f32 (cout * cin * kd * kh * kw))
+(#sbias : chest1 f32 cout)
+preserves
+ cpu **
+ on gpu_loc (gx |-> Frac fx sx) **
+ on gpu_loc (gw |-> Frac fw sw) **
+ on gpu_loc (gbias |-> Frac fb sbias)
+returns gy : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out))
+ensures
+ (exists* (sy : chest1 f32 (b * cout * d_out * h_out * w_out)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
+            acc1 sy tid ==
+            conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
+                          d_out h_out w_out sx sw sbias tid))

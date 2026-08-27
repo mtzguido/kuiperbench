@@ -4,7 +4,7 @@ Skeptic review — KB L1Norm (#38) functional spec
 (a) Does the spec correspond to mathematical row-wise L1
 normalisation? YES, modulo a documented real-arithmetic choice.  The
 PyTorch reference is y = x / mean(|x|, dim=1) = x * D / sum(|x|,
-dim=1).  The input is modelled as an EM.chest2 t B D (the (B,D)
+dim=1).  The input is modelled as a chest2 t B D (the (B,D)
 row-major matrix, layout l2_row_major), NOT a flattened sequence.
 The post [l1norm_post b d dim_f sx sx'] expands to: for every row
 r < b there exist scale_r, sum_abs_r with

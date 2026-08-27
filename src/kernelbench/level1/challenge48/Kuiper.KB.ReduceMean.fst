@@ -27,7 +27,7 @@ let reducemean_recip_f32 (d : szp) : f32 =
 let row_to_real_eq
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : nat { r < rows })
   : Lemma (Seq.equal
              (EM.ematrix_row (EM.to_real_matrix sx) r)
@@ -42,7 +42,7 @@ let row_to_real_eq
 let row_post_eq
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : nat { r < rows })
   : Lemma
       (rsum (KS.lseq_map id (EM.ematrix_row (EM.to_real_matrix sx) r))
@@ -60,7 +60,7 @@ let mean_row_aux
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
   (inv_d : t)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (s_sum : chest1 t rows)
   (r : natlt rows)
   : Lemma
@@ -81,27 +81,27 @@ fn reduce_mean_fw_f32_impl
              SZ.fits (SZ.v m * SZ.v d) /\
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) })
   (inv_d : f32)
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+  (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d)))
-  (#sy : erased (chest1 f32 (SZ.v b * SZ.v m)))
-  preserves cpu
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sy : chest1 f32 (SZ.v b * SZ.v m))
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (y |-> sy)
   ensures
-    on gpu_loc (x |-> sx) **
     (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
        on gpu_loc (y |-> sy') **
-       pure (meanreduce_post (SZ.v b * SZ.v m) (SZ.v d) inv_d sx (chest1_to_seq sy')))
+       pure (meanreduce_post (SZ.v b * SZ.v m) d inv_d sx (chest1_to_seq sy')))
 {
   (* Build the real-valued ghost chest2 and the sx %~ vr witness. *)
   let bm : szp = b *^ m;
   assert pure (SZ.v bm == SZ.v b * SZ.v m);
-  let vr : erased (EM.chest2 real (SZ.v b * SZ.v m) (SZ.v d)) =
+  let vr : chest2 real (SZ.v b * SZ.v m) d =
     hide (EM.to_real_matrix (reveal sx));
   assert pure (reveal sx %~ reveal vr);
-  let vr' : erased (EM.chest2 real (SZ.v bm) (SZ.v d)) = vr;
+  let vr' : chest2 real bm d = vr;
 
   (* Launch 1: row-wise tree reduction (identity pre_map). *)
   HRedB.reduce_batched_block #f32 id id bm d 1024sz
@@ -114,7 +114,7 @@ fn reduce_mean_fw_f32_impl
   Classical.forall_intro
     (Classical.move_requires
        (row_post_eq #f32 (reveal sx)));
-  assert pure (sumreduce_post (SZ.v b * SZ.v m) (SZ.v d) (reveal sx) (chest1_to_seq (reveal sy1)));
+  assert pure (sumreduce_post (SZ.v b * SZ.v m) d (reveal sx) (chest1_to_seq (reveal sy1)));
 
   (* Launch 2: post-scale by inv_d in place. *)
   assert pure (SZ.v bm <= max_blocks * max_threads);
@@ -128,4 +128,4 @@ fn reduce_mean_fw_f32_impl
 }
 #pop-options
 
-let reduce_mean_fw_f32 : reduce_mean_fw_ty f32 = reduce_mean_fw_f32_impl
+let reduce_mean_fw_f32 = reduce_mean_fw_f32_impl

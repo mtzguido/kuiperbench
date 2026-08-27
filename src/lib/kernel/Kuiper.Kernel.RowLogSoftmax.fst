@@ -126,8 +126,8 @@ fn row_log_softmax_gpu
   (n : szp { m * n <= max_blocks * max_threads })
   (#l : layout2 m n) {| ctlayout l |}
   (a : array2 et l { is_global a })
-  (#sa : erased (chest2 et m n))
-  (ra : erased (chest2 real m n))
+  (#sa : chest2 et m n)
+  (ra : chest2 real m n)
   preserves cpu
   requires
     on gpu_loc (a |-> sa) **
@@ -151,6 +151,6 @@ fn row_log_softmax_gpu
 
   free sums;
 
-  s_row_broadcast_approx_log_softmax #et #_ #_ #_ #(SZ.v m) #(SZ.v n) sums_v sa ra;
+  s_row_broadcast_approx_log_softmax #et #_ #_ #_ #m #n sums_v sa ra;
   ()
 }

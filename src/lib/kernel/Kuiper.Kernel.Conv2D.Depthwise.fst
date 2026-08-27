@@ -104,7 +104,7 @@ fn read_x_padded
   (b c h_in w_in : szp)
   (#lx : layout1 (b * c * h_in * w_in)) {| ctlayout lx |}
   (gx : array1 et lx)
-  (#sx : erased (chest1 et (b*c*h_in*w_in)))
+  (#sx : chest1 et (b*c*h_in*w_in))
   (#fx : perm)
   (bi : szlt b)
   (ci : szlt c)
@@ -158,7 +158,7 @@ fn read_w_tap
   (c kh kw : szp)
   (#lw : layout1 (c * 1 * kh * kw)) {| ctlayout lw |}
   (gw : array1 et lw)
-  (#sw : erased (chest1 et (c*1*kh*kw)))
+  (#sw : chest1 et (c*1*kh*kw))
   (#fw : perm)
   (ci : szlt c)
   (kh_i : szlt kh) (kw_i : szlt kw)
@@ -250,10 +250,10 @@ fn kf
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*c*h_in*w_in)))
-  (#sw : erased (chest1 et (c*1*kh*kw)))
-  (#sbias : erased (chest1 et c))
-  (#sy0 : erased (chest1 et (b*c*h_out*w_out)))
+  (#sx : chest1 et (b*c*h_in*w_in))
+  (#sw : chest1 et (c*1*kh*kw))
+  (#sbias : chest1 et c)
+  (#sy0 : chest1 et (b*c*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (b * c * h_out * w_out > 0))
   (#_ : squash (SZ.fits (kh * kw) /\
@@ -266,17 +266,16 @@ fn kf
   (tid : szlt (b * c * h_out * w_out))
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre #et b c h_in w_in kh kw h_out w_out #lx #lw #lbias #ly
          gx gw gbias gy sx sw sbias sy0 fx fw fb tid
   ensures
-    gpu **
     kpost #et b c h_in w_in kh kw stride pad h_out w_out #lx #lw #lbias #ly
           gx gw gbias gy sx sw sbias fx fw fb tid
 {
   (* The per-thread body proves [result == dwconv2d_out_at ...] via a
-     loop invariant tracking [acc == dwconv2d_partial_at ... (SZ.v k)]
+     loop invariant tracking [acc == dwconv2d_partial_at ... k]
      and the step lemma [dwconv2d_partial_at_step] (which wraps the
      spec-level [__dwconv2d_single_lemma]).  Setup, teardown, and
      sendability are discharged at the [kdesc] level (see below). *)
@@ -302,7 +301,7 @@ fn kf
       exists* (vk : sz{SZ.v vk <= kh * kw}).
         k |-> vk **
         acc |-> dwconv2d_partial_at b c h_in w_in kh kw stride pad
-                  h_out w_out sx sw bi ci oh ow (SZ.v vk)
+                  h_out w_out sx sw bi ci oh ow vk
     invariant gx |-> Frac (fx /. (b * c * h_out * w_out)) sx
     invariant gw |-> Frac (fw /. (b * c * h_out * w_out)) sw
     invariant gbias |-> Frac (fb /. (b * c * h_out * w_out)) sbias
@@ -324,8 +323,8 @@ fn kf
       read_padded (lseq_to_t4 b c h_in w_in sx) bi ci
         (oh * stride + kh_i - pad) (ow * stride + kw_i - pad));
     assert pure (wv == tacc (lseq_to_t4 c 1 kh kw sw) ci 0 kh_i kw_i);
-    assert pure (SZ.v kh_i == unrank_dw_kh kh kw (SZ.v kk_v));
-    assert pure (SZ.v kw_i == unrank_dw_kw kh kw (SZ.v kk_v));
+    assert pure (SZ.v kh_i == unrank_dw_kh kh kw kk_v);
+    assert pure (SZ.v kw_i == unrank_dw_kw kh kw kk_v);
     dwconv2d_partial_at_step b c h_in w_in kh kw stride pad
       h_out w_out sx sw bi ci oh ow (SZ.v kk_v + 1);
     acc := add acc0 prod;
@@ -351,6 +350,7 @@ fn dwconv2d_setup
   (kh kw : szp)
   (stride : szp)
   (h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * c * h_out * w_out })
   (#lx : layout1 (b * c * h_in * w_in))
   (#lw : layout1 (c * 1 * kh * kw))
   (#lbias : layout1 c)
@@ -359,10 +359,10 @@ fn dwconv2d_setup
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*c*h_in*w_in)))
-  (#sw : erased (chest1 et (c*1*kh*kw)))
-  (#sbias : erased (chest1 et c))
-  (#sy0 : erased (chest1 et (b*c*h_out*w_out)))
+  (#sx : chest1 et (b*c*h_in*w_in))
+  (#sw : chest1 et (c*1*kh*kw))
+  (#sbias : chest1 et c)
+  (#sy0 : chest1 et (b*c*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out))
   ()
@@ -373,7 +373,7 @@ fn dwconv2d_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ c *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b c h_in w_in kh kw h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias sy0 fx fw fb tid) **
@@ -410,8 +410,7 @@ fn dwconv2d_setup
        (gw |-> Frac (fw /. (b * c * h_out * w_out)) sw) **
        (gbias |-> Frac (fb /. (b * c * h_out * w_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * c * h_out * w_out)
-                   (SZ.v (b *^ c *^ h_out *^ w_out));
+  forevery_rw_size (b * c * h_out * w_out) nthr;
   ()
 }
 
@@ -424,6 +423,7 @@ fn dwconv2d_teardown
   (kh kw : szp)
   (stride : szp) (pad : sz)
   (h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * c * h_out * w_out })
   (#lx : layout1 (b * c * h_in * w_in))
   (#lw : layout1 (c * 1 * kh * kw))
   (#lbias : layout1 c)
@@ -432,15 +432,15 @@ fn dwconv2d_teardown
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*c*h_in*w_in)))
-  (#sw : erased (chest1 et (c*1*kh*kw)))
-  (#sbias : erased (chest1 et c))
+  (#sx : chest1 et (b*c*h_in*w_in))
+  (#sw : chest1 et (c*1*kh*kw))
+  (#sbias : chest1 et c)
   (#fx #fw #fb : perm)
   (#_ : squash (dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out))
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ c *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b c h_in w_in kh kw stride pad h_out w_out
              #lx #lw #lbias #ly
              gx gw gbias gy sx sw sbias fx fw fb tid) **
@@ -456,8 +456,7 @@ fn dwconv2d_teardown
                dwconv2d_out_at b c h_in w_in kh kw stride pad
                                h_out w_out sx sw sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ c *^ h_out *^ w_out))
-                   (b * c * h_out * w_out)
+  forevery_rw_size nthr (b * c * h_out * w_out)
     #(kpost #et b c h_in w_in kh kw stride pad h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias fx fw fb);
@@ -485,7 +484,7 @@ fn dwconv2d_teardown
   tensor_gather_n gx (b * c * h_out * w_out);
   tensor_gather_n gw (b * c * h_out * w_out);
   tensor_gather_n gbias (b * c * h_out * w_out);
-  let sy : erased (chest1 et (b * c * h_out * w_out)) =
+  let sy : chest1 et (b * c * h_out * w_out) =
     hide (mk1
             (fun (tid : nat{tid < b * c * h_out * w_out}) ->
                dwconv2d_out_at b c h_in w_in kh kw stride pad
@@ -522,10 +521,10 @@ let kdesc
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*c*h_in*w_in)))
-  (#sw : erased (chest1 et (c*1*kh*kw)))
-  (#sbias : erased (chest1 et c))
-  (#sy0 : erased (chest1 et (b*c*h_out*w_out)))
+  (#sx : chest1 et (b*c*h_in*w_in))
+  (#sw : chest1 et (c*1*kh*kw))
+  (#sbias : chest1 et c)
+  (#sy0 : chest1 et (b*c*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (is_global gx /\ is_global gw /\
                 is_global gbias /\ is_global gy /\
@@ -544,14 +543,14 @@ let kdesc
                  acc1 sy tid ==
                  dwconv2d_out_at b c h_in w_in kh kw stride pad
                                  h_out w_out sx sw sbias tid)))
-=
-{
-  nthr = b *^ c *^ h_out *^ w_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * c * h_out * w_out }) =
+      b *^ c *^ h_out *^ w_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
-  setup    = dwconv2d_setup b c h_in w_in kh kw stride h_out w_out
+  setup    = dwconv2d_setup b c h_in w_in kh kw stride h_out w_out nthr
                             gx gw gbias gy;
   teardown = dwconv2d_teardown b c h_in w_in kh kw stride pad h_out w_out
-                               gx gw gbias gy;
+                               nthr gx gw gbias gy;
   kpre  = kpre #et b c h_in w_in kh kw h_out w_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias sy0 fx fw fb;
   kpost = kpost #et b c h_in w_in kh kw stride pad h_out w_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias fx fw fb;
   f = kf b c h_in w_in kh kw stride pad h_out w_out gx gw gbias gy;
@@ -577,26 +576,23 @@ fn dwconv2d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*c*h_in*w_in)))
-  (#sw : erased (chest1 et (c*1*kh*kw)))
-  (#sbias : erased (chest1 et c))
-  (#sy0 : erased (chest1 et (b*c*h_out*w_out)))
+  (#sx : chest1 et (b*c*h_in*w_in))
+  (#sw : chest1 et (c*1*kh*kw))
+  (#sbias : chest1 et c)
+  (#sy0 : chest1 et (b*c*h_out*w_out))
   (#fx #fw #fb : perm)
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
           dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*c*h_out*w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*c*h_out*w_out}).

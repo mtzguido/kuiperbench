@@ -112,7 +112,7 @@ fn read_x_padded
   (b cin l_in : szp)
   (#lx : layout1 (b * cin * l_in)) {| ctlayout lx |}
   (gx : array1 et lx)
-  (#sx : erased (chest1 et (b*cin*l_in)))
+  (#sx : chest1 et (b*cin*l_in))
   (#fx : perm)
   (bi : szlt b)
   (ic : szlt cin)
@@ -159,7 +159,7 @@ fn read_w_tap
   (cout cin kk : szp)
   (#lw : layout1 (cout * cin * kk)) {| ctlayout lw |}
   (gw : array1 et lw)
-  (#sw : erased (chest1 et (cout*cin*kk)))
+  (#sw : chest1 et (cout*cin*kk))
   (#fw : perm)
   (oc : szlt cout) (ic : szlt cin) (k_i : szlt kk)
   (#_ : squash (SZ.fits (cout * cin * kk)))
@@ -247,10 +247,10 @@ fn kf
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   (#_ : squash (b * cout * l_out > 0))
   (#_ : squash (SZ.fits (cin * kk) /\
@@ -261,17 +261,16 @@ fn kf
   (tid : szlt (b * cout * l_out))
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre #et b cin l_in cout kk l_out #lx #lw #lbias #ly
          gx gw gbias gy sx sw sbias sy0 fx fw fb tid
   ensures
-    gpu **
     kpost #et b cin l_in cout kk stride pad dilation l_out #lx #lw #lbias #ly
           gx gw gbias gy sx sw sbias fx fw fb tid
 {
   (* The per-thread body proves [result == conv1d_out_at ...] via a loop
-     invariant tracking [acc == conv1d_partial_at ... (SZ.v k)] and the
+     invariant tracking [acc == conv1d_partial_at ... k] and the
      step lemma [conv1d_partial_at_step] (which wraps the spec-level
      [__conv1d_single_lemma]).  Setup, teardown, and sendability are
      all discharged at the [kdesc] level (see below). *)
@@ -292,7 +291,7 @@ fn kf
       exists* (vk : sz{SZ.v vk <= cin * kk}).
         k |-> vk **
         acc |-> conv1d_partial_at b cin l_in cout kk stride pad dilation
-                  l_out sx sw bi oc ol (SZ.v vk)
+                  l_out sx sw bi oc ol vk
     invariant gx |-> Frac (fx /. (b * cout * l_out)) sx
     invariant gw |-> Frac (fw /. (b * cout * l_out)) sw
     invariant gbias |-> Frac (fb /. (b * cout * l_out)) sbias
@@ -313,8 +312,8 @@ fn kf
       read_padded1 (lseq_to_t3 b cin l_in sx) bi ic
         (ol * stride + k_i * dilation - pad));
     assert pure (wv == t3acc (lseq_to_t3 cout cin kk sw) oc ic k_i);
-    assert pure (SZ.v ic == unrank1_ic cin kk (SZ.v kk_v));
-    assert pure (SZ.v k_i == unrank1_k cin kk (SZ.v kk_v));
+    assert pure (SZ.v ic == unrank1_ic cin kk kk_v);
+    assert pure (SZ.v k_i == unrank1_k cin kk kk_v);
     conv1d_partial_at_step b cin l_in cout kk stride pad dilation
       l_out sx sw bi oc ol (SZ.v kk_v + 1);
     acc := add acc0 prod;
@@ -341,6 +340,7 @@ fn conv1d_naive_setup
   (b cin l_in cout : szp) (kk : szp)
   (stride : szp) (dilation : szp)
   (l_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * l_out })
   (#lx : layout1 (b * cin * l_in))
   (#lw : layout1 (cout * cin * kk))
   (#lbias : layout1 cout)
@@ -349,10 +349,10 @@ fn conv1d_naive_setup
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   (#_ : squash (conv1d_size_req b cin l_in cout kk stride dilation l_out))
   ()
@@ -363,7 +363,7 @@ fn conv1d_naive_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ cout *^ l_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b cin l_in cout kk l_out #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias sy0 fx fw fb tid) **
     pure (SZ.fits (tlayout_ulen ly))
@@ -399,7 +399,7 @@ fn conv1d_naive_setup
        (gw |-> Frac (fw /. (b * cout * l_out)) sw) **
        (gbias |-> Frac (fb /. (b * cout * l_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * cout * l_out) (SZ.v (b *^ cout *^ l_out));
+  forevery_rw_size (b * cout * l_out) nthr;
   ()
 }
 
@@ -414,6 +414,7 @@ fn conv1d_naive_teardown
   (b cin l_in cout : szp) (kk : szp)
   (stride : szp) (pad : sz) (dilation : szp)
   (l_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * l_out })
   (#lx : layout1 (b * cin * l_in))
   (#lw : layout1 (cout * cin * kk))
   (#lbias : layout1 cout)
@@ -422,15 +423,15 @@ fn conv1d_naive_teardown
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
   (#fx #fw #fb : perm)
   (#_ : squash (conv1d_size_req b cin l_in cout kk stride dilation l_out))
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ cout *^ l_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b cin l_in cout kk stride pad dilation l_out
              #lx #lw #lbias #ly
              gx gw gbias gy sx sw sbias fx fw fb tid) **
@@ -446,7 +447,7 @@ fn conv1d_naive_teardown
                conv1d_out_at b cin l_in cout kk stride pad dilation
                              l_out sx sw sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ cout *^ l_out)) (b * cout * l_out)
+  forevery_rw_size nthr (b * cout * l_out)
     #(kpost #et b cin l_in cout kk stride pad dilation l_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw sbias fx fw fb);
@@ -471,7 +472,7 @@ fn conv1d_naive_teardown
   tensor_gather_n gx (b * cout * l_out);
   tensor_gather_n gw (b * cout * l_out);
   tensor_gather_n gbias (b * cout * l_out);
-  let sy : erased (chest1 et (b * cout * l_out)) =
+  let sy : chest1 et (b * cout * l_out) =
     hide (mk1
             (fun (tid : nat{tid < b * cout * l_out}) ->
                conv1d_out_at b cin l_in cout kk stride pad dilation
@@ -508,10 +509,10 @@ let kdesc
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   (#_ : squash (is_global gx /\ is_global gw /\
                 is_global gbias /\ is_global gy /\
@@ -530,13 +531,13 @@ let kdesc
                  acc1 sy tid ==
                  conv1d_out_at b cin l_in cout kk stride pad dilation
                                l_out sx sw sbias tid)))
-=
-{
-  nthr = b *^ cout *^ l_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * cout * l_out }) =
+      b *^ cout *^ l_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
-  setup    = conv1d_naive_setup b cin l_in cout kk stride dilation l_out
+  setup    = conv1d_naive_setup b cin l_in cout kk stride dilation l_out nthr
                                 gx gw gbias gy;
-  teardown = conv1d_naive_teardown b cin l_in cout kk stride pad dilation l_out
+  teardown = conv1d_naive_teardown b cin l_in cout kk stride pad dilation l_out nthr
                                    gx gw gbias gy;
   kpre  = kpre #et b cin l_in cout kk l_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias sy0 fx fw fb;
   kpost = kpost #et b cin l_in cout kk stride pad dilation l_out #lx #lw #lbias #ly gx gw gbias gy sx sw sbias fx fw fb;
@@ -563,26 +564,23 @@ fn conv1d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
           conv1d_size_req b cin l_in cout kk stride dilation l_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*cout*l_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*cout*l_out}).

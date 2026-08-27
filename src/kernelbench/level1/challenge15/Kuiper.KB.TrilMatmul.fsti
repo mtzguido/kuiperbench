@@ -36,38 +36,30 @@ module MS = Kuiper.Spec.GEMM
 let tril_matmul_post
   (#t:Type0) {| scalar t, real_like t |}
   (n : nat)
-  (rA rB : EM.chest2 real n n)
-  (sy' : EM.chest2 t n n)
+  (rA rB : chest2 real n n)
+  (sy' : chest2 t n n)
   : prop
   = forall (i j : natlt n).
       acc2 sy' i j %~
         (if j <= i then acc2 (MS.matmul rA rB) i j else 0.0R)
 
-inline_for_extraction noextract
-type tril_matmul_ty (t:Type0) {| floating t, real_like t, floating_real_like t |} =
-  fn (n : szp {
-        SZ.v n * SZ.v n <= max_blocks * max_threads /\
-        SZ.fits (SZ.v n * SZ.v n) })
-     (gA : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global gA })
-     (gB : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global gB })
-     (y  : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global y  })
-     (#sA : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
-     (#sB : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
-     (#sy : erased (EM.chest2 t (SZ.v n) (SZ.v n)))
-     (#rA : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
-     (#rB : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
-     requires
-       cpu **
-       on gpu_loc (gA |-> sA) **
-       on gpu_loc (gB |-> sB) **
-       on gpu_loc (y  |-> sy) **
-       pure (reveal sA %~ reveal rA /\ reveal sB %~ reveal rB)
-     ensures
-       cpu **
-       on gpu_loc (gA |-> sA) **
-       on gpu_loc (gB |-> sB) **
-       (exists* (sy' : EM.chest2 t (SZ.v n) (SZ.v n)).
-          on gpu_loc (y |-> sy') **
-          pure (tril_matmul_post (SZ.v n) (reveal rA) (reveal rB) sy'))
-
-val tril_matmul_f32 : tril_matmul_ty f32
+fn tril_matmul_f32
+  (n : szp {
+     SZ.v n * SZ.v n <= max_blocks * max_threads /\
+     SZ.fits (SZ.v n * SZ.v n) })
+  (gA : array2 f32 (l2_row_major n n) { is_global gA })
+  (gB : array2 f32 (l2_row_major n n) { is_global gB })
+  (y  : array2 f32 (l2_row_major n n) { is_global y  })
+  (#sA #sB #sy : chest2 f32 n n)
+  (#rA #rB : chest2 real n n)
+  preserves
+    cpu **
+    on gpu_loc (gA |-> sA) **
+    on gpu_loc (gB |-> sB)
+  requires
+    on gpu_loc (y  |-> sy) **
+    pure (reveal sA %~ reveal rA /\ reveal sB %~ reveal rB)
+  ensures
+    (exists* (sy' : chest2 f32 n n).
+       on gpu_loc (y |-> sy') **
+       pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))

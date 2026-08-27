@@ -165,7 +165,7 @@ Step 4 — `Kuiper.Kernel.HReduce.Block.Max`
 Clone src/lib/kernel/Kuiper.Kernel.HReduce.Block.fst.  Drop:
   - [#et:Type0 {| scalar et, real_like et |}]   → fix [et = f32]
   - [pre_map / pre_map_r]                       → drop
-  - [vr : EM.chest2 real]                      → drop (use sx
+  - [vr : chest2 real]                         → drop (use sx
                                                   directly)
   - [%~] approximation                          → exact equality
   - [a_add] (real_like field)                  → direct [fmax]

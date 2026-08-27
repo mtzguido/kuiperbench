@@ -48,45 +48,31 @@ val conv2d_out_dim_ub (n k stride pad : nat)
    wraps it in a torch tensor with a cudaFree deleter).  The post is the SAME
    per-thread [conv2d_out_at] functional spec the underlying kernel
    guarantees. *)
-inline_for_extraction noextract
-type conv2d_general_alloc_ty =
-  (b : szp) ->
-  (cin : szp) ->
-  (h_in : szp) ->
-  (w_in : szp) ->
-  (cout : szp) ->
-  (kh : szp) ->
-  (kw : szp) ->
-  (stride : szp) ->
-  (pad : sz) ->
-  (h_out : szp) ->
-  (w_out : szp { conv2d_size_req b cin h_in w_in cout kh kw stride h_out w_out }) ->
-  (gx : array1 f32 (l1_forward (b * cin * h_in * w_in))
-        { is_global gx }) ->
-  (gw : array1 f32 (l1_forward (cout * cin * kh * kw))
-        { is_global gw }) ->
-  (gbias : array1 f32 (l1_forward cout)
-        { is_global gbias }) ->
-  (#fx : perm) -> (#fw : perm) -> (#fb : perm) ->
-  (#sx : erased (chest1 f32 (b * cin * h_in * w_in))) ->
-  (#sw : erased (chest1 f32 (cout * cin * kh * kw))) ->
-  (#sbias : erased (chest1 f32 cout)) ->
-  stt (array1 f32 (l1_forward (b * cout * h_out * w_out)))
-    (requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias))
-    (ensures fun gy ->
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
-          on gpu_loc (gy |-> sy) **
-          pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
-                  acc1 sy tid ==
-                  conv2d_out_at b cin h_in w_in cout kh kw stride pad
-                                h_out w_out sx sw sbias tid)))
-
-val conv2d_general_alloc_f32 : conv2d_general_alloc_ty
+fn conv2d_general_alloc_f32
+  (b cin h_in w_in cout kh kw stride : szp)
+(pad : sz)
+(h_out : szp)
+(w_out : szp { conv2d_size_req b cin h_in w_in cout kh kw stride h_out w_out })
+(gx : array1 f32 (l1_forward (b * cin * h_in * w_in))
+     { is_global gx })
+(gw : array1 f32 (l1_forward (cout * cin * kh * kw))
+     { is_global gw })
+(gbias : array1 f32 (l1_forward cout)
+     { is_global gbias })
+(#fx #fw #fb : perm)
+(#sx : chest1 f32 (b * cin * h_in * w_in))
+(#sw : chest1 f32 (cout * cin * kh * kw))
+(#sbias : chest1 f32 cout)
+preserves
+ cpu **
+ on gpu_loc (gx |-> Frac fx sx) **
+ on gpu_loc (gw |-> Frac fw sw) **
+ on gpu_loc (gbias |-> Frac fb sbias)
+returns gy : array1 f32 (l1_forward (b * cout * h_out * w_out))
+ensures
+ (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
+            acc1 sy tid ==
+            conv2d_out_at b cin h_in w_in cout kh kw stride pad
+                          h_out w_out sx sw sbias tid))

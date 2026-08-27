@@ -63,46 +63,42 @@ let softmax_pages
   = mk3 (fun p i j ->
       acc1 (SM.softmax_real (chest2_row (slice_page rm p) i)) j)
 
-inline_for_extraction noextract
-type sdpa_ty (t:Type0) {| floating t, real_like t, floating_real_like t |} =
-  fn (bh s d : szp)
-     (scale : t)
-     (gQ  : array3 t (l3_batched_row_major bh s d) { is_global gQ })
-     (gKT : array3 t (l3_batched_row_major bh d s) { is_global gKT })
-     (gV  : array3 t (l3_batched_row_major bh s d) { is_global gV })
-     (gScores : array3 t (l3_batched_row_major bh s s) { is_global gScores })
-     (gOut : array3 t (l3_batched_row_major bh s d) { is_global gOut })
-     (#sQ  : erased (chest3 t bh s d))
-     (#sKT : erased (chest3 t bh d s))
-     (#sV  : erased (chest3 t bh s d))
-     (#sScores0 : erased (chest3 t bh s s))
-     (#sOut0 : erased (chest3 t bh s d))
-     (#fQ #fKT #fV : perm)
-     requires
-       cpu **
-       on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
-       on gpu_loc (gScores |-> sScores0) **
-       on gpu_loc (gOut |-> sOut0) **
-       pure (
-         s * s <= max_blocks * max_threads /\
-         SZ.fits (bh * (s * d)) /\
-         SZ.fits (bh * (d * s)) /\
-         SZ.fits (bh * (s * s)) /\
-         bh * s * s <= max_blocks * max_threads /\
-         bh * s <= max_blocks /\
-         (bh * s) * s <= max_blocks * max_threads /\
-         bh * (s * d) <= max_blocks * max_threads
-       )
-     ensures
-       cpu **
-       on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
-       (exists* (probs : chest3 t bh s s) (eOut : chest3 t bh s d).
-         on gpu_loc (gScores |-> probs) **
-         on gpu_loc (gOut |-> eOut) **
-         pure (probs %~
-                 (softmax_pages
-                    (to_real_chest
-                       (mscale scale (batched_matmul sQ sKT))))) **
-         pure (eOut == batched_matmul probs sV))
-
-val sdpa_f32 : sdpa_ty f32
+fn sdpa_f32
+  (bh s d : szp)
+  (scale : f32)
+  (gQ  : array3 f32 (l3_batched_row_major bh s d) { is_global gQ })
+  (gKT : array3 f32 (l3_batched_row_major bh d s) { is_global gKT })
+  (gV  : array3 f32 (l3_batched_row_major bh s d) { is_global gV })
+  (gScores : array3 f32 (l3_batched_row_major bh s s) { is_global gScores })
+  (gOut : array3 f32 (l3_batched_row_major bh s d) { is_global gOut })
+  (#sQ  : chest3 f32 bh s d)
+  (#sKT : chest3 f32 bh d s)
+  (#sV  : chest3 f32 bh s d)
+  (#sScores0 : chest3 f32 bh s s)
+  (#sOut0 : chest3 f32 bh s d)
+  (#fQ #fKT #fV : perm)
+  preserves
+    cpu **
+    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV)
+  requires
+    on gpu_loc (gScores |-> sScores0) **
+    on gpu_loc (gOut |-> sOut0) **
+    pure (
+      s * s <= max_blocks * max_threads /\
+      SZ.fits (bh * (s * d)) /\
+      SZ.fits (bh * (d * s)) /\
+      SZ.fits (bh * (s * s)) /\
+      bh * s * s <= max_blocks * max_threads /\
+      bh * s <= max_blocks /\
+      (bh * s) * s <= max_blocks * max_threads /\
+      bh * (s * d) <= max_blocks * max_threads
+    )
+  ensures
+    (exists* (probs : chest3 f32 bh s s) (eOut : chest3 f32 bh s d).
+      on gpu_loc (gScores |-> probs) **
+      on gpu_loc (gOut |-> eOut) **
+      pure (probs %~
+              (softmax_pages
+                 (to_real_chest
+                    (mscale scale (batched_matmul sQ sKT))))) **
+      pure (eOut == batched_matmul probs sV))

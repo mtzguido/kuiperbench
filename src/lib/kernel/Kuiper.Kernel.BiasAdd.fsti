@@ -36,7 +36,7 @@ module SZ = Kuiper.SizeT
 let bias_add_at
   (#t:Type0) {| scalar t |}
   (m n : nat)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (tid : nat{tid < m * n})
   : GTot t
@@ -49,7 +49,7 @@ let bias_add_at
 val bias_add_at_ij
   (#t:Type0) {| scalar t |}
   (m n : nat)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (i : natlt m) (j : natlt n)
   : Lemma (bias_add_at m n eC sbias (i * n + j) == add (acc2 eC i j) (acc1 sbias j))
@@ -65,54 +65,49 @@ inline_for_extraction noextract
 fn bias_add_gpu
   (#t : Type0) {| scalar t |}
   (m n : szp)
-  (#lC : layout2 (SZ.v m) (SZ.v n)) {| ctlayout lC |}
-  (#lbias : layout1 (SZ.v n)) {| ctlayout lbias |}
+  (#lC : layout2 m n) {| ctlayout lC |}
+  (#lbias : layout1 n) {| ctlayout lbias |}
   (#ly : layout1 (SZ.v m * SZ.v n)) {| ctlayout ly |}
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t (SZ.v m) (SZ.v n)))
-  (#sbias : erased (chest1 t (SZ.v n)))
-  (#sy0 : erased (chest1 t (SZ.v m * SZ.v n)))
+  (#eC : chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
-  preserves cpu
-  requires
+  preserves
+    cpu **
     on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gC /\ is_global gbias /\ is_global gy /\
-          bias_add_size_req (SZ.v m) (SZ.v n))
+          bias_add_size_req m n)
   ensures
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 t (SZ.v m * SZ.v n)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
-               acc1 sy tid == bias_add_at (SZ.v m) (SZ.v n) eC sbias tid))
+               acc1 sy tid == bias_add_at m n eC sbias tid))
 
 (* Canonical-layout monomorphic type abbreviation + f32 instantiation. *)
-inline_for_extraction noextract
-type bias_add_ty (t:Type0) {| scalar t |} =
-  fn (m n : szp)
-     (gC : array2 t (l2_row_major (SZ.v m) (SZ.v n)) { is_global gC })
-     (gbias : array1 t (l1_forward (SZ.v n)) { is_global gbias })
-     (gy : array1 t (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
-     (#eC : erased (EM.chest2 t (SZ.v m) (SZ.v n)))
-     (#sbias : erased (chest1 t (SZ.v n)))
-     (#sy0 : erased (chest1 t (SZ.v m * SZ.v n)))
-     (#fc #fb : perm)
-     preserves cpu
-     requires
-       on gpu_loc (gC |-> Frac fc eC) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       on gpu_loc (gy |-> sy0) **
-       pure (bias_add_size_req (SZ.v m) (SZ.v n))
-     ensures
-       on gpu_loc (gC |-> Frac fc eC) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 t (SZ.v m * SZ.v n)).
-          on gpu_loc (gy |-> sy) **
-          pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
-                  acc1 sy tid == bias_add_at (SZ.v m) (SZ.v n) eC sbias tid))
-
-val bias_add_f32 : bias_add_ty f32
+fn bias_add_f32
+  (m n : szp)
+  (gC : array2 f32 (l2_row_major m n) { is_global gC })
+  (gbias : array1 f32 (l1_forward n) { is_global gbias })
+  (gy : array1 f32 (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
+  (#eC : chest2 f32 m n)
+  (#sbias : chest1 f32 n)
+  (#sy0 : chest1 f32 (SZ.v m * SZ.v n))
+  (#fc #fb : perm)
+  preserves
+    cpu **
+    on gpu_loc (gC |-> Frac fc eC) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
+    on gpu_loc (gy |-> sy0) **
+    pure (bias_add_size_req m n)
+  ensures
+    (exists* (sy : chest1 f32 (SZ.v m * SZ.v n)).
+       on gpu_loc (gy |-> sy) **
+       pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
+               acc1 sy tid == bias_add_at m n eC sbias tid))

@@ -29,22 +29,19 @@ fn conv2d_square_impl
   (gy : array1 et (l1_forward (b * cout * h_out * h_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * h_in * h_in)))
-  (#sw : erased (chest1 et (cout * cin * k * k)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * h_out * h_out)))
+  (#sx : chest1 et (b * cin * h_in * h_in))
+  (#sw : chest1 et (cout * cin * k * k))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * h_out * h_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * cout * h_out * h_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * h_out * h_out}).
@@ -57,6 +54,6 @@ fn conv2d_square_impl
   ()
 }
 
-let conv2d_square_f32 : conv2d_square_ty f32 = conv2d_square_impl #f32
+let conv2d_square_f32 = conv2d_square_impl #f32
 
 inline_for_extraction let () = ()

@@ -97,11 +97,10 @@ let conv3d_size_req
     b * cout * d_out * h_out * w_out <= max_blocks * max_threads
 
 inline_for_extraction noextract
-val conv3d_naive_gpu
+fn conv3d_naive_gpu
   (#et : Type0) {| scalar et |}
-  (b cin d_in h_in w_in cout : szp)
-  (kd kh kw : szp)
-  (stride : szp) (pad : sz)
+  (b cin d_in h_in w_in cout kd kh kw stride : szp)
+  (pad : sz)
   (d_out h_out w_out : szp)
   (#lx : layout1 (b * cin * d_in * h_in * w_in)) {| ctlayout lx |}
   (#lw : layout1 (cout * cin * kd * kh * kw)) {| ctlayout lw |}
@@ -111,30 +110,27 @@ val conv3d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw : erased (chest1 et (cout*cin*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*d_out*h_out*w_out)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw : chest1 et (cout*cin*kd*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
-  : stt unit
-    (requires
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      on gpu_loc (gy |-> sy0) **
-      pure (is_global gx /\ is_global gw /\
-            is_global gbias /\ is_global gy /\
-            conv3d_size_req b cin d_in h_in w_in cout kd kh kw stride
-                            d_out h_out w_out))
-    (ensures fun _ ->
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      (exists* (sy : chest1 et (b*cout*d_out*h_out*w_out)).
-        on gpu_loc (gy |-> sy) **
-        pure (forall (tid : nat{tid < b*cout*d_out*h_out*w_out}).
-                acc1 sy tid ==
-                conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
-                              d_out h_out w_out sx sw sbias tid)))
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
+    on gpu_loc (gy |-> sy0) **
+    pure (is_global gx /\ is_global gw /\
+          is_global gbias /\ is_global gy /\
+          conv3d_size_req b cin d_in h_in w_in cout kd kh kw stride
+                          d_out h_out w_out)
+  ensures
+    (exists* (sy : chest1 et (b*cout*d_out*h_out*w_out)).
+       on gpu_loc (gy |-> sy) **
+       pure (forall (tid : nat{tid < b*cout*d_out*h_out*w_out}).
+               acc1 sy tid ==
+               conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
+                             d_out h_out w_out sx sw sbias tid))

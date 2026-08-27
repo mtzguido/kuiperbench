@@ -29,7 +29,7 @@ let clamp_threads (nth lena : szp)
 let row_to_real_eq
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : nat { r < rows })
   : Lemma (Seq.equal
              (EM.ematrix_row (EM.to_real_matrix sx) r)
@@ -46,7 +46,7 @@ let row_to_real_eq
 let row_post_eq
   (#t:Type0) {| scalar t, real_like t |}
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : nat { r < rows })
   : Lemma
       (seq_max (KS.lseq_map id (EM.ematrix_row (EM.to_real_matrix sx) r))
@@ -74,7 +74,7 @@ let chest1_max_is_seq_max (#n : nat { n > 0 }) (c : chest1 real n)
 let max_row_bridge
   (pre_map_r : real -> real)
   (#rows : nat) (#cols : nat { cols > 0 })
-  (vr : EM.chest2 real rows cols) (r : natlt rows)
+  (vr : chest2 real rows cols) (r : natlt rows)
   : Lemma (ensures seq_max (KS.lseq_map pre_map_r (EM.ematrix_row vr r))
                    == chest1_max (chest_map pre_map_r (chest2_row vr r)))
   = Seq.lemma_eq_elim (chest1_to_seq (chest_map pre_map_r (chest2_row vr r)))
@@ -90,7 +90,7 @@ let approximates_subst (x : f32) (a b : real)
 (* Turn the chest-native launch postcondition into [maxreduce_post]. *)
 let maxreduce_post_from_chest
   (#rows : nat) (#cols : nat { cols > 0 })
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (sy' : chest1 f32 rows)
   : Lemma
       (requires (forall (r : nat). r < rows ==>
@@ -117,27 +117,27 @@ fn maxreduce_dim_fw_f32_impl
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) /\
              SZ.v b * SZ.v m <= max_blocks /\
              SZ.fits (SZ.v d + max_threads) })
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+  (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d)))
-  (#sy : erased (chest1 f32 (SZ.v b * SZ.v m)))
-  preserves cpu
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sy : chest1 f32 (SZ.v b * SZ.v m))
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (y |-> sy)
   ensures
-    on gpu_loc (x |-> sx) **
     (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
        on gpu_loc (y |-> sy') **
-       pure (maxreduce_post (SZ.v b * SZ.v m) (SZ.v d) sx (chest1_to_seq sy')))
+       pure (maxreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy')))
 {
   let bm : szp = b *^ m;
   assert pure (SZ.v bm == SZ.v b * SZ.v m);
   (* Build the real-valued ghost chest2 and the sx %~ vr witness. *)
-  let vr : erased (EM.chest2 real (SZ.v b * SZ.v m) (SZ.v d)) =
+  let vr : chest2 real (SZ.v b * SZ.v m) d =
     hide (EM.to_real_matrix (reveal sx));
   assert pure (reveal sx %~ reveal vr);
-  let vr' : erased (EM.chest2 real (SZ.v bm) (SZ.v d)) = vr;
+  let vr' : chest2 real bm d = vr;
   (* Clamp the block thread count so every strided bucket is non-empty
      (max has no real-number identity, so [nth <= cols] is required). *)
   let nthm : szp = clamp_threads max_threads d;
@@ -148,30 +148,29 @@ fn maxreduce_dim_fw_f32_impl
     x y vr';
   with sy'. assert (on gpu_loc (y |-> sy'));
   (* Bridge the chest-native per-row max postcondition into [maxreduce_post]. *)
-  maxreduce_post_from_chest #(SZ.v bm) #(SZ.v d) (reveal sx) sy';
+  maxreduce_post_from_chest #bm #d (reveal sx) sy';
   ()
 }
 #pop-options
 
-let maxreduce_dim_fw_f32
+fn maxreduce_dim_fw_f32
   (b : szp)
   (m : SZ.t { 0 < SZ.v m /\ SZ.fits (SZ.v b * SZ.v m) })
   (d : szp { SZ.fits (SZ.v m * SZ.v d) /\
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) /\
              SZ.v b * SZ.v m <= max_blocks /\
              SZ.fits (SZ.v d + max_threads) })
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+  (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d)))
-  (#sy : erased (chest1 f32 (SZ.v b * SZ.v m)))
-  : stt unit
-      (cpu **
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (y |-> sy))
-      (fun _ ->
-        cpu **
-        on gpu_loc (x |-> sx) **
-        (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
-           on gpu_loc (y |-> sy') **
-           pure (maxreduce_post (SZ.v b * SZ.v m) (SZ.v d) sx (chest1_to_seq sy'))))
-  = maxreduce_dim_fw_f32_impl b m d x y #sx #sy
+  (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
+  (#sy : chest1 f32 (SZ.v b * SZ.v m))
+  preserves cpu ** on gpu_loc (x |-> sx)
+  requires
+    on gpu_loc (y |-> sy)
+  ensures
+    exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
+      on gpu_loc (y |-> sy') **
+      pure (maxreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy'))
+{
+  maxreduce_dim_fw_f32_impl b m d x y #sx #sy
+}

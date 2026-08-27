@@ -39,14 +39,14 @@ type mean_var_norm_fw_ty (t:Type0) {| floating t, real_like t |} =
                 SZ.fits (b * d) /\
                 b * d <= max_blocks * max_threads })
      (eps : t)
-     (x : array1 t (l1_forward (b *^ d)) { is_global x })
-     (#s : erased (chest1 t (b *^ d)))
-     requires cpu ** on gpu_loc (x |-> s)
+     (x : array1 t (l1_forward (b * d)) { is_global x })
+     (#s : chest1 t (b * d))
+     preserves cpu
+     requires on gpu_loc (x |-> s)
      ensures
-       cpu **
-       (exists* (s' : chest1 t (b *^ d)).
+       (exists* (s' : chest1 t (b * d)).
           on gpu_loc (x |-> s') **
-          pure (mean_var_post (SZ.v b) (SZ.v d) eps (mvn_inv_d d)
+          pure (mean_var_post b d eps (mvn_inv_d d)
                   (chest1_to_seq s) (chest1_to_seq s')))
 
 val mean_var_norm_fw_f32 : mean_var_norm_fw_ty f32

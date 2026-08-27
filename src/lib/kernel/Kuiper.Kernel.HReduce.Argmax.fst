@@ -26,7 +26,7 @@ module HRM = Kuiper.Kernel.HReduce.Max.RowFmax
 [@@"opaque_to_smt"]
 let rec row_argmax_partial
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (nat & f32)
@@ -39,7 +39,7 @@ let rec row_argmax_partial
 
 let row_argmax_partial_zero
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (row_argmax_partial sx r 0 == (0, neg_inf))
           [SMTPat (row_argmax_partial sx r 0)]
@@ -48,7 +48,7 @@ let row_argmax_partial_zero
 #push-options "--fuel 2 --ifuel 1"
 let row_argmax_partial_succ
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma
@@ -64,7 +64,7 @@ let row_argmax_partial_succ
    from the verified Max primitive. *)
 let rec row_argmax_val_eq_fmax
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures snd (row_argmax_partial sx r k) ==
@@ -94,7 +94,7 @@ let rec row_argmax_val_eq_fmax
 (* The selected idx is in range and points to its value. *)
 let rec row_argmax_idx_inv
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures (let (bi, bv) = row_argmax_partial sx r k in
@@ -127,7 +127,7 @@ let rec row_argmax_idx_inv
    running-max prefixes (mirrors the un-exported helpers in RowFmax). *)
 let arg_row_prefix
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot (Seq.lseq f32 k)
@@ -135,7 +135,7 @@ let arg_row_prefix
 
 let rec arg_row_fmax_eq
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures HRM.row_fmax_partial sx r k == seq_fmax (arg_row_prefix sx r k))
@@ -164,7 +164,7 @@ let rec arg_row_fmax_eq
    the keep branch the property is inherited unchanged. *)
 let rec row_argmax_first_inv
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : Lemma (ensures (let (bi, bv) = row_argmax_partial sx r k in
@@ -196,7 +196,7 @@ let rec row_argmax_first_inv
    Max primitive's row_fmax_eq_seq_fmax. *)
 let row_argmax_at_full
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (let (bi, bv) = row_argmax_partial sx r cols in
            bi < cols /\
@@ -211,7 +211,7 @@ let row_argmax_at_full
    is exactly the PyTorch first-occurrence argmax tie-break. *)
 let row_argmax_first_at_full
   (#rows : nat) (#cols : nat{cols > 0})
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : Lemma (let (bi, bv) = row_argmax_partial sx r cols in
            bi < cols /\
@@ -229,11 +229,11 @@ let row_argmax_first_at_full
 noextract
 let argmax_i64
   (#rows : nat) (cols : szp { SZ.v cols < pow2 63 })
-  (sx : EM.chest2 f32 rows (SZ.v cols))
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   : GTot I64.t
-  = row_argmax_idx_inv sx r (SZ.v cols);
-    let bi = fst (row_argmax_partial sx r (SZ.v cols)) in
+  = row_argmax_idx_inv sx r cols;
+    let bi = fst (row_argmax_partial sx r cols) in
     assert (bi <= (if SZ.v cols = 0 then 0 else SZ.v cols - 1));
     assert (bi < pow2 63);
     I64.int_to_t bi
@@ -250,13 +250,13 @@ unfold
 let kpre_batched_argmax
   (rows : szp)
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (sout : chest1 i64 (SZ.v rows))
-  (r : natlt (SZ.v rows))
+  (sx   : chest2 f32 rows cols)
+  (sout : chest1 i64 rows)
+  (r : natlt rows)
   : slprop
   = x |-> Frac (1.0R /. SZ.v rows) sx **
     Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> acc1 sout r
@@ -265,13 +265,13 @@ unfold
 let kpost_batched_argmax
   (rows : szp)
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (sout : chest1 i64 (SZ.v rows))
-  (r : natlt (SZ.v rows))
+  (sx   : chest2 f32 rows cols)
+  (sout : chest1 i64 rows)
+  (r : natlt rows)
   : slprop
   = x |-> Frac (1.0R /. SZ.v rows) sx **
     Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |->
@@ -284,23 +284,22 @@ inline_for_extraction noextract
 fn kf_batched_argmax
   (rows : szp)
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 i64 (SZ.v rows))
+  (#sx   : chest2 f32 rows cols)
+  (#sout : chest1 i64 rows)
   (gid : szlt rows)
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
-    kpre_batched_argmax rows cols x output sx sout (SZ.v gid)
+    kpre_batched_argmax rows cols x output sx sout gid
   ensures
-    gpu **
-    kpost_batched_argmax rows cols x output sx sout (SZ.v gid)
+    kpost_batched_argmax rows cols x output sx sout gid
 {
-  unfold kpre_batched_argmax rows cols x output sx sout (SZ.v gid);
+  unfold kpre_batched_argmax rows cols x output sx sout gid;
 
   let mut ci_ref : sz = 0sz;
   let mut bi_ref : sz = 0sz;
@@ -312,9 +311,9 @@ fn kf_batched_argmax
       bi_ref |-> bi_v **
       bv_ref |-> bv_v **
       x |-> Frac (1.0R /. SZ.v rows) sx **
-      Cell output (((SZ.v gid <: natlt (SZ.v rows)), ()) <: abs (SZ.v rows @| INil)) |-> acc1 sout (SZ.v gid) **
+      Cell output (((SZ.v gid <: natlt rows), ()) <: abs (SZ.v rows @| INil)) |-> acc1 sout gid **
       pure (SZ.v ci_v <= SZ.v cols /\
-            (let (bi, bv) = row_argmax_partial sx (SZ.v gid) (SZ.v ci_v) in
+            (let (bi, bv) = row_argmax_partial sx gid ci_v in
              SZ.v bi_v == bi /\ bv_v == bv))
     decreases (SZ.v cols - SZ.v !ci_ref)
   {
@@ -334,14 +333,14 @@ fn kf_batched_argmax
   with bi_v. assert bi_ref |-> bi_v;
   let final_bi = !bi_ref;
   (* SZ.v final_bi < SZ.v cols by row_argmax_idx_inv ; cast through u32 → i64 *)
-  row_argmax_idx_inv sx (SZ.v gid) (SZ.v cols);
+  row_argmax_idx_inv sx gid cols;
   let final_bi_u32 : U32.t = SZ.sizet_to_u32 final_bi;
   let final_bi_i64 : I64.t = Cast.uint32_to_int64 final_bi_u32;
   assert pure (I64.v final_bi_i64 == SZ.v final_bi);
-  assert pure (argmax_i64 cols sx (SZ.v gid) == final_bi_i64);
+  assert pure (argmax_i64 cols sx gid == final_bi_i64);
   tensor_write_cell output ((gid <: szlt rows), ()) final_bi_i64;
 
-  fold kpost_batched_argmax rows cols x output sx sout (SZ.v gid);
+  fold kpost_batched_argmax rows cols x output sx sout gid;
 }
 #pop-options
 
@@ -349,7 +348,7 @@ fn kf_batched_argmax
 
 let seq_reduce_rows_argmax
   (#rows : nat) (cols : szp { SZ.v cols < pow2 63 })
-  (sx : EM.chest2 f32 rows (SZ.v cols))
+  (sx : chest2 f32 rows cols)
   : GTot (Seq.lseq i64 rows)
   = Seq.init_ghost rows (fun r -> argmax_i64 cols sx r)
 
@@ -359,31 +358,31 @@ ghost
 fn setup_batched_argmax
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 i64 (SZ.v rows))
+  (#sx   : chest2 f32 rows cols)
+  (#sout : chest1 i64 rows)
   ()
   norewrite
   requires
     x |-> sx ** output |-> sout
   ensures
-    (forall+ (r : natlt (SZ.v rows)). kpre_batched_argmax rows cols x output sx sout r) **
+    (forall+ (r : natlt rows). kpre_batched_argmax rows cols x output sx sout r) **
     pure (SZ.fits (tlayout_ulen lout))
 {
   tensor_pts_to_ref output;
-  tensor_share_n x (SZ.v rows);
+  tensor_share_n x rows;
   tensor_explode output;
-  forevery_iso (abs_bij #(SZ.v rows)) _;
+  forevery_iso (abs_bij #rows) _;
 
-  forevery_zip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) -> x |-> Frac (1.0R /. SZ.v rows) sx)
-    (fun (r : natlt (SZ.v rows)) -> Cell output (abs_bij.gg r) |-> acc sout (abs_bij.gg r));
+  forevery_zip #(natlt rows)
+    (fun (_ : natlt rows) -> x |-> Frac (1.0R /. SZ.v rows) sx)
+    (fun (r : natlt rows) -> Cell output (abs_bij.gg r) |-> acc sout (abs_bij.gg r));
 
-  forevery_ext #(natlt (SZ.v rows))
-    (fun (r : natlt (SZ.v rows)) ->
+  forevery_ext #(natlt rows)
+    (fun (r : natlt rows) ->
        (x |-> Frac (1.0R /. SZ.v rows) (reveal sx)) **
        Cell output (abs_bij.gg r) |-> acc sout (abs_bij.gg r))
     (kpre_batched_argmax rows cols x output sx sout);
@@ -396,40 +395,40 @@ ghost
 fn teardown_batched_argmax
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 f32 lin)
   (output : array1 i64 lout)
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 i64 (SZ.v rows))
+  (#sx   : chest2 f32 rows cols)
+  (#sout : chest1 i64 rows)
   ()
   norewrite
   requires
-    (forall+ (r : natlt (SZ.v rows)). kpost_batched_argmax rows cols x output sx sout r) **
+    (forall+ (r : natlt rows). kpost_batched_argmax rows cols x output sx sout r) **
     pure (SZ.fits (tlayout_ulen lout))
   ensures
     x |-> sx ** output |-> seq_to_chest1 (seq_reduce_rows_argmax cols sx)
 {
-  forevery_ext #(natlt (SZ.v rows))
+  forevery_ext #(natlt rows)
     (kpost_batched_argmax rows cols x output sx sout)
-    (fun (r : natlt (SZ.v rows)) ->
+    (fun (r : natlt rows) ->
        x |-> Frac (1.0R /. SZ.v rows) sx **
        Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> argmax_i64 cols sx r);
 
-  forevery_unzip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) -> x |-> Frac (1.0R /. SZ.v rows) sx)
-    (fun (r : natlt (SZ.v rows)) ->
+  forevery_unzip #(natlt rows)
+    (fun (_ : natlt rows) -> x |-> Frac (1.0R /. SZ.v rows) sx)
+    (fun (r : natlt rows) ->
        Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> argmax_i64 cols sx r);
 
-  tensor_gather_n x (SZ.v rows);
+  tensor_gather_n x rows;
 
-  let sout' : erased (chest1 i64 (SZ.v rows)) = hide (seq_to_chest1 (seq_reduce_rows_argmax cols sx));
-  forevery_ext #(natlt (SZ.v rows))
-    (fun (r : natlt (SZ.v rows)) ->
+  let sout' : chest1 i64 rows = hide (seq_to_chest1 (seq_reduce_rows_argmax cols sx));
+  forevery_ext #(natlt rows)
+    (fun (r : natlt rows) ->
        Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> argmax_i64 cols sx r)
-    (fun (r : natlt (SZ.v rows)) -> Cell output (abs_bij.gg r) |-> acc (reveal sout') (abs_bij.gg r));
+    (fun (r : natlt rows) -> Cell output (abs_bij.gg r) |-> acc (reveal sout') (abs_bij.gg r));
 
-  forevery_iso_back (abs_bij #(SZ.v rows))
+  forevery_iso_back (abs_bij #rows)
     (fun (i : abs (SZ.v rows @| INil)) -> Cell output i |-> acc (reveal sout') i);
 
   tensor_implode output #1.0R #(reveal sout');
@@ -443,12 +442,12 @@ inline_for_extraction noextract
 let kdesc_batched_argmax
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 i64 lout { is_global output })
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 i64 (SZ.v rows))
+  (#sx   : chest2 f32 rows cols)
+  (#sout : chest1 i64 rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
       (x |-> sx ** output |-> seq_to_chest1 (seq_reduce_rows_argmax cols sx)) =
@@ -471,18 +470,18 @@ inline_for_extraction noextract
 fn reduce_batched_argmax_f32
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v cols < pow2 63 })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 i64 lout { is_global output })
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 i64 (SZ.v rows))
-  preserves cpu
+  (#sx   : chest2 f32 rows cols)
+  (#sout : chest1 i64 rows)
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> sout)
   ensures
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows_argmax cols sx))
 {
   launch_sync (kdesc_batched_argmax rows cols x output #sx #sout);

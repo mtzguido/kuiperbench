@@ -39,50 +39,40 @@ val dwconv2d_out_dim_ub (n k stride pad : nat)
   : Lemma (requires k >= 1 /\ stride >= 1 /\ k <= n + 2 * pad)
           (ensures (n + 2 * pad - k) / stride + 1 <= n + 2 * pad)
 
-inline_for_extraction noextract
-type dwconv2d_ty (t:Type0) {| scalar t |} =
-  fn (b : szp)
-     (c : szp)
-     (h_in : szp)
-     (w_in : szp)
-     (kh : szp)
-     (kw : szp)
-     (stride : szp)
-     (pad : sz)
-     (h_out : szp)
-     (w_out : szp { dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out })
-     (gx : array1 t (l1_forward (b * c * h_in * w_in))
-           { is_global gx })
-     (gw : array1 t (l1_forward (c * 1 * kh * kw))
-           { is_global gw })
-     (gbias : array1 t (l1_forward c)
-           { is_global gbias })
-     (gy : array1 t (l1_forward (b * c * h_out * w_out))
-           { is_global gy })
-     (#fx : perm) (#fw : perm) (#fb : perm)
-     (#sx : erased (chest1 t (b * c * h_in * w_in)))
-     (#sw : erased (chest1 t (c * 1 * kh * kw)))
-     (#sbias : erased (chest1 t c))
-     (#sy0 : erased (chest1 t (b * c * h_out * w_out)))
-     requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       on gpu_loc (gy |-> sy0)
-     ensures
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 t (b * c * h_out * w_out)).
-         on gpu_loc (gy |-> sy) **
-         pure (forall (tid : nat{tid < b * c * h_out * w_out}).
-                 acc1 sy tid ==
-                 dwconv2d_out_at b c h_in w_in kh kw stride pad
-                                 h_out w_out sx sw sbias tid))
+fn dwconv2d_f32
+  (b c h_in w_in kh kw stride : szp)
+  (pad : sz)
+  (h_out : szp)
+  (w_out : szp { dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out })
+  (gx : array1 f32 (l1_forward (b * c * h_in * w_in))
+        { is_global gx })
+  (gw : array1 f32 (l1_forward (c * 1 * kh * kw))
+        { is_global gw })
+  (gbias : array1 f32 (l1_forward c)
+        { is_global gbias })
+  (gy : array1 f32 (l1_forward (b * c * h_out * w_out))
+        { is_global gy })
+  (#fx #fw #fb : perm)
+  (#sx : chest1 f32 (b * c * h_in * w_in))
+  (#sw : chest1 f32 (c * 1 * kh * kw))
+  (#sbias : chest1 f32 c)
+  (#sy0 : chest1 f32 (b * c * h_out * w_out))
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
+    on gpu_loc (gy |-> sy0)
+  ensures
+    (exists* (sy : chest1 f32 (b * c * h_out * w_out)).
+      on gpu_loc (gy |-> sy) **
+      pure (forall (tid : nat{tid < b * c * h_out * w_out}).
+              acc1 sy tid ==
+              dwconv2d_out_at b c h_in w_in kh kw stride pad
+                              h_out w_out sx sw sbias tid))
 
-val dwconv2d_f32 : dwconv2d_ty f32
 
 (* (b) Self-allocating entry-point type.  Takes the raw depthwise-conv dims
    plus [h_out]/[w_out] (supplied by the verified [dwconv2d_out_dim]).
@@ -91,46 +81,34 @@ val dwconv2d_f32 : dwconv2d_ty f32
    (the bridge wraps it in a torch tensor with a cudaFree deleter).  The post
    is the SAME per-thread [dwconv2d_out_at] functional spec the underlying
    kernel guarantees. *)
-inline_for_extraction noextract
-type dwconv2d_alloc_ty =
-  (b : szp) ->
-  (c : szp) ->
-  (h_in : szp) ->
-  (w_in : szp) ->
-  (kh : szp) ->
-  (kw : szp) ->
-  (stride : szp) ->
-  (pad : sz) ->
-  (h_out : szp) ->
-  (w_out : szp { dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out }) ->
-  (gx : array1 f32 (l1_forward (b * c * h_in * w_in))
-        { is_global gx }) ->
-  (gw : array1 f32 (l1_forward (c * 1 * kh * kw))
-        { is_global gw }) ->
-  (gbias : array1 f32 (l1_forward c)
-        { is_global gbias }) ->
-  (#fx : perm) -> (#fw : perm) -> (#fb : perm) ->
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in))) ->
-  (#sw : erased (chest1 f32 (c * 1 * kh * kw))) ->
-  (#sbias : erased (chest1 f32 c)) ->
-  stt (array1 f32 (l1_forward (b * c * h_out * w_out)))
-    (requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias))
-    (ensures fun gy ->
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 f32 (b * c * h_out * w_out)).
-          on gpu_loc (gy |-> sy) **
-          pure (forall (tid : nat{tid < b * c * h_out * w_out}).
-                  acc1 sy tid ==
-                  dwconv2d_out_at b c h_in w_in kh kw stride pad
-                                  h_out w_out sx sw sbias tid)))
+fn dwconv2d_alloc_f32
+  (b c h_in w_in kh kw stride : szp)
+(pad : sz)
+(h_out : szp)
+(w_out : szp { dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out })
+(gx : array1 f32 (l1_forward (b * c * h_in * w_in))
+     { is_global gx })
+(gw : array1 f32 (l1_forward (c * 1 * kh * kw))
+     { is_global gw })
+(gbias : array1 f32 (l1_forward c)
+     { is_global gbias })
+(#fx #fw #fb : perm)
+(#sx : chest1 f32 (b * c * h_in * w_in))
+(#sw : chest1 f32 (c * 1 * kh * kw))
+(#sbias : chest1 f32 c)
+preserves
+ cpu **
+ on gpu_loc (gx |-> Frac fx sx) **
+ on gpu_loc (gw |-> Frac fw sw) **
+ on gpu_loc (gbias |-> Frac fb sbias)
+returns gy : array1 f32 (l1_forward (b * c * h_out * w_out))
+ensures
+ (exists* (sy : chest1 f32 (b * c * h_out * w_out)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < b * c * h_out * w_out}).
+            acc1 sy tid ==
+            dwconv2d_out_at b c h_in w_in kh kw stride pad
+                            h_out w_out sx sw sbias tid))
 
-val dwconv2d_alloc_f32 : dwconv2d_alloc_ty
 
 inline_for_extraction let () = ()

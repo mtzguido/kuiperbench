@@ -9,7 +9,7 @@ module Kuiper.KB.RMSNorm
        X[b,c,h,w] ← X[b,c,h,w] * inv_rms[b,hw]
 
    The (B, C, H, W) row-major buffer is viewed in F* as Array2 with layout
-       l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)
+       l2_bcm_pages b hw c
    whose imap is (r, ci) ↦ (r/HW)*C*HW + ci*HW + r%HW
    exactly matching the physical row-major layout.
 
@@ -36,25 +36,21 @@ let rms_inv_c (#t:Type0) {| floating t |} (c : SZ.t) : t =
   div one (of_int (FStar.Int.Cast.uint64_to_int64
                      (FStar.SizeT.sizet_to_uint64 c)))
 
-inline_for_extraction noextract
-type rmsnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
-  fn (b : szp)
-     (hw : SZ.t { 0 < SZ.v hw /\ SZ.fits (SZ.v b * SZ.v hw) })
-     (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
-     (eps : t)
-     (x : array2 t (l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)) { is_global x })
-     (#sx : erased (EM.chest2 t (SZ.v b * SZ.v hw) (SZ.v c)))
-     requires
-       cpu **
-       on gpu_loc (x |-> sx) **
-       pure (
-         SZ.v b * SZ.v hw > 0 /\
-         SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
-       )
-     ensures
-       cpu **
-       (exists* (sx' : EM.chest2 t (SZ.v b * SZ.v hw) (SZ.v c)).
-          on gpu_loc (x |-> sx') **
-          pure (rmsnorm_post (SZ.v b * SZ.v hw) (SZ.v c) eps (rms_inv_c c) sx sx'))
-
-val rmsnorm_fw_f32 : rmsnorm_fw_ty f32
+fn rmsnorm_fw_f32
+  (b : szp)
+  (hw : SZ.t { 0 < SZ.v hw /\ SZ.fits (SZ.v b * SZ.v hw) })
+  (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
+  (eps : f32)
+  (x : array2 f32 (l2_bcm_pages b hw c) { is_global x })
+  (#sx : chest2 f32 (SZ.v b * SZ.v hw) c)
+  preserves cpu
+  requires
+    on gpu_loc (x |-> sx) **
+    pure (
+      SZ.v b * SZ.v hw > 0 /\
+      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
+    )
+  ensures
+    (exists* (sx' : chest2 f32 (SZ.v b * SZ.v hw) c).
+       on gpu_loc (x |-> sx') **
+       pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx'))

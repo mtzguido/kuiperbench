@@ -9,7 +9,7 @@ module Kuiper.Spec.L1Norm
    x * D / sum(|x|, dim=1).
 
    The input is a (B, D) row-major matrix, modelled directly as an
-   [EM.chest2 t B D] (NOT a flattened sequence): the postcondition is
+   [chest2 t B D] (NOT a flattened sequence): the postcondition is
    stated over the matrix entries [acc2 sx r j].
 
    Per-row spec is structurally analogous to RMSNorm: each row of the
@@ -62,7 +62,7 @@ let row_l1_normalized
   (#t:Type0) {| scalar t, real_like t, floating t |}
   (#b #d : nat)
   (dim_f : t)
-  (sx sx' : EM.chest2 t b d)
+  (sx sx' : chest2 t b d)
   (r : natlt b)
   : prop =
   exists (scale : t) (sum_abs : t).
@@ -76,7 +76,7 @@ let l1norm_post
   (#t:Type0) {| scalar t, real_like t, floating t |}
   (b d : nat)
   (dim_f : t)
-  (sx sx' : EM.chest2 t b d)
+  (sx sx' : chest2 t b d)
   : prop =
   forall (r : nat). r < b ==> row_l1_normalized dim_f sx sx' r
 
@@ -88,7 +88,7 @@ let l1norm_post
 val row_reduce_partial_fabs_approx
   (#t:Type0) {| scalar t, real_like t, floating t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial (fabs #t) sx r cols
            %~ l1_sum_r (EM.ematrix_row sx r))

@@ -134,7 +134,7 @@ fn array1_read_from_slice
   (r : array1 et l)
   (#i #j : erased nat{i <= j /\ j <= len})
   (idx : sz{i <= idx /\ idx < j})
-  (#s : erased (chest1 et (j - i)))
+  (#s : chest1 et (j - i))
   preserves
     array1_pts_to_slice r i j s
   returns
@@ -143,7 +143,7 @@ fn array1_read_from_slice
     pure (v == acc1 s (idx - i))
 {
   unfold array1_pts_to_slice r i j s;
-  forevery_extract #(x:nat{i <= x /\ x < j}) (SZ.v idx) _;
+  forevery_extract #(x:nat{i <= x /\ x < j}) idx _;
   let v = tensor_read_cell r ((idx <: szlt len), ());
   Pulse.Lib.Trade.elim_trade _ _;
   fold array1_pts_to_slice r i j s;
@@ -158,7 +158,7 @@ fn array1_write_to_slice
   (r : array1 et l)
   (#i #j : erased nat{i <= j /\ j <= len})
   (idx : sz{i <= idx /\ idx < j})
-  (#s : erased (chest1 et (j - i)))
+  (#s : chest1 et (j - i))
   (v : et)
   requires
     array1_pts_to_slice r i j s
@@ -166,9 +166,9 @@ fn array1_write_to_slice
     array1_pts_to_slice r i j (upd1 s (idx - i) v)
 {
   unfold array1_pts_to_slice r i j s;
-  forevery_extract' #(x:nat{i <= x /\ x < j}) (SZ.v idx) _;
+  forevery_extract' #(x:nat{i <= x /\ x < j}) idx _;
   tensor_write_cell r ((idx <: szlt len), ()) v;
-  let s' : erased (chest1 et (j - i)) = upd1 s (idx - i) v;
+  let s' : chest1 et (j - i) = upd1 s (idx - i) v;
   Pulse.Lib.Forall.elim_forall
     (fun (x:nat{i <= x /\ x < j}) ->
       tensor_pts_to_cell r ((x <: natlt len), ()) (acc1 s' (x - i)));
@@ -389,7 +389,7 @@ fn iteration
 
     let b = sdiv_pow2 (it +^ 1sz) tid;
 
-    rewrite each (div_pow2 (it + 1) (SZ.v tid)) as b;
+    rewrite each (div_pow2 (it + 1) tid) as b;
 
     div_pow2_lemma_2 it tid;
     combine
@@ -398,7 +398,7 @@ fn iteration
       _;
 
     if b {
-      assert (pure (div_pow2 (SZ.v it + 1) (SZ.v tid)));
+      assert (pure (div_pow2 (SZ.v it + 1) tid));
       if_elim_true _;
 
       (**)unfold (array1_pts_to_slice_sum r nextid end_ vr);
@@ -434,10 +434,10 @@ fn iteration
       // Step below optional right now, but good practice?
       (**)rewrite
       (**)  if_ true
-      (**)      (array1_pts_to_slice_sum r (SZ.v tid) (reveal end_) vr)
+      (**)      (array1_pts_to_slice_sum r tid (reveal end_) vr)
       (**)as
-      (**)  if_ (div_pow2 (SZ.v it + 1) (SZ.v tid))
-      (**)      (array1_pts_to_slice_sum r (SZ.v tid) (reveal end_) vr);
+      (**)  if_ (div_pow2 (SZ.v it + 1) tid)
+      (**)      (array1_pts_to_slice_sum r tid (reveal end_) vr);
     } else {
       (* no-op *)
       if_elim_false _;
@@ -672,8 +672,8 @@ fn sum_stride_map
   (a : array1 et l)
   (stride : szp)
   (off : szlt stride)
-  (#va : erased (chest1 et lena))
-  (vr : erased (chest1 real lena))
+  (#va : chest1 et lena)
+  (vr : chest1 real lena)
   (#f : perm)
   preserves
     gpu ** a |-> Frac f va ** pure (va %~ vr) ** pure (SZ.fits (lena + stride))
@@ -768,15 +768,15 @@ fn kf
   (lena : sz { SZ.fits (lena + nth) })
   (#l : layout1 lena) {| ctlayout l |}
   (a : array1 et l)
-  (va : erased (chest1 et lena))
-  (vr : erased (chest1 real lena) { va %~ vr })
+  (va : chest1 et lena)
+  (vr : chest1 real lena { va %~ vr })
   (out : gpu_ref et)
   (shmem : c_shmems [SHArray et nth])
   (bid : szlt 1sz)
   (tid : szlt nth)
   ()
+  preserves gpu
   requires
-    gpu **
     pure (c_shmems_inv shmem) **
     kpre pre_map pre_map_r nth lena a va vr out shmem bid tid **
     thread_id nth tid **
@@ -784,7 +784,6 @@ fn kf
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1) (vr_partial pre_map_r (chest1_to_seq vr) nth)) **
     B.barrier_state 0
   ensures
-    gpu **
     kpost pre_map pre_map_r nth lena a va vr out shmem bid tid **
     thread_id nth tid **
     block_id 1sz bid **
@@ -805,7 +804,7 @@ fn kf
   let mut n : szlt 32 = 0sz;
 
   let psum_chest : chest1 et 1 = mk1 #et #1 (fun _ -> psum);
-  slice_singleton sa (SZ.v tid) psum psum_chest;
+  slice_singleton sa tid psum psum_chest;
 
   (**)fold (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial pre_map_r (chest1_to_seq vr) nth));
   (**)if_intro_true' (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (chest1_to_seq vr) nth));
@@ -846,7 +845,7 @@ fn kf
     gpu_write out (array1_read_from_slice sa 0sz);
     with ss. assert array1_pts_to_slice sa 0 nth ss;
     unfold array1_pts_to_slice sa;
-    let css : erased (chest1 et nth) = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
+    let css : chest1 et nth = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
     (* Clean the index refinement [0<=k /\ k<nth] down to [k<nth] (= natlt nth),
        then reindex to the abstract tensor index and implode. *)
     forevery_refine_ext' #nat #(fun (k:nat) -> 0 <= k /\ k < nth) (fun (k:nat) -> k < nth) _;
@@ -1137,7 +1136,7 @@ let row_reduce_partial_zero
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial pre_map sx r 0 == zero)
           [SMTPat (row_reduce_partial pre_map sx r 0)]
@@ -1148,7 +1147,7 @@ let row_reduce_partial_succ
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_reduce_partial pre_map sx r (k + 1) ==
@@ -1165,13 +1164,13 @@ let kpre_batched
   (pre_map : et -> et)
   (rows : szp)
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (sout : chest1 et (SZ.v rows))
-  (r : natlt (SZ.v rows))
+  (sx   : chest2 et rows cols)
+  (sout : chest1 et rows)
+  (r : natlt rows)
   : slprop
   = x |-> Frac (1.0R /. SZ.v rows) sx **
     Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> acc1 sout r
@@ -1182,13 +1181,13 @@ let kpost_batched
   (pre_map : et -> et)
   (rows : szp)
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (sout : chest1 et (SZ.v rows))
-  (r : natlt (SZ.v rows))
+  (sx   : chest2 et rows cols)
+  (sout : chest1 et rows)
+  (r : natlt rows)
   : slprop
   = x |-> Frac (1.0R /. SZ.v rows) sx **
     Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r
@@ -1202,23 +1201,22 @@ fn kf_batched
   (pre_map : et -> et)
   (rows : szp)
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 et (SZ.v rows))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest1 et rows)
   (gid : szlt rows)
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
-    kpre_batched pre_map rows cols x output sx sout (SZ.v gid)
+    kpre_batched pre_map rows cols x output sx sout gid
   ensures
-    gpu **
-    kpost_batched pre_map rows cols x output sx sout (SZ.v gid)
+    kpost_batched pre_map rows cols x output sx sout gid
 {
-  unfold kpre_batched pre_map rows cols x output sx sout (SZ.v gid);
+  unfold kpre_batched pre_map rows cols x output sx sout gid;
 
   let mut ci_ref : sz = 0sz;
   let mut acc_ref : et = zero;
@@ -1228,9 +1226,9 @@ fn kf_batched
       ci_ref |-> ci_v **
       acc_ref |-> acc_v **
       x |-> Frac (1.0R /. SZ.v rows) sx **
-      Cell output (((SZ.v gid <: natlt (SZ.v rows)), ()) <: abs (SZ.v rows @| INil)) |-> acc1 sout (SZ.v gid) **
+      Cell output (((SZ.v gid <: natlt rows), ()) <: abs (SZ.v rows @| INil)) |-> acc1 sout gid **
       pure (SZ.v ci_v <= SZ.v cols /\
-            acc_v == row_reduce_partial pre_map sx (SZ.v gid) (SZ.v ci_v))
+            acc_v == row_reduce_partial pre_map sx gid ci_v)
     decreases (SZ.v cols - SZ.v !ci_ref)
   {
     let ci_v_raw = !ci_ref;
@@ -1238,8 +1236,8 @@ fn kf_batched
     let v = tensor_read x (cidx2 gid ci_v);
     let acc_v = !acc_ref;
     assert pure (
-      row_reduce_partial pre_map sx (SZ.v gid) (SZ.v ci_v + 1) ==
-      row_reduce_partial pre_map sx (SZ.v gid) (SZ.v ci_v) `add` pre_map (acc2 sx (SZ.v gid) (SZ.v ci_v)));
+      row_reduce_partial pre_map sx gid (SZ.v ci_v + 1) ==
+      row_reduce_partial pre_map sx gid ci_v `add` pre_map (acc2 sx gid ci_v));
     acc_ref := add acc_v (pre_map v);
     ci_ref := !ci_ref +^ 1sz;
   };
@@ -1248,7 +1246,7 @@ fn kf_batched
   let final_acc = !acc_ref;
   tensor_write_cell output ((gid <: szlt rows), ()) final_acc;
 
-  fold kpost_batched pre_map rows cols x output sx sout (SZ.v gid);
+  fold kpost_batched pre_map rows cols x output sx sout gid;
 }
 #pop-options
 
@@ -1260,38 +1258,38 @@ fn setup_batched
   (pre_map : et -> et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 et (SZ.v rows))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest1 et rows)
   ()
   norewrite
   requires
     x |-> sx ** output |-> sout
   ensures
-    (forall+ (r : natlt (SZ.v rows)). kpre_batched pre_map rows cols x output sx sout r) **
+    (forall+ (r : natlt rows). kpre_batched pre_map rows cols x output sx sout r) **
     pure (SZ.fits (tlayout_ulen lout))
 {
   (* Establish fits fact while output is in whole-array form. *)
   tensor_pts_to_ref output;
 
   (* Share x among rows threads. *)
-  tensor_share_n x (SZ.v rows);
+  tensor_share_n x rows;
 
   (* Explode output into per-cell cells. *)
   tensor_explode output;
-  forevery_iso (abs_bij #(SZ.v rows)) _;
+  forevery_iso (abs_bij #rows) _;
 
   (* Zip x-fracs and output-cells. *)
-  forevery_zip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) -> x |-> Frac (1.0R /. SZ.v rows) sx)
-    (fun (r : natlt (SZ.v rows)) -> Cell output (abs_bij.gg r) |-> acc sout (abs_bij.gg r));
+  forevery_zip #(natlt rows)
+    (fun (_ : natlt rows) -> x |-> Frac (1.0R /. SZ.v rows) sx)
+    (fun (r : natlt rows) -> Cell output (abs_bij.gg r) |-> acc sout (abs_bij.gg r));
 
   (* Rewrite to kpre form. *)
-  forevery_ext #(natlt (SZ.v rows))
-    (fun (r : natlt (SZ.v rows)) ->
+  forevery_ext #(natlt rows)
+    (fun (r : natlt rows) ->
        (x |-> Frac (1.0R /. SZ.v rows) (reveal sx)) **
        Cell output (abs_bij.gg r) |-> acc sout (abs_bij.gg r))
     (kpre_batched pre_map rows cols x output sx sout);
@@ -1306,42 +1304,42 @@ fn teardown_batched
   (pre_map : et -> et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout1 (SZ.v rows))
+  (#lin  : layout2 rows cols)
+  (#lout : layout1 rows)
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 et (SZ.v rows))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest1 et rows)
   ()
   norewrite
   requires
-    (forall+ (r : natlt (SZ.v rows)). kpost_batched pre_map rows cols x output sx sout r) **
+    (forall+ (r : natlt rows). kpost_batched pre_map rows cols x output sx sout r) **
     pure (SZ.fits (tlayout_ulen lout))
   ensures
     x |-> sx ** output |-> seq_to_chest1 (seq_reduce_rows pre_map sx)
 {
   (* Unfold kpost to zip form. *)
-  forevery_ext #(natlt (SZ.v rows))
+  forevery_ext #(natlt rows)
     (kpost_batched pre_map rows cols x output sx sout)
-    (fun (r : natlt (SZ.v rows)) ->
+    (fun (r : natlt rows) ->
        x |-> Frac (1.0R /. SZ.v rows) sx **
        Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r);
 
   (* Unzip. *)
-  forevery_unzip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) -> x |-> Frac (1.0R /. SZ.v rows) sx)
-    (fun (r : natlt (SZ.v rows)) -> Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r);
+  forevery_unzip #(natlt rows)
+    (fun (_ : natlt rows) -> x |-> Frac (1.0R /. SZ.v rows) sx)
+    (fun (r : natlt rows) -> Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r);
 
   (* Gather x. *)
-  tensor_gather_n x (SZ.v rows);
+  tensor_gather_n x rows;
 
   (* Rewrite output cells to use sout'. *)
-  let sout' : erased (chest1 et (SZ.v rows)) = hide (seq_to_chest1 (seq_reduce_rows pre_map sx));
-  forevery_ext #(natlt (SZ.v rows))
-    (fun (r : natlt (SZ.v rows)) -> Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r)
-    (fun (r : natlt (SZ.v rows)) -> Cell output (abs_bij.gg r) |-> acc (reveal sout') (abs_bij.gg r));
+  let sout' : chest1 et rows = hide (seq_to_chest1 (seq_reduce_rows pre_map sx));
+  forevery_ext #(natlt rows)
+    (fun (r : natlt rows) -> Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r)
+    (fun (r : natlt rows) -> Cell output (abs_bij.gg r) |-> acc (reveal sout') (abs_bij.gg r));
 
-  forevery_iso_back (abs_bij #(SZ.v rows))
+  forevery_iso_back (abs_bij #rows)
     (fun (i : abs (SZ.v rows @| INil)) -> Cell output i |-> acc (reveal sout') i);
 
   (* Implode output. *)
@@ -1358,12 +1356,12 @@ let kdesc_batched
   (pre_map : et -> et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 et (SZ.v rows))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest1 et rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
       (x |-> sx ** output |-> seq_to_chest1 (seq_reduce_rows pre_map sx)) =
@@ -1388,18 +1386,18 @@ fn reduce_batched
   (pre_map : et -> et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : chest1 et (SZ.v rows))
-  preserves cpu
+  (#sx   : chest2 et rows cols)
+  (#sout : chest1 et rows)
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> sout)
   ensures
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows pre_map sx))
 {
   launch_sync (kdesc_batched pre_map rows cols x output #sx #sout);

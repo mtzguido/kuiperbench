@@ -51,22 +51,19 @@ fn dwconv2d_impl
   (gy : array1 et (l1_forward (b * c * h_out * w_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * c * h_in * w_in)))
-  (#sw : erased (chest1 et (c * 1 * kh * kw)))
-  (#sbias : erased (chest1 et c))
-  (#sy0 : erased (chest1 et (b * c * h_out * w_out)))
+  (#sx : chest1 et (b * c * h_in * w_in))
+  (#sw : chest1 et (c * 1 * kh * kw))
+  (#sbias : chest1 et c)
+  (#sy0 : chest1 et (b * c * h_out * w_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * c * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * c * h_out * w_out}).
@@ -79,7 +76,7 @@ fn dwconv2d_impl
   ()
 }
 
-let dwconv2d_f32 : dwconv2d_ty f32 = dwconv2d_impl #f32
+let dwconv2d_f32 = dwconv2d_impl #f32
 
 (* (b) Self-allocating entry point.  Allocates the [b*c*h_out*w_out] output
    buffer on the GPU via [alloc0] (extracts to cudaMalloc), runs the
@@ -101,20 +98,16 @@ fn dwconv2d_alloc
   (gbias : array1 f32 (l1_forward c)
         { is_global gbias })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
-  (#sw : erased (chest1 f32 (c * 1 * kh * kw)))
-  (#sbias : erased (chest1 f32 c))
-  requires
+  (#sx : chest1 f32 (b * c * h_in * w_in))
+  (#sw : chest1 f32 (c * 1 * kh * kw))
+  (#sbias : chest1 f32 c)
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
     on gpu_loc (gbias |-> Frac fb sbias)
   returns gy : array1 f32 (l1_forward (b * c * h_out * w_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (b * c * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * c * h_out * w_out}).
@@ -125,7 +118,7 @@ fn dwconv2d_alloc
   (* All partial products of [b*c*h_out*w_out] are bounded by the full
      product (every factor is [>= 1]), which fits per [dwconv2d_size_req]. *)
   ML.lemma_mult_le_left (SZ.v b * SZ.v c) 1 (SZ.v h_out * SZ.v w_out);
-  ML.lemma_mult_le_left (SZ.v b * SZ.v c * SZ.v h_out) 1 (SZ.v w_out);
+  ML.lemma_mult_le_left (SZ.v b * SZ.v c * SZ.v h_out) 1 w_out;
   let len_y : szp = SZ.(b *^ c *^ h_out *^ w_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   with em. assert (on gpu_loc (gy |-> em));
@@ -134,7 +127,7 @@ fn dwconv2d_alloc
   gy
 }
 
-let dwconv2d_alloc_f32 : dwconv2d_alloc_ty =
+let dwconv2d_alloc_f32 =
   fun b c h_in w_in kh kw stride pad h_out w_out
       gx gw gbias #fx #fw #fb #sx #sw #sbias ->
     dwconv2d_alloc b c h_in w_in kh kw stride pad h_out w_out

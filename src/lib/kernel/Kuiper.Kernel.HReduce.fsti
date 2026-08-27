@@ -53,7 +53,7 @@ let rec row_reduce_partial
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
   : GTot et
@@ -66,7 +66,7 @@ val row_reduce_partial_zero
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial pre_map sx r 0 == zero)
           [SMTPat (row_reduce_partial pre_map sx r 0)]
@@ -75,7 +75,7 @@ val row_reduce_partial_succ
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   (k : nat{k < cols})
   : Lemma (row_reduce_partial pre_map sx r (k + 1) ==
@@ -87,7 +87,7 @@ let row_reduce
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   (r : natlt rows)
   : GTot et
   = row_reduce_partial pre_map sx r cols
@@ -97,30 +97,28 @@ let seq_reduce_rows
   (#et : Type0) {| scalar et |}
   (pre_map : et -> et)
   (#rows #cols : nat)
-  (sx : EM.chest2 et rows cols)
+  (sx : chest2 et rows cols)
   : GTot (lseq et rows)
   = Seq.init_ghost rows (fun r -> row_reduce pre_map sx r)
 
 (* ── reduce_batched: one thread per row ──────────────────────────────── *)
 
 inline_for_extraction noextract
-type reduce_batched_ty (et : Type0) {| scalar et |} =
-  fn (pre_map : et -> et)
-     (rows : szp { SZ.v rows <= max_blocks * max_threads })
-     (cols : szp)
-     (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-     (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
-     (x      : array2 et lin  { is_global x      })
-     (output : array1 et lout { is_global output })
-     (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
-     (#sout : chest1 et (SZ.v rows))
-     preserves cpu
-     requires
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (output |-> sout)
-     ensures
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows pre_map sx))
-
-inline_for_extraction noextract
-val reduce_batched (#et : Type0) {| scalar et |} : reduce_batched_ty et
+fn reduce_batched
+  (#et : Type0) {| scalar et |}
+  (pre_map : et -> et)
+  (rows : szp { SZ.v rows <= max_blocks * max_threads })
+  (cols : szp)
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout1 rows)              {| ctlayout lout |}
+  (x      : array2 et lin  { is_global x      })
+  (output : array1 et lout { is_global output })
+  (#sx   : chest2 et rows cols)
+  (#sout : chest1 et rows)
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
+  requires
+    on gpu_loc (output |-> sout)
+  ensures
+    on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows pre_map sx))

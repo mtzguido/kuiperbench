@@ -258,12 +258,12 @@ fn separable_alloc
   (gbias_pw : array1 f32 (l1_forward cout)
         { is_global gbias_pw })
   (#fx : perm) (#fwd : perm) (#fbd : perm) (#fwp : perm) (#fbp : perm)
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
-  (#sw_dw : erased (chest1 f32 (c * 1 * kh * kw)))
-  (#sbias_dw : erased (chest1 f32 c))
-  (#sw_pw : erased (chest1 f32 (cout * c * 1 * 1)))
-  (#sbias_pw : erased (chest1 f32 cout))
-  requires
+  (#sx : chest1 f32 (b * c * h_in * w_in))
+  (#sw_dw : chest1 f32 (c * 1 * kh * kw))
+  (#sbias_dw : chest1 f32 c)
+  (#sw_pw : chest1 f32 (cout * c * 1 * 1))
+  (#sbias_pw : chest1 f32 cout)
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
@@ -272,12 +272,6 @@ fn separable_alloc
     on gpu_loc (gbias_pw |-> Frac fbp sbias_pw)
   returns gy : array1 f32 (l1_forward (b * cout * h_out * w_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
-    on gpu_loc (gbias_dw |-> Frac fbd sbias_dw) **
-    on gpu_loc (gw_pw |-> Frac fwp sw_pw) **
-    on gpu_loc (gbias_pw |-> Frac fbp sbias_pw) **
     (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
@@ -288,7 +282,7 @@ fn separable_alloc
 {
   (* allocate the depthwise-output scratch buffer *)
   ML.lemma_mult_le_left (SZ.v b * SZ.v c) 1 (SZ.v h_out * SZ.v w_out);
-  ML.lemma_mult_le_left (SZ.v b * SZ.v c * SZ.v h_out) 1 (SZ.v w_out);
+  ML.lemma_mult_le_left (SZ.v b * SZ.v c * SZ.v h_out) 1 w_out;
   let len_mid : szp = SZ.(b *^ c *^ h_out *^ w_out);
   let gmid = alloc0 #f32 len_mid (l1_forward len_mid);
   (* depthwise stage: gmid[tid] = dwconv2d_out_at ... *)
@@ -297,23 +291,23 @@ fn separable_alloc
   with smid. assert (on gpu_loc (gmid |-> smid));
   (* allocate the final output buffer *)
   ML.lemma_mult_le_left (SZ.v b * SZ.v cout) 1 (SZ.v h_out * SZ.v w_out);
-  ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v h_out) 1 (SZ.v w_out);
+  ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v h_out) 1 w_out;
   let len_y : szp = SZ.(b *^ cout *^ h_out *^ w_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   (* pointwise (1x1) stage on the depthwise output *)
   CG.conv2d_general_f32 b c h_out w_out cout 1sz 1sz 1sz 0sz h_out w_out
                         gmid gw_pw gbias_pw gy;
   (* tie the chained posts to the whole separable spec *)
-  separable_compose_lemma (SZ.v b) (SZ.v c) (SZ.v h_in) (SZ.v w_in)
-    (SZ.v kh) (SZ.v kw) (SZ.v stride) (SZ.v pad)
-    (SZ.v cout) (SZ.v h_out) (SZ.v w_out)
+  separable_compose_lemma b c h_in w_in
+    kh kw stride pad
+    cout h_out w_out
     sx sw_dw sbias_dw sw_pw sbias_pw smid;
   (* free the scratch buffer *)
   free gmid;
   gy
 }
 
-let separable_alloc_f32 : separable_alloc_ty =
+let separable_alloc_f32 =
   fun b c h_in w_in kh kw stride pad cout h_out w_out
       gx gw_dw gbias_dw gw_pw gbias_pw
       #fx #fwd #fbd #fwp #fbp #sx #sw_dw #sbias_dw #sw_pw #sbias_pw ->

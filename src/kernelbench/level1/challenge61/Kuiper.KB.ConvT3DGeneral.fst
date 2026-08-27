@@ -55,22 +55,19 @@ fn convt3d_general_impl
   (gy : array1 et (l1_forward (b * cout * d_out * h_out * w_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * d_in * h_in * w_in)))
-  (#sw_l : erased (chest1 et (cin * cout * kd * kh * kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * d_out * h_out * w_out)))
+  (#sx : chest1 et (b * cin * d_in * h_in * w_in))
+  (#sw_l : chest1 et (cin * cout * kd * kh * kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * d_out * h_out * w_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * cout * d_out * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
@@ -84,7 +81,7 @@ fn convt3d_general_impl
   ()
 }
 
-let convt3d_general_f32 : convt3d_general_ty f32 = convt3d_general_impl #f32
+let convt3d_general_f32 = convt3d_general_impl #f32
 
 (* (b) Self-allocating entry point.  Allocates the
    [b*cout*d_out*h_out*w_out] output buffer on the GPU via [alloc0]
@@ -107,20 +104,16 @@ fn convt3d_general_alloc
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 f32 (b * cin * d_in * h_in * w_in)))
-  (#sw_l : erased (chest1 f32 (cin * cout * kd * kh * kw)))
-  (#sbias : erased (chest1 f32 cout))
-  requires
+  (#sx : chest1 f32 (b * cin * d_in * h_in * w_in))
+  (#sw_l : chest1 f32 (cin * cout * kd * kh * kw))
+  (#sbias : chest1 f32 cout)
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
     on gpu_loc (gbias |-> Frac fb sbias)
   returns gy : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (b * cout * d_out * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
@@ -137,7 +130,7 @@ fn convt3d_general_alloc
   ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v d_out)
                         1 (SZ.v h_out * SZ.v w_out);
   ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v d_out * SZ.v h_out)
-                        1 (SZ.v w_out);
+                        1 w_out;
   let len_y : szp = SZ.(b *^ cout *^ d_out *^ h_out *^ w_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   with em. assert (on gpu_loc (gy |-> em));
@@ -147,7 +140,7 @@ fn convt3d_general_alloc
   gy
 }
 
-let convt3d_general_alloc_f32 : convt3d_general_alloc_ty =
+let convt3d_general_alloc_f32 =
   fun b cin d_in h_in w_in cout kd kh kw sd sh sw pd ph pw dd dh dw
       d_out h_out w_out gx gw gbias #fx #fw #fb #sx #sw_l #sbias ->
     convt3d_general_alloc b cin d_in h_in w_in cout kd kh kw sd sh sw

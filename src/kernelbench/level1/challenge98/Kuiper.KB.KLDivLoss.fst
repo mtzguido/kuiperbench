@@ -39,8 +39,8 @@ fn kl_div_loss
   (predictions : array1 t lp { is_global predictions })
   (#lt : layout1 n) {| ctlayout lt |}
   (targets     : array1 t lt { is_global targets })
-  (#sp : erased (chest1 t n))
-  (#st : erased (chest1 t n))
+  (#sp : chest1 t n)
+  (#st : chest1 t n)
   (#fb : perm)
   norewrite
   preserves
@@ -56,7 +56,7 @@ fn kl_div_loss
   Map.map_gpu2 (kl_step #t) n predictions targets;
   (* ^ predictions |-> chest1_map2 (kl_step #t) sp st *)
 
-  let vr : erased (chest1 real n) =
+  let vr : chest1 real n =
     hide (to_real_chest (Map.chest1_map2 (kl_step #t) (reveal sp) (reveal st)));
   lemma_to_real_chest_approximates
     (Map.chest1_map2 (kl_step #t) (reveal sp) (reveal st));

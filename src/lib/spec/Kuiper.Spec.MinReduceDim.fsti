@@ -20,13 +20,14 @@ module Kuiper.Spec.MinReduceDim
    Path (b) is much cheaper and matches PyTorch bit-exactly on non-NaN. *)
 
 open Kuiper
+open Kuiper.Chest
 open Kuiper.Math.Fmin
 module Seq = FStar.Seq
 module EM  = Kuiper.EMatrix
 
 let minreduce_post
   (n_rows : nat) (n_cols : nat)
-  (sx : EM.chest2 f32 n_rows n_cols)
+  (sx : chest2 f32 n_rows n_cols)
   (sy : Seq.lseq f32 n_rows)
   : prop =
   forall (r : nat). r < n_rows ==>

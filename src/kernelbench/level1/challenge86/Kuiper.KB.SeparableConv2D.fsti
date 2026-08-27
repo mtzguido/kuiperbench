@@ -102,59 +102,43 @@ let separable_size_req
   = dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out /\
     conv2d_size_req b c h_out w_out cout 1 1 1 h_out w_out
 
-inline_for_extraction noextract
-type separable_alloc_ty =
-  (b : szp) ->
-  (c : szp) ->
-  (h_in : szp) ->
-  (w_in : szp) ->
-  (kh : szp) ->
-  (kw : szp) ->
-  (stride : szp) ->
-  (pad : sz) ->
-  (cout : szp) ->
-  (h_out : szp) ->
-  (w_out : szp { separable_size_req b c h_in w_in kh kw stride cout h_out w_out }) ->
-  (gx : array1 f32 (l1_forward (b * c * h_in * w_in))
-        { is_global gx }) ->
-  (gw_dw : array1 f32 (l1_forward (c * 1 * kh * kw))
-        { is_global gw_dw }) ->
-  (gbias_dw : array1 f32 (l1_forward c)
-        { is_global gbias_dw }) ->
-  (gw_pw : array1 f32 (l1_forward (cout * c * 1 * 1))
-        { is_global gw_pw }) ->
-  (gbias_pw : array1 f32 (l1_forward cout)
-        { is_global gbias_pw }) ->
-  (#fx : perm) -> (#fwd : perm) -> (#fbd : perm) ->
-  (#fwp : perm) -> (#fbp : perm) ->
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in))) ->
-  (#sw_dw : erased (chest1 f32 (c * 1 * kh * kw))) ->
-  (#sbias_dw : erased (chest1 f32 c)) ->
-  (#sw_pw : erased (chest1 f32 (cout * c * 1 * 1))) ->
-  (#sbias_pw : erased (chest1 f32 cout)) ->
-  stt (array1 f32 (l1_forward (b * cout * h_out * w_out)))
-    (requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
-       on gpu_loc (gbias_dw |-> Frac fbd sbias_dw) **
-       on gpu_loc (gw_pw |-> Frac fwp sw_pw) **
-       on gpu_loc (gbias_pw |-> Frac fbp sbias_pw))
-    (ensures fun gy ->
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
-       on gpu_loc (gbias_dw |-> Frac fbd sbias_dw) **
-       on gpu_loc (gw_pw |-> Frac fwp sw_pw) **
-       on gpu_loc (gbias_pw |-> Frac fbp sbias_pw) **
-       (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
-          on gpu_loc (gy |-> sy) **
-          pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
-                  acc1 sy tid ==
-                  separable_out_at b c h_in w_in kh kw stride pad
-                                   cout h_out w_out
-                                   sx sw_dw sbias_dw sw_pw sbias_pw tid)))
+fn separable_alloc_f32
+  (b c h_in w_in kh kw stride : szp)
+(pad : sz)
+(cout h_out : szp)
+(w_out : szp { separable_size_req b c h_in w_in kh kw stride cout h_out w_out })
+(gx : array1 f32 (l1_forward (b * c * h_in * w_in))
+     { is_global gx })
+(gw_dw : array1 f32 (l1_forward (c * 1 * kh * kw))
+     { is_global gw_dw })
+(gbias_dw : array1 f32 (l1_forward c)
+     { is_global gbias_dw })
+(gw_pw : array1 f32 (l1_forward (cout * c * 1 * 1))
+     { is_global gw_pw })
+(gbias_pw : array1 f32 (l1_forward cout)
+     { is_global gbias_pw })
+(#fx #fwd #fbd #fwp #fbp : perm)
+(#sx : chest1 f32 (b * c * h_in * w_in))
+(#sw_dw : chest1 f32 (c * 1 * kh * kw))
+(#sbias_dw : chest1 f32 c)
+(#sw_pw : chest1 f32 (cout * c * 1 * 1))
+(#sbias_pw : chest1 f32 cout)
+preserves
+ cpu **
+ on gpu_loc (gx |-> Frac fx sx) **
+ on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
+ on gpu_loc (gbias_dw |-> Frac fbd sbias_dw) **
+ on gpu_loc (gw_pw |-> Frac fwp sw_pw) **
+ on gpu_loc (gbias_pw |-> Frac fbp sbias_pw)
+returns gy : array1 f32 (l1_forward (b * cout * h_out * w_out))
+ensures
+ (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
+            acc1 sy tid ==
+            separable_out_at b c h_in w_in kh kw stride pad
+                             cout h_out w_out
+                             sx sw_dw sbias_dw sw_pw sbias_pw tid))
 
-val separable_alloc_f32 : separable_alloc_ty
 
 inline_for_extraction let () = ()

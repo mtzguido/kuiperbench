@@ -42,7 +42,7 @@ let flat4to3 (#et:Type) (#b #i #j #l:nat) (s : chest4 et b i j l)
        (to_seq (l4_row_major b i j l) s)
 
 let flat4to2 (#et:Type) (#b #i #j #l:nat) (s : chest4 et b i j l)
-  : EMatrix.chest2 et (b*i*j) l
+  : chest2 et (b*i*j) l
   = flat3to2 (flat4to3 s)
 
 (* ----------------------------------------------------------------------- *)
@@ -70,8 +70,8 @@ let from_to3
 (* ----------------------------------------------------------------------- *)
 (* Spec glue.  The 4-D flatten [flat4to2] (= [flat3to2] of [flat4to3]) is   *)
 (* exactly the row-major linearization of all leading dims.  These two pure *)
-(* lemmas bridge the pre/post conditions across the [SZ.v (b*^i)] vs [b*i]  *)
-(* dimension gap.                                                           *)
+(* lemmas bridge the pre/post conditions across the runtime and             *)
+(* mathematical product dimensions.                                         *)
 (* ----------------------------------------------------------------------- *)
 
 (* Forward: the [flat3to2] of the (p,j,ll) 3-D view of [s] equals [flat4to2 s]
@@ -278,7 +278,7 @@ let flat_of_approx4
 let ematmul4_flat_lemma
   (#b #i #j #l #k : nat)
   (a : chest4 real b i j l)
-  (bm : EMatrix.chest2 real l k)
+  (bm : chest2 real l k)
   : Lemma (flat4to2 (ematmul4 a bm) == MS.matmul (flat4to2 a) bm)
   = let lhs = flat4to2 (ematmul4 a bm) in
     let rhs = MS.matmul (flat4to2 a) bm in
@@ -436,20 +436,19 @@ fn matmul4d
   (gB : array2 t (l2_row_major l k)     { is_global gB })
   (gC : array4 t (l4_row_major b i j k) { is_global gC })
   (rA : chest4 real b i j l)
-  (rB : EMatrix.chest2 real l k)
+  (rB : chest2 real l k)
   (#eA : chest4 t b i j l)
-  (#eB : EMatrix.chest2 t l k)
+  (#eB : chest2 t l k)
   (#eC : chest4 t b i j k)
   (#fA #fB : perm)
-  requires
+  preserves
     cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
     pure (eA %~ rA) **
     pure (eB %~ rB) **
     on gpu_loc (gC |-> eC)
   ensures
-    cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
     (exists* (eC' : chest4 t b i j k).
       on gpu_loc (gC |-> eC') **
       pure (eC' %~ ematmul4 rA rB))
@@ -485,13 +484,13 @@ fn matmul4d
   let bound : sz = max_blocks *^ max_threads;
   assert pure (SZ.v bound == max_blocks * max_threads);
   dguard (bijk <=^ bound);
-  assert pure (K.size_req (SZ.v bi * SZ.v j) (SZ.v k) (SZ.v l));
+  assert pure (K.size_req (SZ.v bi * SZ.v j) k l);
 
   let pbi : erased nat = SZ.v bi;
 
   (* The flattened (b*i*j, l) real operand: the spec-level mirror of the buffer
      re-interpretation, defined directly from the 4-D real model [rA]. *)
-  let rA_flat : EMatrix.chest2 real (SZ.v b * SZ.v i * SZ.v j) l = flat4to2 rA;
+  let rA_flat : chest2 real (SZ.v b * SZ.v i * SZ.v j) l = flat4to2 rA;
 
   (* 1. Forward-reshape gA : (b,i,j,l) -> 3-D view (b*i,j,l) over same buffer. *)
   map_loc gpu_loc (fun () -> reshape4to3 pbi gA);
@@ -501,8 +500,8 @@ fn matmul4d
   (* Bridge: MatmulND wants [flat3to2 eA3 %~ rA_flat].  [flat4to2_eq] gives
      [flat3to2 eA3 == flat4to2 eA]; [flat_of_approx4] transfers the new 4-D
      hypothesis [eA %~ rA] to [flat4to2 eA %~ flat4to2 rA == rA_flat]. *)
-  flat4to2_eq #t (SZ.v b) (SZ.v i) (SZ.v j) (SZ.v l) pbi () eA;
-  flat_of_approx4 #t #_ #_ #(SZ.v b) #(SZ.v i) #(SZ.v j) #(SZ.v l) eA rA;
+  flat4to2_eq #t b i j l pbi () eA;
+  flat_of_approx4 #t #_ #_ #b #i #j #l eA rA;
 
   (* 3. Run the verified ND matmul on the flattened (b*i,j,l) @ (l,k) operands. *)
   matmul_nd #t bi j l k
@@ -523,15 +522,15 @@ fn matmul4d
   let eC4 : chest4 t b i j k =
     from_seq (l4_row_major b i j k)
       (to_seq (l3_batched_row_major pbi j k) eC3);
-  flat4to2_out #t (SZ.v b) (SZ.v i) (SZ.v j) (SZ.v k) pbi () eC3;
+  flat4to2_out #t b i j k pbi () eC3;
   (* [flat4to2 eC4 == flat3to2 eC3 %~ MS.matmul rA_flat rB]. *)
   assert pure (flat4to2 eC4 %~ MS.matmul rA_flat rB);
   (* DIRECT product commutes with the flatten:
      [flat4to2 (ematmul4 rA rB) == MS.matmul (flat4to2 rA) rB == MS.matmul rA_flat rB],
      so [flat4to2 eC4 %~ flat4to2 (ematmul4 rA rB)]; then [approx4_of_flat] lifts
      that to the DIRECT 4-D postcondition [eC4 %~ ematmul4 rA rB]. *)
-  ematmul4_flat_lemma #(SZ.v b) #(SZ.v i) #(SZ.v j) #(SZ.v l) #(SZ.v k) rA rB;
-  approx4_of_flat #t #_ #_ #(SZ.v b) #(SZ.v i) #(SZ.v j) #(SZ.v k) eC4 (ematmul4 rA rB);
+  ematmul4_flat_lemma #b #i #j #l #k rA rB;
+  approx4_of_flat #t #_ #_ #b #i #j #k eC4 (ematmul4 rA rB);
   assert pure (eC4 %~ ematmul4 rA rB);
   (* [eC3 == from_seq (l3 pbi) (to_seq (l4) eC4)] discharges the reshape3to4_eq
      obligation: to_seq (l4) eC4 == to_seq (l3 pbi) eC3 (A4.to_from), then

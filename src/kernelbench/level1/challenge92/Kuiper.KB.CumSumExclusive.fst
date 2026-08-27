@@ -40,7 +40,7 @@ let slice_is_approx
    not exported via that module's .fsti. *)
 let macc_scan2d_exclusive_result_f32
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows) (i : natlt cols)
   : Lemma (acc2 (scan2d_exclusive_result cmonoid_fadd_f32 sx) r i
            == scan_exclusive_at cmonoid_fadd_f32 (EM.ematrix_row sx r) i)
@@ -52,7 +52,7 @@ let macc_scan2d_exclusive_result_f32
 #push-options " --z3rlimit 60"
 let cell_post_eq
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (i : natlt cols)
   : Lemma
@@ -79,30 +79,29 @@ inline_for_extraction noextract
 fn cumsum_exclusive_fw_f32_impl
   (b : szp { b <= max_blocks })
   (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-  (input  : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
+  (input  : array2 f32 (l2_row_major b d)
             { is_global input  })
-  (output : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
+  (output : array2 f32 (l2_row_major b d)
             { is_global output })
-  (#sx  : erased (EM.chest2 f32 (SZ.v b) (SZ.v d)))
-  (#sy0 : erased (EM.chest2 f32 (SZ.v b) (SZ.v d)))
-  requires
+  (#sx  : chest2 f32 b d)
+  (#sy0 : chest2 f32 b d)
+  preserves
     cpu **
-    on gpu_loc (input  |-> sx) **
+    on gpu_loc (input  |-> sx)
+  requires
     on gpu_loc (output |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (input |-> sx) **
-    (exists* (sy : EM.chest2 f32 (SZ.v b) (SZ.v d)).
+    (exists* (sy : chest2 f32 b d).
        on gpu_loc (output |-> sy) **
-       pure (cumsum_exclusive_post (SZ.v b) (SZ.v d) sx sy))
+       pure (cumsum_exclusive_post b d sx sy))
 {
   scan1d_exclusive_rowblock #f32 cmonoid_fadd_f32 b d
-    #(l2_row_major (SZ.v b) (SZ.v d)) #_
-    #(l2_row_major (SZ.v b) (SZ.v d)) #_
+    #(l2_row_major b d) #_
+    #(l2_row_major b d) #_
     input output;
   Classical.forall_intro_2
     (Classical.move_requires_2
-       (cell_post_eq #(SZ.v b) #(SZ.v d) (reveal sx)));
+       (cell_post_eq #b #d (reveal sx)));
   ()
 }
 #pop-options
@@ -110,5 +109,5 @@ fn cumsum_exclusive_fw_f32_impl
 (* z3rlimit > 40: top-level coercion of the impl to the interface type,
  * mirrors the inclusive [cumsum_fw_f32]. *)
 #push-options "--z3rlimit 100"
-let cumsum_exclusive_fw_f32 : cumsum_exclusive_fw_ty f32 = cumsum_exclusive_fw_f32_impl
+let cumsum_exclusive_fw_f32 = cumsum_exclusive_fw_f32_impl
 #pop-options

@@ -41,7 +41,7 @@ let slice_is_approx
    [%~]-approximated real-arithmetic prefix product. *)
 let macc_scan2d_inclusive_result_f32_mul
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows) (i : natlt cols)
   : Lemma (acc2 (scan2d_inclusive_result cmonoid_fmul_f32 sx) r i
            == scan_inclusive_at cmonoid_fmul_f32 (EM.ematrix_row sx r) i)
@@ -50,7 +50,7 @@ let macc_scan2d_inclusive_result_f32_mul
 #push-options " --z3rlimit 60"
 let cell_post_eq
   (#rows #cols : nat)
-  (sx : EM.chest2 f32 rows cols)
+  (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (i : natlt cols)
   : Lemma
@@ -75,34 +75,33 @@ inline_for_extraction noextract
 fn cumprod_fw_f32_impl
   (b : szp { b <= max_blocks })
   (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-  (input  : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
+  (input  : array2 f32 (l2_row_major b d)
             { is_global input  })
-  (output : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
+  (output : array2 f32 (l2_row_major b d)
             { is_global output })
-  (#sx  : erased (EM.chest2 f32 (SZ.v b) (SZ.v d)))
-  (#sy0 : erased (EM.chest2 f32 (SZ.v b) (SZ.v d)))
-  requires
+  (#sx  : chest2 f32 b d)
+  (#sy0 : chest2 f32 b d)
+  preserves
     cpu **
-    on gpu_loc (input  |-> sx) **
+    on gpu_loc (input  |-> sx)
+  requires
     on gpu_loc (output |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (input |-> sx) **
-    (exists* (sy : EM.chest2 f32 (SZ.v b) (SZ.v d)).
+    (exists* (sy : chest2 f32 b d).
        on gpu_loc (output |-> sy) **
-       pure (cumprod_post (SZ.v b) (SZ.v d) sx sy))
+       pure (cumprod_post b d sx sy))
 {
   scan1d_inclusive_rowblock #f32 cmonoid_fmul_f32 b d
-    #(l2_row_major (SZ.v b) (SZ.v d)) #_
-    #(l2_row_major (SZ.v b) (SZ.v d)) #_
+    #(l2_row_major b d) #_
+    #(l2_row_major b d) #_
     input output;
   Classical.forall_intro_2
     (Classical.move_requires_2
-       (cell_post_eq #(SZ.v b) #(SZ.v d) (reveal sx)));
+       (cell_post_eq #b #d (reveal sx)));
   ()
 }
 #pop-options
 
 #push-options "--z3rlimit 100"
-let cumprod_fw_f32 : cumprod_fw_ty f32 = cumprod_fw_f32_impl
+let cumprod_fw_f32 = cumprod_fw_f32_impl
 #pop-options

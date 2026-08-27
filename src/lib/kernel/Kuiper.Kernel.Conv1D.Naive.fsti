@@ -78,12 +78,11 @@ let conv1d_size_req
     b * cout * l_out <= max_blocks * max_threads
 
 inline_for_extraction noextract
-val conv1d_naive_gpu
+fn conv1d_naive_gpu
   (#et : Type0) {| scalar et |}
-  (b cin l_in cout : szp)
-  (kk : szp)
-  (stride : szp) (pad : sz) (dilation : szp)
-  (l_out : szp)
+  (b cin l_in cout kk stride : szp)
+  (pad : sz)
+  (dilation l_out : szp)
   (#lx : layout1 (b * cin * l_in)) {| ctlayout lx |}
   (#lw : layout1 (cout * cin * kk)) {| ctlayout lw |}
   (#lbias : layout1 cout) {| ctlayout lbias |}
@@ -92,29 +91,26 @@ val conv1d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
-  : stt unit
-    (requires
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      on gpu_loc (gy |-> sy0) **
-      pure (is_global gx /\ is_global gw /\
-            is_global gbias /\ is_global gy /\
-            conv1d_size_req b cin l_in cout kk stride dilation l_out))
-    (ensures fun _ ->
-      cpu **
-      on gpu_loc (gx |-> Frac fx sx) **
-      on gpu_loc (gw |-> Frac fw sw) **
-      on gpu_loc (gbias |-> Frac fb sbias) **
-      (exists* (sy : chest1 et (b*cout*l_out)).
-        on gpu_loc (gy |-> sy) **
-        pure (forall (tid : nat{tid < b*cout*l_out}).
-                acc1 sy tid ==
-                conv1d_out_at b cin l_in cout kk stride pad dilation
-                              l_out sx sw sbias tid)))
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
+    on gpu_loc (gy |-> sy0) **
+    pure (is_global gx /\ is_global gw /\
+          is_global gbias /\ is_global gy /\
+          conv1d_size_req b cin l_in cout kk stride dilation l_out)
+  ensures
+    (exists* (sy : chest1 et (b*cout*l_out)).
+       on gpu_loc (gy |-> sy) **
+       pure (forall (tid : nat{tid < b*cout*l_out}).
+               acc1 sy tid ==
+               conv1d_out_at b cin l_in cout kk stride pad dilation
+                             l_out sx sw sbias tid))

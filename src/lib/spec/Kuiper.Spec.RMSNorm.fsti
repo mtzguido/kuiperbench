@@ -61,7 +61,7 @@ let row_rmsnormalized
   (#t:Type0) {| scalar t, real_like t, floating t |}
   (#b #d : nat)
   (eps inv_c : t)
-  (sx sx' : EM.chest2 t b d)
+  (sx sx' : chest2 t b d)
   (r : natlt b)
   : prop =
   exists (sumsq : t) (inv : t).
@@ -75,7 +75,7 @@ let rmsnorm_post
   (#t:Type0) {| scalar t, real_like t, floating t |}
   (b d : nat)
   (eps inv_c : t)
-  (sx sx' : EM.chest2 t b d)
+  (sx sx' : chest2 t b d)
   : prop =
   forall (r : nat). r < b ==> row_rmsnormalized eps inv_c sx sx' r
 
@@ -87,7 +87,7 @@ let rmsnorm_post
 val row_reduce_partial_sq_approx
   (#t:Type0) {| scalar t, real_like t |}
   (#rows #cols : nat)
-  (sx : EM.chest2 t rows cols)
+  (sx : chest2 t rows cols)
   (r : natlt rows)
   : Lemma (row_reduce_partial (sq_step #t) sx r cols
            %~ frobenius_sumsq_r (to_real_seq (EM.ematrix_row sx r)))

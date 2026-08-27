@@ -31,7 +31,7 @@ module K = Kuiper.Kernel.GEMM.Naive3
    performed by the kernel ([reshape3to2]). *)
 inline_for_extraction noextract
 let flat3to2 (#et:Type) (#a #b #c:nat) (s : chest3 et a b c)
-  : EMatrix.chest2 et (a*b) c
+  : chest2 et (a*b) c
   = from_seq (l2_row_major (a*b) c)
        (to_seq (l3_batched_row_major a b c) s)
 
@@ -49,39 +49,56 @@ val content_ok
        (i*m+j) c
      == acc3 s3 i j c)
 
-inline_for_extraction noextract
-type matmul_nd_ty (t:Type0) {| floating t, real_like t, floating_real_like t |} =
-  fn (n m k l : szp)
-     (gA : array3 t (l3_batched_row_major n m k) { is_global gA })
-     (gB : array2 t (l2_row_major k l)           { is_global gB })
-     (gC : array3 t (l3_batched_row_major n m l) { is_global gC })
-     (rA : EMatrix.chest2 real (n*m) k)
-     (rB : EMatrix.chest2 real k l)
-     (#eA : chest3 t n m k)
-     (#eB : EMatrix.chest2 t k l)
-     (#eC : chest3 t n m l)
-     (#fA #fB : perm)
-     requires
-       cpu **
-       on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
-       pure (K.size_req (n*m) l k) **
-       pure (flat3to2 eA %~ rA) **
-       pure (eB %~ rB) **
-       on gpu_loc (gC |-> eC)
-     ensures
-       cpu **
-       on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
-       (exists* (eC' : chest3 t n m l).
-         on gpu_loc (gC |-> eC') **
-         pure (flat3to2 eC' %~ MS.matmul rA rB))
-
 (* Generic (type-polymorphic) entry — exposed so other KernelBench modules
    (e.g. the 4-D variant in challenge 11) can reuse the verified flatten+GEMM
    without re-deriving it.  [inline_for_extraction noextract]: it generates no
    code on its own; only monomorphic [let]-bindings like [matmul_nd_f32] do. *)
 inline_for_extraction noextract
-val matmul_nd
+fn matmul_nd
   (#t:Type0) {| floating t, real_like t, floating_real_like t |}
-  : matmul_nd_ty t
+  (n m k l : szp)
+  (gA : array3 t (l3_batched_row_major n m k) { is_global gA })
+  (gB : array2 t (l2_row_major k l)           { is_global gB })
+  (gC : array3 t (l3_batched_row_major n m l) { is_global gC })
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
+  (#eA : chest3 t n m k)
+  (#eB : chest2 t k l)
+  (#eC : chest3 t n m l)
+  (#fA #fB : perm)
+  preserves
+    cpu **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
+    pure (K.size_req (n*m) l k) **
+    pure (flat3to2 eA %~ rA) **
+    pure (eB %~ rB) **
+    on gpu_loc (gC |-> eC)
+  ensures
+    (exists* (eC' : chest3 t n m l).
+      on gpu_loc (gC |-> eC') **
+      pure (flat3to2 eC' %~ MS.matmul rA rB))
 
-val matmul_nd_f32 : matmul_nd_ty f32
+fn matmul_nd_f32
+  (n m k l : szp)
+  (gA : array3 f32 (l3_batched_row_major n m k) { is_global gA })
+  (gB : array2 f32 (l2_row_major k l)           { is_global gB })
+  (gC : array3 f32 (l3_batched_row_major n m l) { is_global gC })
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
+  (#eA : chest3 f32 n m k)
+  (#eB : chest2 f32 k l)
+  (#eC : chest3 f32 n m l)
+  (#fA #fB : perm)
+  preserves
+    cpu **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
+    pure (K.size_req (n*m) l k) **
+    pure (flat3to2 eA %~ rA) **
+    pure (eB %~ rB) **
+    on gpu_loc (gC |-> eC)
+  ensures
+    (exists* (eC' : chest3 f32 n m l).
+      on gpu_loc (gC |-> eC') **
+      pure (flat3to2 eC' %~ MS.matmul rA rB))

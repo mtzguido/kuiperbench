@@ -53,7 +53,7 @@ PHASE 0 (functional spec) :: SHIPPED, verified ADMIT=0.
    - Per-pixel left-fold accumulator [__pwconv2d_single] over [ic],
      mirroring Spec.GEMM.__matmul_single exactly.
    - Whole-tensor [pwconv2d] + index lemma with SMTPat.
-   - Weight is `Kuiper.EMatrix.chest2 et C_out C_in` — the natural
+   - Weight is `chest2 et C_out C_in` — the natural
      shape consumed by the existing GEMM kernels.
 
 PHASE 1 (kernel orchestrator + bridge + Python + run.sh) :: NOT

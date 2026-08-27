@@ -38,8 +38,8 @@ let gemm_relu_div_post
   (#t:Type0) {| floating t |}
   (#batch #input #out : nat)
   (divisor : t)
-  (sx  : EM.chest2 t batch input)
-  (swt : EM.chest2 t input out)
+  (sx  : chest2 t batch input)
+  (swt : chest2 t input out)
   (sbias : chest1 t out)
   (sy' : chest1 t (batch * out))
   : prop
@@ -47,37 +47,30 @@ let gemm_relu_div_post
       acc1 sy' (i * out + j) ==
         div (relu (add (acc2 (MS.matmul sx swt) i j) (acc1 sbias j))) divisor
 
-inline_for_extraction noextract
-type gemm_relu_divide_ty (t:Type0) {| floating t |} =
-  fn (batch : szp)
-     (input : szp)
-     (out : szp {
-        SZ.v batch * SZ.v out <= max_blocks * max_threads /\
-        SZ.fits (SZ.v batch * SZ.v input) /\
-        SZ.fits (SZ.v input * SZ.v out) /\
-        SZ.fits (SZ.v batch * SZ.v out) })
-     (divisor : t)
-     (x    : array2 t (l2_row_major (SZ.v batch) (SZ.v input)) { is_global x    })
-     (wt   : array2 t (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
-     (bias : array1 t (l1_forward (SZ.v out))                  { is_global bias })
-     (y    : array1 t (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-     (#sx   : erased (EM.chest2 t (SZ.v batch) (SZ.v input)))
-     (#swt  : erased (EM.chest2 t (SZ.v input) (SZ.v out)))
-     (#sbias: erased (chest1 t (SZ.v out)))
-     (#sy   : erased (chest1 t (SZ.v batch * SZ.v out)))
-     requires
-       cpu **
-       on gpu_loc (x    |-> sx)   **
-       on gpu_loc (wt   |-> swt)  **
-       on gpu_loc (bias |-> sbias)**
-       on gpu_loc (y    |-> sy)
-     ensures
-       cpu **
-       on gpu_loc (x    |-> sx)   **
-       on gpu_loc (wt   |-> swt)  **
-       on gpu_loc (bias |-> sbias)**
-       (exists* (sy' : chest1 t (SZ.v batch * SZ.v out)).
-          on gpu_loc (y |-> sy') **
-          pure (gemm_relu_div_post divisor sx swt sbias sy'))
-
-val gemm_relu_divide_f32 : gemm_relu_divide_ty f32
+fn gemm_relu_divide_f32
+  (batch input : szp)
+  (out : szp {
+     SZ.v batch * SZ.v out <= max_blocks * max_threads /\
+     SZ.fits (SZ.v batch * SZ.v input) /\
+     SZ.fits (SZ.v input * SZ.v out) /\
+     SZ.fits (SZ.v batch * SZ.v out) })
+  (divisor : f32)
+  (x    : array2 f32 (l2_row_major batch input) { is_global x    })
+  (wt   : array2 f32 (l2_row_major input out)   { is_global wt   })
+  (bias : array1 f32 (l1_forward out)                  { is_global bias })
+  (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
+  (#sx   : chest2 f32 batch input)
+  (#swt  : chest2 f32 input out)
+  (#sbias: chest1 f32 out)
+  (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
+  preserves
+    cpu **
+    on gpu_loc (x    |-> sx) **
+    on gpu_loc (wt   |-> swt) **
+    on gpu_loc (bias |-> sbias)
+  requires
+    on gpu_loc (y    |-> sy)
+  ensures
+    (exists* (sy' : chest1 f32 (SZ.v batch * SZ.v out)).
+       on gpu_loc (y |-> sy') **
+       pure (gemm_relu_div_post divisor sx swt sbias sy'))

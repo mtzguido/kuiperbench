@@ -6,7 +6,7 @@ module Kuiper.Kernel.ConvT3D.Naive
    single while-loop matched up to
    [Kuiper.Spec.ConvTranspose3D.__convT3d_single] via the
    [conv1d_partial_at] proof pattern (loop invariant tracks
-   [acc == convT3d_partial_at ... (SZ.v k)]; step lemma extends by one
+   [acc == convT3d_partial_at ... k]; step lemma extends by one
    tap).  Setup, teardown, and kpre/kpost sendability are all
    discharged at the [kdesc] level. *)
 
@@ -195,7 +195,7 @@ fn read_x_strided_pad_3d
   (b cin d_in h_in w_in : szp)
   (#lx : layout1 (b * cin * d_in * h_in * w_in)) {| ctlayout lx |}
   (gx : array1 et lx)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
   (#fx : perm)
   (bi : szlt b)
   (ic : szlt cin)
@@ -275,7 +275,7 @@ fn read_w_tap_t3
   (cin cout kd kh kw : szp)
   (#lw : layout1 (cin * cout * kd * kh * kw)) {| ctlayout lw |}
   (gw : array1 et lw)
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
   (#fw : perm)
   (ic : szlt cin) (oc : szlt cout)
   (kd_i : szlt kd) (kh_i : szlt kh) (kw_i : szlt kw)
@@ -386,10 +386,10 @@ fn kf
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*d_out*h_out*w_out)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (b * cout * d_out * h_out * w_out > 0))
   (#_ : squash (SZ.fits (cin * kd * kh * kw) /\
@@ -409,12 +409,11 @@ fn kf
   (tid : szlt (b * cout * d_out * h_out * w_out))
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre #et b cin d_in h_in w_in cout kd kh kw d_out h_out w_out
          #lx #lw #lbias #ly gx gw gbias gy sx sw_l sbias sy0 fx fw fb tid
   ensures
-    gpu **
     kpost #et b cin d_in h_in w_in cout kd kh kw sd sh sw pd ph pw dd dh dw
           d_out h_out w_out
           #lx #lw #lbias #ly gx gw gbias gy sx sw_l sbias fx fw fb tid
@@ -425,9 +424,9 @@ fn kf
   named_mul_value d_out how dhw;
   let cdhw : sz = cout *^ dhw;
   named_mul_value cout dhw cdhw;
-  output_decode_facts (SZ.v b) (SZ.v cout) (SZ.v d_out) (SZ.v h_out)
-    (SZ.v w_out) (SZ.v tid) (SZ.v how) (SZ.v dhw) (SZ.v cdhw);
-  div_lt_product (SZ.v tid) (SZ.v b) (SZ.v cdhw);
+  output_decode_facts b cout d_out h_out
+    w_out tid how dhw cdhw;
+  div_lt_product tid b cdhw;
   let bi : szlt b = tid /^ cdhw;
   let r1 : szlt cdhw = tid %^ cdhw;
   let oc : szlt cout = r1 /^ dhw;
@@ -441,10 +440,10 @@ fn kf
   named_mul_value kh kw kh_kw;
   let kd_kh_kw : sz = kd *^ kh_kw;
   named_mul_value kd kh_kw kd_kh_kw;
-  flattened_taps_fit cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw);
+  flattened_taps_fit cin kd kh kw kh_kw kd_kh_kw;
   let n_taps : sz = cin *^ kd_kh_kw;
   named_mul_value cin kd_kh_kw n_taps;
-  flatten_taps cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw) (SZ.v n_taps);
+  flatten_taps cin kd kh kw kh_kw kd_kh_kw n_taps;
 
   let od_pd : sz = od +^ pd;
   let oh_ph : sz = oh +^ ph;
@@ -459,7 +458,7 @@ fn kf
         k |-> vk **
         acc |-> convT3d_partial_at b cin d_in h_in w_in cout kd kh kw
                   sd sh sw pd ph pw dd dh dw
-                  d_out h_out w_out sx sw_l sbias bi oc od oh ow (SZ.v vk)
+                  d_out h_out w_out sx sw_l sbias bi oc od oh ow vk
     invariant pure (SZ.fits (cin * kd * kh * kw))
     invariant gx |-> Frac (fx /. (b * cout * d_out * h_out * w_out)) sx
     invariant gw |-> Frac (fw /. (b * cout * d_out * h_out * w_out)) sw_l
@@ -469,15 +468,15 @@ fn kf
   {
     let kk = !k;
     assert pure (SZ.v kk < cin * SZ.v kd_kh_kw);
-    div_lt_product (SZ.v kk) cin (SZ.v kd_kh_kw);
+    div_lt_product kk cin kd_kh_kw;
     let ic : szlt cin = kk /^ kd_kh_kw;
     let r  : szlt kd_kh_kw = kk %^ kd_kh_kw;
     assert pure (SZ.v r < kd * SZ.v kh_kw);
-    div_lt_product (SZ.v r) kd (SZ.v kh_kw);
+    div_lt_product r kd kh_kw;
     let kd_i : szlt kd = r /^ kh_kw;
     let r2  : szlt kh_kw = r %^ kh_kw;
     assert pure (SZ.v r2 < kh * kw);
-    div_lt_product (SZ.v r2) kh kw;
+    div_lt_product r2 kh kw;
     let kh_i : szlt kh = r2 /^ kw;
     let kw_i : szlt kw = r2 %^ kw;
 
@@ -488,9 +487,9 @@ fn kf
     assert pure (SZ.v r2 == SZ.v r % SZ.v kh_kw);
     assert pure (SZ.v kh_i == SZ.v r2 / kw);
     assert pure (SZ.v kw_i == SZ.v r2 % kw);
-    unrank3_from_steps cin kd kh kw (SZ.v kk) (SZ.v kh_kw)
-      (SZ.v kd_kh_kw) (SZ.v n_taps) (SZ.v ic) (SZ.v r) (SZ.v kd_i)
-      (SZ.v r2) (SZ.v kh_i) (SZ.v kw_i);
+    unrank3_from_steps cin kd kh kw kk kh_kw
+      kd_kh_kw n_taps ic r kd_i
+      r2 kh_i kw_i;
 
     let kd_dd : sz = kd_i *^ dd;
     let kh_dh : sz = kh_i *^ dh;
@@ -514,7 +513,7 @@ fn kf
       d_out h_out w_out sx sw_l sbias bi oc od oh ow (SZ.v kk + 1);
     acc := add acc0 prod;
     assert pure (SZ.v kk < cin * kd * kh * kw);
-    decreases_after_increment (cin * kd * kh * kw) (SZ.v kk);
+    decreases_after_increment (cin * kd * kh * kw) kk;
     let knew : sz = !k +^ 1sz;
     assert pure (SZ.v knew == SZ.v kk + 1);
     assert pure (SZ.v knew <= cin * kd * kh * kw);
@@ -528,7 +527,7 @@ fn kf
      of [tid] is shown to match the spec-side decode (modulo associativity
      of [*]).  Same discharge pattern as [Kuiper.Kernel.Conv3D.Naive.kf]. *)
   let k_done = !k;
-  reached_bound (SZ.v k_done) (SZ.v n_taps) (cin * kd * kh * kw);
+  reached_bound k_done n_taps (cin * kd * kh * kw);
   let bias_v = tensor_read gbias (oc, ());
   let result = add bias_v !acc;
 
@@ -549,13 +548,13 @@ fn kf
   assert pure (SZ.v oh == SZ.v r3 / w_out);
   assert pure (SZ.v ow == SZ.v r3 % w_out);
 
-  assert pure (result == convT3d_out_at (SZ.v b) (SZ.v cin) (SZ.v d_in) (SZ.v h_in) (SZ.v w_in)
-                                        (SZ.v cout) (SZ.v kd) (SZ.v kh) (SZ.v kw)
-                                        (SZ.v sd) (SZ.v sh) (SZ.v sw)
-                                        (SZ.v pd) (SZ.v ph) (SZ.v pw)
-                                        (SZ.v dd) (SZ.v dh) (SZ.v dw)
-                                        (SZ.v d_out) (SZ.v h_out) (SZ.v w_out)
-                                        sx sw_l sbias (SZ.v tid));
+  assert pure (result == convT3d_out_at b cin d_in h_in w_in
+                                        cout kd kh kw
+                                        sd sh sw
+                                        pd ph pw
+                                        dd dh dw
+                                        d_out h_out w_out
+                                        sx sw_l sbias tid);
   tensor_write_cell gy (tid, ()) result
 }
 
@@ -571,6 +570,7 @@ fn convt3d_naive_setup
   (b cin d_in h_in w_in cout : szp) (kd kh kw : szp)
   (sd sh sw : szp) (pd ph pw : sz) (dd dh dw : szp)
   (d_out h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * d_out * h_out * w_out })
   (#lx : layout1 (b * cin * d_in * h_in * w_in))
   (#lw : layout1 (cin * cout * kd * kh * kw))
   (#lbias : layout1 cout)
@@ -579,10 +579,10 @@ fn convt3d_naive_setup
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*d_out*h_out*w_out)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (convT3d_size_req b cin d_in h_in w_in cout kd kh kw
                                  sd sh sw pd ph pw dd dh dw
@@ -595,7 +595,7 @@ fn convt3d_naive_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (b *^ cout *^ d_out *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpre #et b cin d_in h_in w_in cout kd kh kw d_out h_out w_out
             #lx #lw #lbias #ly
             gx gw gbias gy sx sw_l sbias sy0 fx fw fb tid) **
@@ -632,8 +632,7 @@ fn convt3d_naive_setup
        (gw |-> Frac (fw /. (b * cout * d_out * h_out * w_out)) sw_l) **
        (gbias |-> Frac (fb /. (b * cout * d_out * h_out * w_out)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (b * cout * d_out * h_out * w_out)
-                   (SZ.v (b *^ cout *^ d_out *^ h_out *^ w_out));
+  forevery_rw_size (b * cout * d_out * h_out * w_out) nthr;
   ()
 }
 
@@ -645,6 +644,7 @@ fn convt3d_naive_teardown
   (b cin d_in h_in w_in cout : szp) (kd kh kw : szp)
   (sd sh sw : szp) (pd ph pw : sz) (dd dh dw : szp)
   (d_out h_out w_out : szp)
+  (nthr : szp { SZ.v nthr == b * cout * d_out * h_out * w_out })
   (#lx : layout1 (b * cin * d_in * h_in * w_in))
   (#lw : layout1 (cin * cout * kd * kh * kw))
   (#lbias : layout1 cout)
@@ -653,9 +653,9 @@ fn convt3d_naive_teardown
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
+  (#sbias : chest1 et cout)
   (#fx #fw #fb : perm)
   (#_ : squash (convT3d_size_req b cin d_in h_in w_in cout kd kh kw
                                  sd sh sw pd ph pw dd dh dw
@@ -663,7 +663,7 @@ fn convt3d_naive_teardown
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (b *^ cout *^ d_out *^ h_out *^ w_out)).
+    (forall+ (tid : natlt nthr).
        kpost #et b cin d_in h_in w_in cout kd kh kw
              sd sh sw pd ph pw dd dh dw
              d_out h_out w_out
@@ -682,8 +682,7 @@ fn convt3d_naive_teardown
                               sd sh sw pd ph pw dd dh dw
                               d_out h_out w_out sx sw_l sbias tid))
 {
-  forevery_rw_size (SZ.v (b *^ cout *^ d_out *^ h_out *^ w_out))
-                   (b * cout * d_out * h_out * w_out)
+  forevery_rw_size nthr (b * cout * d_out * h_out * w_out)
     #(kpost #et b cin d_in h_in w_in cout kd kh kw
             sd sh sw pd ph pw dd dh dw
             d_out h_out w_out
@@ -716,7 +715,7 @@ fn convt3d_naive_teardown
   tensor_gather_n gx (b * cout * d_out * h_out * w_out);
   tensor_gather_n gw (b * cout * d_out * h_out * w_out);
   tensor_gather_n gbias (b * cout * d_out * h_out * w_out);
-  let sy : erased (chest1 et (b * cout * d_out * h_out * w_out)) =
+  let sy : chest1 et (b * cout * d_out * h_out * w_out) =
     hide (mk1
             (fun (tid : nat{tid < b * cout * d_out * h_out * w_out}) ->
                convT3d_out_at b cin d_in h_in w_in cout kd kh kw
@@ -755,10 +754,10 @@ let kdesc
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*d_out*h_out*w_out)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (is_global gx /\ is_global gw /\
                 is_global gbias /\ is_global gy /\
@@ -780,16 +779,16 @@ let kdesc
                  convT3d_out_at b cin d_in h_in w_in cout kd kh kw
                                 sd sh sw pd ph pw dd dh dw
                                 d_out h_out w_out sx sw_l sbias tid)))
-=
-{
-  nthr = b *^ cout *^ d_out *^ h_out *^ w_out;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == b * cout * d_out * h_out * w_out }) =
+      b *^ cout *^ d_out *^ h_out *^ w_out in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
   setup    = convt3d_naive_setup b cin d_in h_in w_in cout kd kh kw
                                  sd sh sw pd ph pw dd dh dw
-                                 d_out h_out w_out gx gw gbias gy;
+                                 d_out h_out w_out nthr gx gw gbias gy;
   teardown = convt3d_naive_teardown b cin d_in h_in w_in cout kd kh kw
                                     sd sh sw pd ph pw dd dh dw
-                                    d_out h_out w_out gx gw gbias gy;
+                                    d_out h_out w_out nthr gx gw gbias gy;
   kpre  = kpre #et b cin d_in h_in w_in cout kd kh kw d_out h_out w_out
                #lx #lw #lbias #ly gx gw gbias gy sx sw_l sbias sy0 fx fw fb;
   kpost = kpost #et b cin d_in h_in w_in cout kd kh kw sd sh sw pd ph pw
@@ -818,17 +817,18 @@ fn convt3d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*d_out*h_out*w_out)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
@@ -836,10 +836,6 @@ fn convt3d_naive_gpu
                            sd sh sw pd ph pw dd dh dw
                            d_out h_out w_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*cout*d_out*h_out*w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*cout*d_out*h_out*w_out}).

@@ -44,10 +44,10 @@ type ce_loss_fw_ty =
                SZ.fits (c + max_threads) /\
                SZ.fits (b * c) })
     (inv_b : f32)
-    (predictions : array1 f32 (l1_forward (b *^ c)) { is_global predictions })
+    (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
     (targets : array1 SZ.t (l1_forward b) { is_global targets })
-    (#sp : erased (chest1 f32 (b *^ c)))
-    (#stv : erased (chest1 SZ.t b))
+    (#sp : chest1 f32 (b * c))
+    (#stv : chest1 SZ.t b)
     (#fp #ft : perm)
     preserves cpu **
               on gpu_loc (predictions |-> Frac fp sp) **
@@ -56,9 +56,9 @@ type ce_loss_fw_ty =
       pure (forall (r : nat). r < SZ.v b ==> SZ.v (acc1 (reveal stv) r) < SZ.v c)
     returns res : f32
     ensures
-      pure (cross_entropy_post (SZ.v b) (SZ.v c) inv_b
+      pure (cross_entropy_post b c inv_b
               (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v c))
-              (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t (SZ.v b))
+              (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t b)
               res)
 
 val ce_loss_fw_f32 : ce_loss_fw_ty

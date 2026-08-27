@@ -39,7 +39,7 @@ let div_bound (a : nat) (mm : nat) (n : pos)
 let bias_add_at_ij
   (#t:Type0) {| scalar t |}
   (m n : nat)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (i : natlt m) (j : natlt n)
   : Lemma (bias_add_at m n eC sbias (i * n + j) == add (acc2 eC i j) (acc1 sbias j))
@@ -60,7 +60,7 @@ let kpre
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (sy0 : chest1 t (m * n))
   (fc fb : perm)
@@ -80,7 +80,7 @@ let kpost
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (eC : EM.chest2 t m n)
+  (eC : chest2 t m n)
   (sbias : chest1 t n)
   (fc fb : perm)
   (tid : natlt (m * n))
@@ -102,19 +102,18 @@ fn kf
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
-  (#sy0 : erased (chest1 t (m * n)))
+  (#eC : chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (m * n))
   (#fc #fb : perm)
   (#_ : squash (SZ.fits (m * n)))
   (tid : szlt (m * n))
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre #t m n #lC #lbias #ly gC gbias gy eC sbias sy0 fc fb tid
   ensures
-    gpu **
     kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb tid
 {
   let i : szlt m = tid /^ n;
@@ -133,15 +132,16 @@ ghost
 fn bias_add_setup
   (#t : Type0) {| scalar t |}
   (m n : szp)
+  (nthr : szp { SZ.v nthr == m * n })
   (#lC : layout2 m n)
   (#lbias : layout1 n)
   (#ly : layout1 (m * n))
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
-  (#sy0 : erased (chest1 t (m * n)))
+  (#eC : chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (m * n))
   (#fc #fb : perm)
   (#_ : squash (SZ.fits (m * n)))
   ()
@@ -151,7 +151,7 @@ fn bias_add_setup
     (gbias |-> Frac fb sbias) **
     (gy |-> sy0)
   ensures
-    (forall+ (tid : natlt (m *^ n)).
+    (forall+ (tid : natlt nthr).
        kpre #t m n #lC #lbias #ly gC gbias gy eC sbias sy0 fc fb tid) **
     pure (SZ.fits (tlayout_ulen ly))
 {
@@ -175,7 +175,7 @@ fn bias_add_setup
     (fun (i : natlt (m * n)) ->
        (gbias |-> Frac (fb /. (m * n)) sbias) **
        (Cell gy (idx1 i) |-> acc1 sy0 i));
-  forevery_rw_size (m * n) (SZ.v (m *^ n));
+  forevery_rw_size (m * n) nthr;
   ()
 }
 
@@ -188,20 +188,21 @@ ghost
 fn bias_add_teardown
   (#t : Type0) {| scalar t |}
   (m n : szp)
+  (nthr : szp { SZ.v nthr == m * n })
   (#lC : layout2 m n)
   (#lbias : layout1 n)
   (#ly : layout1 (m * n))
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
+  (#eC : chest2 t m n)
+  (#sbias : chest1 t n)
   (#fc #fb : perm)
   (#_ : squash (SZ.fits (m * n)))
   ()
   norewrite
   requires
-    (forall+ (tid : natlt (m *^ n)).
+    (forall+ (tid : natlt nthr).
        kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb tid) **
     pure (SZ.fits (tlayout_ulen ly))
   ensures
@@ -212,7 +213,7 @@ fn bias_add_teardown
        pure (forall (tid : nat{tid < m * n}).
                acc1 sy tid == bias_add_at m n eC sbias tid))
 {
-  forevery_rw_size (SZ.v (m *^ n)) (m * n)
+  forevery_rw_size nthr (m * n)
     #(kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb);
   forevery_unzip
     (fun (_ : natlt (m * n)) ->
@@ -227,7 +228,7 @@ fn bias_add_teardown
        Cell gy (idx1 i) |-> bias_add_at m n eC sbias i);
   tensor_gather_n gC (m * n);
   tensor_gather_n gbias (m * n);
-  let sy : erased (chest1 t (m * n)) =
+  let sy : chest1 t (m * n) =
     hide (mk1 #t #(m * n)
             (fun (tid : natlt (m * n)) -> bias_add_at m n eC sbias tid));
   forevery_ext
@@ -262,13 +263,13 @@ let kdesc
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
-  (#sy0 : erased (chest1 t (m * n)))
+  (#eC : chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (m * n))
   (#fc #fb : perm)
   (#_ : squash (is_global gC /\ is_global gbias /\
                 is_global gy /\
-                bias_add_size_req (SZ.v m) (SZ.v n)))
+                bias_add_size_req m n))
   : kernel_desc
       ((gC |-> Frac fc eC) **
        (gbias |-> Frac fb sbias) **
@@ -279,12 +280,11 @@ let kdesc
           (gy |-> sy) **
           pure (forall (tid : nat{tid < m * n}).
                   acc1 sy tid == bias_add_at m n eC sbias tid)))
-=
-{
-  nthr = m *^ n;
+  = [@@inline_let] let nthr : (x : szp { SZ.v x == m * n }) = m *^ n in {
+  nthr = nthr;
   frame = pure (SZ.fits (tlayout_ulen ly));
-  setup    = bias_add_setup m n gC gbias gy;
-  teardown = bias_add_teardown m n gC gbias gy;
+  setup    = bias_add_setup m n nthr gC gbias gy;
+  teardown = bias_add_teardown m n nthr gC gbias gy;
   kpre  = kpre #t m n #lC #lbias #ly gC gbias gy eC sbias sy0 fc fb;
   kpost = kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb;
   f = kf m n gC gbias gy;
@@ -298,56 +298,54 @@ inline_for_extraction noextract
 fn bias_add_gpu
   (#t : Type0) {| scalar t |}
   (m n : szp)
-  (#lC : layout2 (SZ.v m) (SZ.v n)) {| ctlayout lC |}
-  (#lbias : layout1 (SZ.v n)) {| ctlayout lbias |}
+  (#lC : layout2 m n) {| ctlayout lC |}
+  (#lbias : layout1 n) {| ctlayout lbias |}
   (#ly : layout1 (SZ.v m * SZ.v n)) {| ctlayout ly |}
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t (SZ.v m) (SZ.v n)))
-  (#sbias : erased (chest1 t (SZ.v n)))
-  (#sy0 : erased (chest1 t (SZ.v m * SZ.v n)))
+  (#eC : chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
-  preserves cpu
-  requires
+  preserves
+    cpu **
     on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gC /\ is_global gbias /\ is_global gy /\
-          bias_add_size_req (SZ.v m) (SZ.v n))
+          bias_add_size_req m n)
   ensures
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 t (SZ.v m * SZ.v n)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
-               acc1 sy tid == bias_add_at (SZ.v m) (SZ.v n) eC sbias tid))
+               acc1 sy tid == bias_add_at m n eC sbias tid))
 {
   launch_sync (kdesc m n gC gbias gy)
 }
 
 fn bias_add_f32
   (m n : szp)
-  (gC : array2 f32 (l2_row_major (SZ.v m) (SZ.v n)) { is_global gC })
-  (gbias : array1 f32 (l1_forward (SZ.v n)) { is_global gbias })
+  (gC : array2 f32 (l2_row_major m n) { is_global gC })
+  (gbias : array1 f32 (l1_forward n) { is_global gbias })
   (gy : array1 f32 (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
-  (#eC : erased (EM.chest2 f32 (SZ.v m) (SZ.v n)))
-  (#sbias : erased (chest1 f32 (SZ.v n)))
-  (#sy0 : erased (chest1 f32 (SZ.v m * SZ.v n)))
+  (#eC : chest2 f32 m n)
+  (#sbias : chest1 f32 n)
+  (#sy0 : chest1 f32 (SZ.v m * SZ.v n))
   (#fc #fb : perm)
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (gC |-> Frac fc eC) **
+    on gpu_loc (gbias |-> Frac fb sbias)
   requires
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     on gpu_loc (gy |-> sy0) **
-    pure (bias_add_size_req (SZ.v m) (SZ.v n))
+    pure (bias_add_size_req m n)
   ensures
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (SZ.v m * SZ.v n)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
-               acc1 sy tid == bias_add_at (SZ.v m) (SZ.v n) eC sbias tid))
+               acc1 sy tid == bias_add_at m n eC sbias tid))
 {
   bias_add_gpu m n gC gbias gy
 }

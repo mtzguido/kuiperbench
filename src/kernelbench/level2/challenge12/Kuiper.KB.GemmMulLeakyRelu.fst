@@ -12,31 +12,6 @@ module Map = Kuiper.Kernel.Map
 module BA = Kuiper.Kernel.BiasAdd
 module P = Kuiper.Kernel.GEMM.Naive2
 
-(* Bridges between flat array2 ownership and its zero-cost rank-2 tensor view,
-   required to feed the (tensor-based) GEMM API while keeping the rest of the
-   proof array2-based. *)
-ghost
-fn bridge_fwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
-ghost
-fn bridge_bwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
 (* Per-(i,j) discharge of [gemm_mul_lrelu_post].  Given the EXACT bias-add
    per-element fact for the flat index [i*out+j], the fused pointwise
    [mul_lrelu mult slope] map yields the desired float expression.
@@ -60,7 +35,7 @@ let acc1_chest_map
 let gmlr_row_aux
   (batch out : nat)
   (mult slope : f32)
-  (mm : EM.chest2 f32 batch out)
+  (mm : chest2 f32 batch out)
   (sbias : chest1 f32 out)
   (sy_b : chest1 f32 (batch * out))
   (hyp : squash
@@ -87,24 +62,22 @@ fn gemm_mul_leaky_relu_f32_impl
      SZ.fits (SZ.v batch * SZ.v out) })
   (mult : f32)
   (slope : f32)
-  (x    : array2 f32 (l2_row_major (SZ.v batch) (SZ.v input)) { is_global x    })
-  (wt   : array2 f32 (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
-  (bias : array1 f32 (l1_forward (SZ.v out))                  { is_global bias })
+  (x    : array2 f32 (l2_row_major batch input) { is_global x    })
+  (wt   : array2 f32 (l2_row_major input out)   { is_global wt   })
+  (bias : array1 f32 (l1_forward out)                  { is_global bias })
   (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-  (#sx   : erased (EM.chest2 f32 (SZ.v batch) (SZ.v input)))
-  (#swt  : erased (EM.chest2 f32 (SZ.v input) (SZ.v out)))
-  (#sbias: erased (chest1 f32 (SZ.v out)))
-  (#sy   : erased (chest1 f32 (SZ.v batch * SZ.v out)))
-  preserves cpu
+  (#sx   : chest2 f32 batch input)
+  (#swt  : chest2 f32 input out)
+  (#sbias: chest1 f32 out)
+  (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
+  preserves
+    cpu **
+    on gpu_loc (x    |-> sx) **
+    on gpu_loc (wt   |-> swt) **
+    on gpu_loc (bias |-> sbias)
   requires
-    on gpu_loc (x    |-> sx)   **
-    on gpu_loc (wt   |-> swt)  **
-    on gpu_loc (bias |-> sbias)**
     on gpu_loc (y    |-> sy)
   ensures
-    on gpu_loc (x    |-> sx)   **
-    on gpu_loc (wt   |-> swt)  **
-    on gpu_loc (bias |-> sbias)**
     (exists* (sy' : chest1 f32 (SZ.v batch * SZ.v out)).
        on gpu_loc (y |-> sy') **
        pure (gemm_mul_lrelu_post mult slope sx swt sbias sy'))
@@ -112,23 +85,17 @@ fn gemm_mul_leaky_relu_f32_impl
   (* Expose Seq.length / SZ.fits facts for the concrete layouts. *)
 
   (* Scratch GEMM output: gC = x @ wt  (batch × out). *)
-  let gC = alloc0 #f32 (batch *^ out) (l2_row_major (SZ.v batch) (SZ.v out));
+  let gC = alloc0 #f32 (batch *^ out) (l2_row_major batch out);
   with sc0. assert on gpu_loc (gC |-> sc0);
-  bridge_fwd x;
-  bridge_fwd wt;
-  bridge_fwd gC;
 
   (* Launch 1: exact GEMM.  comb2 ignores the old gC value. *)
   P.mmcomb_gpu_exact (MS.comb2 #f32)
     #batch #out #input
     (x) (wt) (gC);
   with eC'. assert on gpu_loc (gC |-> eC');
-  bridge_bwd x;
-  bridge_bwd wt;
-  bridge_bwd gC;
   assert pure (reveal eC' == MS.matmul (reveal sx) (reveal swt));
 
-  let mm : erased (EM.chest2 f32 (SZ.v batch) (SZ.v out)) =
+  let mm : chest2 f32 batch out =
     hide (MS.matmul (reveal sx) (reveal swt));
   assert pure (eC' == mm);
 
@@ -136,7 +103,7 @@ fn gemm_mul_leaky_relu_f32_impl
   BA.bias_add_gpu batch out gC bias y;
   with sy_b. assert on gpu_loc (y |-> sy_b);
   assert pure (forall (tid:nat). tid < SZ.v batch * SZ.v out ==>
-                 acc1 sy_b tid == BA.bias_add_at (SZ.v batch) (SZ.v out) (reveal mm) sbias tid);
+                 acc1 sy_b tid == BA.bias_add_at batch out (reveal mm) sbias tid);
 
   (* Launch 3: fused pointwise multiply-by-constant then LeakyReLU. *)
   Map.map_gpu (mul_lrelu mult slope) (batch *^ out) #_ #(c_l1_forward _) y;
@@ -144,11 +111,11 @@ fn gemm_mul_leaky_relu_f32_impl
 
   (* Discharge per-(i,j) [gemm_mul_lrelu_post]. *)
   Classical.forall_intro_2
-    (gmlr_row_aux (SZ.v batch) (SZ.v out) mult slope (reveal mm) sbias sy_b ());
+    (gmlr_row_aux batch out mult slope (reveal mm) sbias sy_b ());
 
   free gC;
   ()
 }
 #pop-options
 
-let gemm_mul_leaky_relu_f32 : gemm_mul_leaky_relu_ty f32 = gemm_mul_leaky_relu_f32_impl
+let gemm_mul_leaky_relu_f32 = gemm_mul_leaky_relu_f32_impl

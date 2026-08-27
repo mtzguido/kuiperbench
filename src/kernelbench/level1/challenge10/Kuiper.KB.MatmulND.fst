@@ -23,34 +23,6 @@ open Kuiper.Injection
 open Kuiper.Shape
 open Kuiper.Bijection
 
-(* Bridges between flat array2 ownership and its zero-cost rank-2 tensor view,
-   required to feed the (tensor-based) Naive3 GEMM API while keeping the rest
-   of the proof array2-based.  Mirror of
-   [Kuiper.KB.GemmDivSumScale.bridge_fwd/bwd].  Both are [ghost] and
-   [as_tensor] is [inline_for_extraction noextract], so no extracted CUDA
-   changes. *)
-ghost
-fn bridge_fwd
-  (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
-  (a : array2 et lay) (#f : perm) (#s : erased (EMatrix.chest2 et rows cols))
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
-ghost
-fn bridge_bwd
-  (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
-  (a : array2 et lay) (#f : perm) (#s : erased (EMatrix.chest2 et rows cols))
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
 
 (* ----------------------------------------------------------------------- *)
 (* Reshape lemmas (moved from Scratch.Reshape — these verify clean and      *)
@@ -140,7 +112,7 @@ let content_ok
 let from_to2
   (#et:Type) (#m #n:nat)
   (l : full_layout2 m n)
-  (s : EMatrix.chest2 et m n)
+  (s : chest2 et m n)
   : Lemma (ensures from_seq l (to_seq l s) == s)
   = let lhs = from_seq l (to_seq l s) in
     let aux (i:natlt m) (j:natlt n)
@@ -152,8 +124,8 @@ let from_to2
     EMatrix.lemma_equal_intro lhs s;
     Kuiper.Chest.ext lhs s
 
-(* Per-entry bridge across the [SZ.v (n*^m)] vs [n*m] dimension gap.  The GEMM
-   output [eGemm] is typed at the szp-product dimension [pnm == n*m]; this lemma
+(* Per-entry bridge between the runtime product and its mathematical value.
+   The GEMM output [eGemm] is typed at [pnm == n*m]; this lemma
    shows that the (n,m,l)-tensor re-interpretation, flattened back via [flat3to2]
    (whose row dimension is the NAT product [n*m]), has the SAME entries as
    [eGemm].  Reasoning is purely at the scalar [acc2] level (no [%~] typeclass),
@@ -161,7 +133,7 @@ let from_to2
 #push-options "--z3rlimit 50"
 let entry_eq
   (#t:Type) (n m k l : nat) (pnm:nat) (_:squash (pnm == n * m))
-  (eGemm : EMatrix.chest2 t pnm l)
+  (eGemm : chest2 t pnm l)
   (i:natlt (n*m)) (j:natlt l)
   : Lemma
     (acc2
@@ -231,7 +203,7 @@ fn reshape2to3_eq
   (a3 : array3 et (l3_batched_row_major n m k))
   (#s3 : chest3 et n m k)
   (#f : perm)
-  (#e : EMatrix.chest2 et p k)
+  (#e : chest2 et p k)
   (#_ : squash (
      e == from_seq (l2_row_major p k)
             (to_seq (l3_batched_row_major n m k) s3)))
@@ -261,22 +233,21 @@ fn matmul_nd
   (gA : array3 t (l3_batched_row_major n m k) { is_global gA })
   (gB : array2 t (l2_row_major k l)           { is_global gB })
   (gC : array3 t (l3_batched_row_major n m l) { is_global gC })
-  (rA : EMatrix.chest2 real (n*m) k)
-  (rB : EMatrix.chest2 real k l)
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
   (#eA : chest3 t n m k)
-  (#eB : EMatrix.chest2 t k l)
+  (#eB : chest2 t k l)
   (#eC : chest3 t n m l)
   (#fA #fB : perm)
-  requires
+  preserves
     cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
     pure (K.size_req (n*m) l k) **
     pure (flat3to2 eA %~ rA) **
     pure (eB %~ rB) **
     on gpu_loc (gC |-> eC)
   ensures
-    cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
     (exists* (eC' : chest3 t n m l).
       on gpu_loc (gC |-> eC') **
       pure (flat3to2 eC' %~ MS.matmul rA rB))
@@ -298,11 +269,7 @@ fn matmul_nd
   (* on gpu_loc (gC2 |-> Frac 1.0 (flat3to2 eC)) *)
 
   (* 3. Run the layout-polymorphic Naive3 GEMM on the flattened operands.
-        Preserves gA2, gB; turns gC2 into the matmul result.
-        Bridge Array2 ownership into tensor ownership for the GEMM API. *)
-  bridge_fwd (from_array (l2_row_major pnm k) (core gA));
-  bridge_fwd gB;
-  bridge_fwd (from_array (l2_row_major pnm l) (core gC));
+        Preserves gA2, gB; turns gC2 into the matmul result. *)
   Klas3.spec t l2_row_major l2_row_major l2_row_major nm l k
     ((from_array (l2_row_major pnm k) (core gA)))
     (gB)
@@ -311,9 +278,6 @@ fn matmul_nd
   with eGemm.
     assert on gpu_loc
       ((from_array (l2_row_major pnm l) (core gC)) |-> eGemm);
-  bridge_bwd (from_array (l2_row_major pnm k) (core gA));
-  bridge_bwd gB;
-  bridge_bwd (from_array (l2_row_major pnm l) (core gC));
   (* context hyp:  eGemm %~ MS.matmul rA rB   (at the [pnm] row dimension) *)
 
   (* 4. Backward-reshape gA2 -> gA (recover gA |-> eA). *)

@@ -154,8 +154,8 @@ let scan2d_inclusive_post
   (#t:Type0) {| scalar t, real_like t |}
   (m_r : cmonoid real)
   (n_rows n_cols : nat)
-  (sx : EM.chest2 t n_rows n_cols)
-  (sy : EM.chest2 t n_rows n_cols)
+  (sx : chest2 t n_rows n_cols)
+  (sy : chest2 t n_rows n_cols)
   : prop
   = forall (r : nat) (i : nat).
         r < n_rows /\ i < n_cols ==>
@@ -167,8 +167,8 @@ let scan2d_exclusive_post
   (#t:Type0) {| scalar t, real_like t |}
   (m_r : cmonoid real)
   (n_rows n_cols : nat)
-  (sx : EM.chest2 t n_rows n_cols)
-  (sy : EM.chest2 t n_rows n_cols)
+  (sx : chest2 t n_rows n_cols)
+  (sy : chest2 t n_rows n_cols)
   : prop
   = forall (r : nat) (i : nat).
         r < n_rows /\ i < n_cols ==>
@@ -181,8 +181,8 @@ let scan2d_inclusive_reverse_post
   (#t:Type0) {| scalar t, real_like t |}
   (m_r : cmonoid real)
   (n_rows n_cols : nat)
-  (sx : EM.chest2 t n_rows n_cols)
-  (sy : EM.chest2 t n_rows n_cols)
+  (sx : chest2 t n_rows n_cols)
+  (sy : chest2 t n_rows n_cols)
   : prop
   = forall (r : nat) (i : nat).
         r < n_rows /\ i < n_cols ==>
@@ -195,9 +195,9 @@ let scan2d_inclusive_masked_post
   (#t:Type0) {| scalar t, real_like t |}
   (m_r : cmonoid real)
   (n_rows n_cols : nat)
-  (sx : EM.chest2 t n_rows n_cols)
-  (smask : EM.chest2 bool n_rows n_cols)
-  (sy : EM.chest2 t n_rows n_cols)
+  (sx : chest2 t n_rows n_cols)
+  (smask : chest2 bool n_rows n_cols)
+  (sy : chest2 t n_rows n_cols)
   : prop
   = forall (r : nat) (i : nat).
         r < n_rows /\ i < n_cols ==>
