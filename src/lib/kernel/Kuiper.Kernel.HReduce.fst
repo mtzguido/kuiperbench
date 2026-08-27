@@ -775,8 +775,8 @@ fn kf
   (bid : szlt 1sz)
   (tid : szlt nth)
   ()
+  preserves gpu
   requires
-    gpu **
     pure (c_shmems_inv shmem) **
     kpre pre_map pre_map_r nth lena a va vr out shmem bid tid **
     thread_id nth tid **
@@ -784,7 +784,6 @@ fn kf
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1) (vr_partial pre_map_r (chest1_to_seq vr) nth)) **
     B.barrier_state 0
   ensures
-    gpu **
     kpost pre_map pre_map_r nth lena a va vr out shmem bid tid **
     thread_id nth tid **
     block_id 1sz bid **
@@ -1211,11 +1210,10 @@ fn kf_batched
   (gid : szlt rows)
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre_batched pre_map rows cols x output sx sout gid
   ensures
-    gpu **
     kpost_batched pre_map rows cols x output sx sout gid
 {
   unfold kpre_batched pre_map rows cols x output sx sout gid;
@@ -1394,12 +1392,12 @@ fn reduce_batched
   (output : array1 et lout { is_global output })
   (#sx   : EM.chest2 et rows cols)
   (#sout : chest1 et rows)
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> sout)
   ensures
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows pre_map sx))
 {
   launch_sync (kdesc_batched pre_map rows cols x output #sx #sout);

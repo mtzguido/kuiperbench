@@ -46,15 +46,14 @@ fn maxpool1d_fw
   (#fIn  : perm)
   (#sx   : EM.chest2 t bc l)
   (#sout : EM.chest2 t bc l_out)
-  requires
+  preserves
     cpu **
-    on gpu_loc (input  |-> Frac fIn sx) **
+    on gpu_loc (input  |-> Frac fIn sx)
+  requires
     on gpu_loc (output |-> sout) **
     pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
     pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
   ensures
-    cpu **
-    on gpu_loc (input  |-> Frac fIn sx) **
     on gpu_loc (output |->
       windowreduce_result m_inst sx
         k s p d l_out)
@@ -63,12 +62,12 @@ fn maxpool1d_fw
 }
 
 inline_for_extraction noextract
-let maxpool1d_fw_f32 : maxpool1d_fw_ty =
+let maxpool1d_fw_f32 =
   fun k s p d bc l l_out #_ #_ #_ #_ input output #fIn #sx #sout ->
     maxpool1d_fw #f32 cmonoid_fmax_f32 k s p d bc l l_out input output
       #fIn #sx #sout
 
-let maxpool1d_fw_rm_f32 : maxpool1d_fw_rm_ty =
+let maxpool1d_fw_rm_f32 =
   fun k s p d bc l l_out input output #fIn #sx #sout ->
     maxpool1d_fw_f32 k s p d bc l l_out
       #(l2_row_major bc l)     #_
@@ -112,9 +111,10 @@ fn maxpool1d_alloc
   (input : array2 f32 (l2_row_major (b * c) l) { is_global input })
   (#fIn : perm)
   (#sx  : EM.chest2 f32 (b * c) l)
-  requires
+  preserves
     cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
+    on gpu_loc (input |-> Frac fIn sx)
+  requires
     pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
     pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
     pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
@@ -124,8 +124,6 @@ fn maxpool1d_alloc
   returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
                & array2 f32 (l2_row_major (b * c) lo))
   ensures
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
     on gpu_loc ((dsnd r) |->
       windowreduce_result cmonoid_fmax_f32 sx
         k s p d (dfst r)) **
@@ -141,6 +139,6 @@ fn maxpool1d_alloc
   (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
 }
 
-let maxpool1d_alloc_f32 : maxpool1d_alloc_ty =
+let maxpool1d_alloc_f32 =
   fun b c l k s p d input #fIn #sx ->
     maxpool1d_alloc b c l k s p d input #fIn #sx

@@ -85,13 +85,12 @@ fn cumsum_exclusive_fw_f32_impl
             { is_global output })
   (#sx  : EM.chest2 f32 b d)
   (#sy0 : EM.chest2 f32 b d)
-  requires
+  preserves
     cpu **
-    on gpu_loc (input  |-> sx) **
+    on gpu_loc (input  |-> sx)
+  requires
     on gpu_loc (output |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (input |-> sx) **
     (exists* (sy : EM.chest2 f32 b d).
        on gpu_loc (output |-> sy) **
        pure (cumsum_exclusive_post b d sx sy))
@@ -110,5 +109,5 @@ fn cumsum_exclusive_fw_f32_impl
 (* z3rlimit > 40: top-level coercion of the impl to the interface type,
  * mirrors the inclusive [cumsum_fw_f32]. *)
 #push-options "--z3rlimit 100"
-let cumsum_exclusive_fw_f32 : cumsum_exclusive_fw_ty f32 = cumsum_exclusive_fw_f32_impl
+let cumsum_exclusive_fw_f32 = cumsum_exclusive_fw_f32_impl
 #pop-options

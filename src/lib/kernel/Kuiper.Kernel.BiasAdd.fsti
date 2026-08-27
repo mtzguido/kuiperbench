@@ -75,44 +75,39 @@ fn bias_add_gpu
   (#sbias : chest1 t n)
   (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
-  preserves cpu
-  requires
+  preserves
+    cpu **
     on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gC /\ is_global gbias /\ is_global gy /\
           bias_add_size_req m n)
   ensures
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 t (SZ.v m * SZ.v n)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
                acc1 sy tid == bias_add_at m n eC sbias tid))
 
 (* Canonical-layout monomorphic type abbreviation + f32 instantiation. *)
-inline_for_extraction noextract
-type bias_add_ty (t:Type0) {| scalar t |} =
-  fn (m n : szp)
-     (gC : array2 t (l2_row_major m n) { is_global gC })
-     (gbias : array1 t (l1_forward n) { is_global gbias })
-     (gy : array1 t (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
-     (#eC : EM.chest2 t m n)
-     (#sbias : chest1 t n)
-     (#sy0 : chest1 t (SZ.v m * SZ.v n))
-     (#fc #fb : perm)
-     preserves cpu
-     requires
-       on gpu_loc (gC |-> Frac fc eC) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       on gpu_loc (gy |-> sy0) **
-       pure (bias_add_size_req m n)
-     ensures
-       on gpu_loc (gC |-> Frac fc eC) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 t (SZ.v m * SZ.v n)).
-          on gpu_loc (gy |-> sy) **
-          pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
-                  acc1 sy tid == bias_add_at m n eC sbias tid))
-
-val bias_add_f32 : bias_add_ty f32
+fn bias_add_f32
+  (m n : szp)
+  (gC : array2 f32 (l2_row_major m n) { is_global gC })
+  (gbias : array1 f32 (l1_forward n) { is_global gbias })
+  (gy : array1 f32 (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
+  (#eC : EM.chest2 f32 m n)
+  (#sbias : chest1 f32 n)
+  (#sy0 : chest1 f32 (SZ.v m * SZ.v n))
+  (#fc #fb : perm)
+  preserves
+    cpu **
+    on gpu_loc (gC |-> Frac fc eC) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
+    on gpu_loc (gy |-> sy0) **
+    pure (bias_add_size_req m n)
+  ensures
+    (exists* (sy : chest1 f32 (SZ.v m * SZ.v n)).
+       on gpu_loc (gy |-> sy) **
+       pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
+               acc1 sy tid == bias_add_at m n eC sbias tid))

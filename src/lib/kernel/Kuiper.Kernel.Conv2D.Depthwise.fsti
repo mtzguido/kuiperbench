@@ -96,20 +96,18 @@ fn dwconv2d_naive_gpu
   (#sbias : chest1 et c)
   (#sy0 : chest1 et (b*c*h_out*w_out))
   (#fx #fw #fb : perm)
-  requires
+  norewrite
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
           dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*c*h_out*w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*c*h_out*w_out}).

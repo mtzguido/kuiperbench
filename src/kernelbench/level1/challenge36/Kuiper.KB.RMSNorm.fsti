@@ -36,25 +36,21 @@ let rms_inv_c (#t:Type0) {| floating t |} (c : SZ.t) : t =
   div one (of_int (FStar.Int.Cast.uint64_to_int64
                      (FStar.SizeT.sizet_to_uint64 c)))
 
-inline_for_extraction noextract
-type rmsnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
-  fn (b : szp)
-     (hw : SZ.t { 0 < SZ.v hw /\ SZ.fits (SZ.v b * SZ.v hw) })
-     (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
-     (eps : t)
-     (x : array2 t (l2_bcm_pages b hw c) { is_global x })
-     (#sx : EM.chest2 t (SZ.v b * SZ.v hw) c)
-     requires
-       cpu **
-       on gpu_loc (x |-> sx) **
-       pure (
-         SZ.v b * SZ.v hw > 0 /\
-         SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
-       )
-     ensures
-       cpu **
-       (exists* (sx' : EM.chest2 t (SZ.v b * SZ.v hw) c).
-          on gpu_loc (x |-> sx') **
-          pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx'))
-
-val rmsnorm_fw_f32 : rmsnorm_fw_ty f32
+fn rmsnorm_fw_f32
+  (b : szp)
+  (hw : SZ.t { 0 < SZ.v hw /\ SZ.fits (SZ.v b * SZ.v hw) })
+  (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
+  (eps : f32)
+  (x : array2 f32 (l2_bcm_pages b hw c) { is_global x })
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) c)
+  preserves cpu
+  requires
+    on gpu_loc (x |-> sx) **
+    pure (
+      SZ.v b * SZ.v hw > 0 /\
+      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
+    )
+  ensures
+    (exists* (sx' : EM.chest2 f32 (SZ.v b * SZ.v hw) c).
+       on gpu_loc (x |-> sx') **
+       pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx'))

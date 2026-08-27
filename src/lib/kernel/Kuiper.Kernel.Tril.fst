@@ -105,11 +105,10 @@ fn kf
   (#sb : chest2 t m n)
   (tid : szlt (m * n))
   ()
+  preserves gpu
   requires
-    gpu **
     kpre m n b sb tid
   ensures
-    gpu **
     kpost m n b sb tid
 {
   let row : sz = tid /^ n; assert rewrites_to row (tid /^ n);

@@ -63,17 +63,13 @@ fn conv3d_general_alloc
   (#sx : chest1 f32 (b * cin * d_in * h_in * w_in))
   (#sw : chest1 f32 (cout * cin * kd * kh * kw))
   (#sbias : chest1 f32 cout)
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
     on gpu_loc (gbias |-> Frac fb sbias)
   returns gy : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (b * cout * d_out * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
@@ -97,7 +93,7 @@ fn conv3d_general_alloc
   gy
 }
 
-let conv3d_general_alloc_f32 : conv3d_general_alloc_ty =
+let conv3d_general_alloc_f32 =
   fun b cin d_in h_in w_in cout kd kh kw stride pad d_out h_out w_out
       gx gw gbias #fx #fw #fb #sx #sw #sbias ->
     conv3d_general_alloc b cin d_in h_in w_in cout kd kh kw stride pad

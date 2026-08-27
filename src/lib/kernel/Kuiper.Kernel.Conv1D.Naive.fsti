@@ -96,20 +96,18 @@ fn conv1d_naive_gpu
   (#sbias : chest1 et cout)
   (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
-  requires
+  norewrite
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
           conv1d_size_req b cin l_in cout kk stride dilation l_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*cout*l_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*cout*l_out}).

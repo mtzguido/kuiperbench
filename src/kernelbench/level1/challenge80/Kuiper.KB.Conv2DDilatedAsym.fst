@@ -51,17 +51,14 @@ fn conv2d_dilated_asym_impl
   (#sbias : chest1 et cout)
   (#sy0 : chest1 et (b * cout * h_out * w_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * cout * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
@@ -74,7 +71,7 @@ fn conv2d_dilated_asym_impl
   ()
 }
 
-let conv2d_dilated_asym_f32 : conv2d_dilated_asym_ty f32 =
+let conv2d_dilated_asym_f32 =
   conv2d_dilated_asym_impl #f32
 
 inline_for_extraction let () = ()

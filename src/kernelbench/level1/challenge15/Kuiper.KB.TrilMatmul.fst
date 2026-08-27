@@ -20,8 +20,7 @@ ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
   (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -31,8 +30,7 @@ ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
   (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -71,15 +69,14 @@ fn tril_matmul_f32_impl
   (#sy : EM.chest2 f32 n n)
   (#rA : EM.chest2 real n n)
   (#rB : EM.chest2 real n n)
-  preserves cpu
-  requires
+  preserves
+    cpu **
     on gpu_loc (gA |-> sA) **
-    on gpu_loc (gB |-> sB) **
+    on gpu_loc (gB |-> sB)
+  requires
     on gpu_loc (y  |-> sy) **
     pure (reveal sA %~ reveal rA /\ reveal sB %~ reveal rB)
   ensures
-    on gpu_loc (gA |-> sA) **
-    on gpu_loc (gB |-> sB) **
     (exists* (sy' : EM.chest2 f32 n n).
        on gpu_loc (y |-> sy') **
        pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))
@@ -127,4 +124,4 @@ fn tril_matmul_f32_impl
 }
 #pop-options
 
-let tril_matmul_f32 : tril_matmul_ty f32 = tril_matmul_f32_impl
+let tril_matmul_f32 = tril_matmul_f32_impl

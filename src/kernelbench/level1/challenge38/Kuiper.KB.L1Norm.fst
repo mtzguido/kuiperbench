@@ -152,4 +152,4 @@ fn l1norm_fw
   l1norm_fw_f32_impl b d dim_f x;
 }
 
-let l1norm_fw_f32 : l1norm_fw_ty f32 = l1norm_fw
+let l1norm_fw_f32 = l1norm_fw

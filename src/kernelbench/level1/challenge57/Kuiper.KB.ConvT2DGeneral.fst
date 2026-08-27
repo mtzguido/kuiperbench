@@ -64,17 +64,14 @@ fn convt2d_general_impl
   (#sbias : chest1 et cout)
   (#sy0 : chest1 et (b * cout * h_out * w_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * cout * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
@@ -88,7 +85,7 @@ fn convt2d_general_impl
   ()
 }
 
-let convt2d_general_f32 : convt2d_general_ty f32 = convt2d_general_impl #f32
+let convt2d_general_f32 = convt2d_general_impl #f32
 
 (* (b) Self-allocating entry point.  Allocates the [b*cout*h_out*w_out] output
    buffer on the GPU via [alloc0] (extracts to cudaMalloc), runs the
@@ -112,17 +109,13 @@ fn convt2d_general_alloc
   (#sx : chest1 f32 (b * cin * h_in * w_in))
   (#sw_l : chest1 f32 (cin * cout * kh * kw))
   (#sbias : chest1 f32 cout)
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
     on gpu_loc (gbias |-> Frac fb sbias)
   returns gy : array1 f32 (l1_forward (b * cout * h_out * w_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
@@ -143,7 +136,7 @@ fn convt2d_general_alloc
   gy
 }
 
-let convt2d_general_alloc_f32 : convt2d_general_alloc_ty =
+let convt2d_general_alloc_f32 =
   fun b cin h_in w_in cout kh kw sh sw ph pw dh dw h_out w_out
       gx gw gbias #fx #fw #fb #sx #sw_l #sbias ->
     convt2d_general_alloc b cin h_in w_in cout kh kw sh sw ph pw dh dw

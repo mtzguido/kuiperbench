@@ -536,14 +536,13 @@ fn batch_norm
   (#sx : chest2 f32 c (n * SZ.v hw))
   (#sg : chest1 f32 c)
   (#sb : chest1 f32 c)
-  preserves cpu
-  requires
-    on gpu_loc (x |-> sx) **
+  preserves
+    cpu **
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sb)
+  requires
+    on gpu_loc (x |-> sx)
   ensures
-    on gpu_loc (gamma |-> Frac fg sg) **
-    on gpu_loc (beta  |-> Frac fb sb) **
     (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
        on gpu_loc (x |-> sx') **
        pure (batchnorm_post c (n * SZ.v hw) eps inv_n
@@ -628,14 +627,13 @@ fn batchnorm_fw
   (#sx : chest2 f32 c (n * SZ.v hw))
   (#sg : chest1 f32 c)
   (#sb : chest1 f32 c)
-  preserves cpu
-  requires
-    on gpu_loc (x |-> sx) **
+  preserves
+    cpu **
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sb)
+  requires
+    on gpu_loc (x |-> sx)
   ensures
-    on gpu_loc (gamma |-> Frac fg sg) **
-    on gpu_loc (beta  |-> Frac fb sb) **
     (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
        on gpu_loc (x |-> sx') **
        pure (batchnorm_post c (n * SZ.v hw) eps (bn_inv_n nhw)
@@ -645,4 +643,4 @@ fn batchnorm_fw
   batch_norm n c hw nhw eps inv_n x gamma beta;
 }
 
-let batchnorm_fw_f32 : batchnorm_fw_ty f32 = batchnorm_fw
+let batchnorm_fw_f32 = batchnorm_fw

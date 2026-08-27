@@ -29,17 +29,14 @@ fn conv3d_general_impl
   (#sbias : chest1 et cout)
   (#sy0 : chest1 et (b * cout * d_out * h_out * w_out))
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b * cout * d_out * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
@@ -52,6 +49,6 @@ fn conv3d_general_impl
   ()
 }
 
-let conv3d_general_f32 : conv3d_general_ty f32 = conv3d_general_impl #f32
+let conv3d_general_f32 = conv3d_general_impl #f32
 
 inline_for_extraction let () = ()

@@ -133,11 +133,13 @@ fn convt3d_naive_gpu
   (#sbias : chest1 et cout)
   (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
-  requires
+  norewrite
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
@@ -145,10 +147,6 @@ fn convt3d_naive_gpu
                            sd sh sw pd ph pw dd dh dw
                            d_out h_out w_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*cout*d_out*h_out*w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*cout*d_out*h_out*w_out}).

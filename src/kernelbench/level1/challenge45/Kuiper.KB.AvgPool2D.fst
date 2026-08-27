@@ -54,15 +54,14 @@ fn avgpool2d_axis_fw
   (#fIn  : perm)
   (#sx   : EM.chest2 t bc l)
   (#sout : EM.chest2 t bc l_out)
-  requires
+  preserves
     cpu **
-    on gpu_loc (input  |-> Frac fIn sx) **
+    on gpu_loc (input  |-> Frac fIn sx)
+  requires
     on gpu_loc (output |-> sout) **
     pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
     pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
   ensures
-    cpu **
-    on gpu_loc (input  |-> Frac fIn sx) **
     on gpu_loc (output |->
       windowreduce_result m_inst sx
         k s p d l_out)
@@ -71,12 +70,12 @@ fn avgpool2d_axis_fw
 }
 
 inline_for_extraction noextract
-let avgpool2d_axis_fw_f32 : avgpool2d_axis_fw_ty =
+let avgpool2d_axis_fw_f32 =
   fun k s p d bc l l_out #_ #_ #_ #_ input output #fIn #sx #sout ->
     avgpool2d_axis_fw #f32 cmonoid_fadd_f32 k s p d bc l l_out input output
       #fIn #sx #sout
 
-let avgpool2d_axis_fw_rm_f32 : avgpool2d_axis_fw_rm_ty =
+let avgpool2d_axis_fw_rm_f32 =
   fun k s p d bc l l_out input output #fIn #sx #sout ->
     avgpool2d_axis_fw_f32 k s p d bc l l_out
       #(l2_row_major bc l)     #_
@@ -205,9 +204,10 @@ fn avgpool2d_axis_alloc
   (input : array2 f32 (l2_row_major bc l) { is_global input })
   (#fIn : perm)
   (#sx  : EM.chest2 f32 bc l)
-  requires
+  preserves
     cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
+    on gpu_loc (input |-> Frac fIn sx)
+  requires
     pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
     pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
     pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
@@ -221,8 +221,6 @@ fn avgpool2d_axis_alloc
   returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
                & array2 f32 (l2_row_major bc lo))
   ensures
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
     on gpu_loc ((dsnd r) |->
       mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
         mul (avgpool_recip_f32 k)
@@ -274,6 +272,6 @@ fn avgpool2d_axis_alloc
   (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
 }
 
-let avgpool2d_axis_alloc_f32 : avgpool2d_axis_alloc_ty =
+let avgpool2d_axis_alloc_f32 =
   fun k s p d bc l input #fIn #sx ->
     avgpool2d_axis_alloc k s p d bc l input #fIn #sx

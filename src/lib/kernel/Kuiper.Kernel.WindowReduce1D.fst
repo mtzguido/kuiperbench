@@ -210,11 +210,10 @@ fn kf
   (#_ : squash (sz_fits_window k s p d lo))
   (gid : szlt (rows * lo))
   ()
+  preserves gpu
   requires
-    gpu **
     kpre m input output sx sout fIn gid
   ensures
-    gpu **
     kpost m k s p d input output sx fIn gid
 {
   let r_sz : szlt rows = gid /^ lo;

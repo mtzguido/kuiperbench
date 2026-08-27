@@ -470,9 +470,10 @@ fn sdpa
   (#sScores0 : chest3 f32 bh s s)
   (#sOut0 : chest3 f32 bh s d)
   (#fQ #fKT #fV : perm)
-  requires
+  preserves
     cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
+    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV)
+  requires
     on gpu_loc (gScores |-> sScores0) **
     on gpu_loc (gOut |-> sOut0) **
     pure (
@@ -486,8 +487,6 @@ fn sdpa
       bh * (s * d) <= max_blocks * max_threads
     )
   ensures
-    cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
     (exists* (probs : chest3 f32 bh s s) (eOut : chest3 f32 bh s d).
       on gpu_loc (gScores |-> probs) **
       on gpu_loc (gOut |-> eOut) **

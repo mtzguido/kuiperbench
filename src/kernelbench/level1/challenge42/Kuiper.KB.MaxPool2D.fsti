@@ -48,63 +48,55 @@ val pool_out_len_1d_sz
 
 (* Verification-facing wrapper type (layout-polymorphic, f32 carrier). *)
 inline_for_extraction noextract
-type maxpool2d_axis_fw_ty =
-  fn
+fn maxpool2d_axis_fw_f32
   (k s p d : szp)
-  (bc : szp { SZ.v bc <= max_blocks * max_threads })
-  (l    : szp)
-  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
-  (#lin  : layout2 bc l) {| ctlayout lin  |}
-  (#lout : layout2 bc l_out) {| ctlayout lout |}
-  (input  : array2 f32 lin  { is_global input  })
-  (output : array2 f32 lout { is_global output })
-  (#fIn  : perm)
-  (#sx   : EM.chest2 f32 bc l)
-  (#sout : EM.chest2 f32 bc l_out)
-  requires
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    on gpu_loc (output |-> sout) **
-    pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
-    pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
-  ensures
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    on gpu_loc (output |->
-      windowreduce_result cmonoid_fmax_f32 sx
-        k s p d l_out)
+(bc : szp { SZ.v bc <= max_blocks * max_threads })
+(l    : szp)
+(l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
+(#lin  : layout2 bc l) {| ctlayout lin  |}
+(#lout : layout2 bc l_out) {| ctlayout lout |}
+(input  : array2 f32 lin  { is_global input  })
+(output : array2 f32 lout { is_global output })
+(#fIn  : perm)
+(#sx   : EM.chest2 f32 bc l)
+(#sout : EM.chest2 f32 bc l_out)
+preserves
+ cpu **
+ on gpu_loc (input |-> Frac fIn sx)
+requires
+ on gpu_loc (output |-> sout) **
+ pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
+ pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
+ensures
+ on gpu_loc (output |->
+   windowreduce_result cmonoid_fmax_f32 sx
+     k s p d l_out)
 
-inline_for_extraction noextract
-val maxpool2d_axis_fw_f32 : maxpool2d_axis_fw_ty
 
 (* Concrete-layout extractable entry (l2_row_major). *)
-inline_for_extraction noextract
-type maxpool2d_axis_fw_rm_ty =
-  fn
+fn maxpool2d_axis_fw_rm_f32
   (k s p d : szp)
-  (bc : szp { SZ.v bc <= max_blocks * max_threads })
-  (l    : szp { SZ.fits (SZ.v bc * SZ.v l) })
-  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d /\
-                SZ.fits (SZ.v bc * SZ.v l_out) })
-  (input  : array2 f32 (l2_row_major bc l)     { is_global input  })
-  (output : array2 f32 (l2_row_major bc l_out) { is_global output })
-  (#fIn  : perm)
-  (#sx   : EM.chest2 f32 bc l)
-  (#sout : EM.chest2 f32 bc l_out)
-  requires
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    on gpu_loc (output |-> sout) **
-    pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
-    pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
-  ensures
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    on gpu_loc (output |->
-      windowreduce_result cmonoid_fmax_f32 sx
-        k s p d l_out)
+(bc : szp { SZ.v bc <= max_blocks * max_threads })
+(l    : szp { SZ.fits (SZ.v bc * SZ.v l) })
+(l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d /\
+             SZ.fits (SZ.v bc * SZ.v l_out) })
+(input  : array2 f32 (l2_row_major bc l)     { is_global input  })
+(output : array2 f32 (l2_row_major bc l_out) { is_global output })
+(#fIn  : perm)
+(#sx   : EM.chest2 f32 bc l)
+(#sout : EM.chest2 f32 bc l_out)
+preserves
+ cpu **
+ on gpu_loc (input |-> Frac fIn sx)
+requires
+ on gpu_loc (output |-> sout) **
+ pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
+ pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
+ensures
+ on gpu_loc (output |->
+   windowreduce_result cmonoid_fmax_f32 sx
+     k s p d l_out)
 
-val maxpool2d_axis_fw_rm_f32 : maxpool2d_axis_fw_rm_ty
 
 (* Self-allocating per-axis pass.  Takes the flattened row count [bc] and the
    inner axis length [l] (NOT a pre-computed [l_out], NOT a caller buffer);
@@ -114,38 +106,34 @@ val maxpool2d_axis_fw_rm_f32 : maxpool2d_axis_fw_rm_ty
    performs dimension-contract checks and the (unavoidable) inter-pass permute
    copies; it computes no output length and allocates no pool buffer.  Extracts
    to a C function returning a [{ uint32_t fst; float *snd; }] struct. *)
-inline_for_extraction noextract
-type maxpool2d_axis_alloc_ty =
-  fn
+fn maxpool2d_axis_alloc_f32
   (k s p d : szp)
-  (bc : szp { SZ.v bc <= max_blocks * max_threads })
-  (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
-  (input : array2 f32 (l2_row_major bc l) { is_global input })
-  (#fIn : perm)
-  (#sx  : EM.chest2 f32 bc l)
-  requires
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
-    pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
-    pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
-    pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
-    pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
-    pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-               & array2 f32 (l2_row_major bc lo))
-  ensures
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    on gpu_loc ((dsnd r) |->
-      windowreduce_result cmonoid_fmax_f32 sx
-        k s p d (dfst r)) **
-    pure (SZ.v (dfst r) ==
-            pool_out_len_1d l k s p d) **
-    pure (is_global (dsnd r)) **
-    pure (is_full_array (core (dsnd r)))
+(bc : szp { SZ.v bc <= max_blocks * max_threads })
+(l : szp { SZ.fits (SZ.v bc * SZ.v l) })
+(input : array2 f32 (l2_row_major bc l) { is_global input })
+(#fIn : perm)
+(#sx  : EM.chest2 f32 bc l)
+preserves
+ cpu **
+ on gpu_loc (input |-> Frac fIn sx)
+requires
+ pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
+ pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
+ pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
+ pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
+ pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
+ pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
+returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
+            & array2 f32 (l2_row_major bc lo))
+ensures
+ on gpu_loc ((dsnd r) |->
+   windowreduce_result cmonoid_fmax_f32 sx
+     k s p d (dfst r)) **
+ pure (SZ.v (dfst r) ==
+         pool_out_len_1d l k s p d) **
+ pure (is_global (dsnd r)) **
+ pure (is_full_array (core (dsnd r)))
 
-val maxpool2d_axis_alloc_f32 : maxpool2d_axis_alloc_ty
 
 (* ── Single verified, transpose-free 2-D max-pool entry ──────────────
 
@@ -158,39 +146,34 @@ val maxpool2d_axis_alloc_f32 : maxpool2d_axis_alloc_ty
    returned (W_out, H_out, buffer) triple's buffer is physically the
    row-major (B*C, H_out, W_out) result and carries the pass-2
    [windowreduce_result] post over some (B*C*W_out, H) matrix [sx2]. *)
-inline_for_extraction noextract
-type maxpool2d_full_alloc_ty =
-  fn
+fn maxpool2d_full_alloc_f32
   (kh kw sh sw ph pw dh dw bc h w : szp)
-  (#_ : squash (SZ.fits (SZ.v bc * SZ.v h)))
-  (input : array2 f32 (l2_row_major (bc * h) w) { is_global input })
-  (#fIn : perm)
-  (#sx  : EM.chest2 f32 (bc * h) w)
-  requires
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    pure (SZ.fits (SZ.v dw * (SZ.v kw - 1) + 1)) **
-    pure (SZ.fits (SZ.v dh * (SZ.v kh - 1) + 1)) **
-    pure (SZ.fits (SZ.v w + 2 * SZ.v pw)) **
-    pure (SZ.fits (SZ.v h + 2 * SZ.v ph)) **
-    pure (SZ.v dw * (SZ.v kw - 1) + 1 <= SZ.v w + 2 * SZ.v pw) **
-    pure (SZ.v dh * (SZ.v kh - 1) + 1 <= SZ.v h + 2 * SZ.v ph) **
-    pure (SZ.fits ((SZ.v w + 2 * SZ.v pw) * SZ.v sw + SZ.v kw * SZ.v dw)) **
-    pure (SZ.fits ((SZ.v h + 2 * SZ.v ph) * SZ.v sh + SZ.v kh * SZ.v dh)) **
-    pure (SZ.fits (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw))) **
-    pure (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw)
-            <= max_blocks * max_threads)
-  returns r : (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw
-                         /\ SZ.v wo > 0 }
-               & (ho : sz { SZ.v ho == pool_out_len_1d h kh sh ph dh
-                            /\ SZ.v ho > 0 }
-                  & array2 f32 (l2_bcm_pages bc wo ho)))
-  ensures
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx) **
-    (exists* (sx2 : EM.chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
-       on gpu_loc ((dsnd (dsnd r)) |->
-         windowreduce_result cmonoid_fmax_f32 sx2
-           kh sh ph dh (dfst (dsnd r))))
-
-val maxpool2d_full_alloc_f32 : maxpool2d_full_alloc_ty
+(#_ : squash (SZ.fits (SZ.v bc * SZ.v h)))
+(input : array2 f32 (l2_row_major (bc * h) w) { is_global input })
+(#fIn : perm)
+(#sx  : EM.chest2 f32 (bc * h) w)
+preserves
+ cpu **
+ on gpu_loc (input |-> Frac fIn sx)
+requires
+ pure (SZ.fits (SZ.v dw * (SZ.v kw - 1) + 1)) **
+ pure (SZ.fits (SZ.v dh * (SZ.v kh - 1) + 1)) **
+ pure (SZ.fits (SZ.v w + 2 * SZ.v pw)) **
+ pure (SZ.fits (SZ.v h + 2 * SZ.v ph)) **
+ pure (SZ.v dw * (SZ.v kw - 1) + 1 <= SZ.v w + 2 * SZ.v pw) **
+ pure (SZ.v dh * (SZ.v kh - 1) + 1 <= SZ.v h + 2 * SZ.v ph) **
+ pure (SZ.fits ((SZ.v w + 2 * SZ.v pw) * SZ.v sw + SZ.v kw * SZ.v dw)) **
+ pure (SZ.fits ((SZ.v h + 2 * SZ.v ph) * SZ.v sh + SZ.v kh * SZ.v dh)) **
+ pure (SZ.fits (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw))) **
+ pure (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw)
+         <= max_blocks * max_threads)
+returns r : (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw
+                      /\ SZ.v wo > 0 }
+            & (ho : sz { SZ.v ho == pool_out_len_1d h kh sh ph dh
+                         /\ SZ.v ho > 0 }
+               & array2 f32 (l2_bcm_pages bc wo ho)))
+ensures
+ (exists* (sx2 : EM.chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
+    on gpu_loc ((dsnd (dsnd r)) |->
+      windowreduce_result cmonoid_fmax_f32 sx2
+        kh sh ph dh (dfst (dsnd r))))

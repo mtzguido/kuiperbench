@@ -159,4 +159,4 @@ fn rmsnorm_fw
   rmsnorm_fw_f32_impl b hw c eps inv_c x;
 }
 
-let rmsnorm_fw_f32 : rmsnorm_fw_ty f32 = rmsnorm_fw
+let rmsnorm_fw_f32 = rmsnorm_fw

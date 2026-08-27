@@ -41,9 +41,9 @@ type mean_var_norm_fw_ty (t:Type0) {| floating t, real_like t |} =
      (eps : t)
      (x : array1 t (l1_forward (b * d)) { is_global x })
      (#s : chest1 t (b * d))
-     requires cpu ** on gpu_loc (x |-> s)
+     preserves cpu
+     requires on gpu_loc (x |-> s)
      ensures
-       cpu **
        (exists* (s' : chest1 t (b * d)).
           on gpu_loc (x |-> s') **
           pure (mean_var_post b d eps (mvn_inv_d d)

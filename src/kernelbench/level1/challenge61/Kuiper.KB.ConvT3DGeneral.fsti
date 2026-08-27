@@ -40,57 +40,7 @@ val convt_out_dim_ub (n s d k p opad : nat)
           (ensures (n - 1) * s - 2 * p + d * (k - 1) + opad + 1
                    <= (n - 1) * s + d * (k - 1) + opad + 1)
 
-inline_for_extraction noextract
-type convt3d_general_ty (t:Type0) {| scalar t |} =
-  fn (b cin d_in h_in w_in cout kd kh kw sd sh sw : szp)
-     (pd ph pw : sz)
-     (dd dh dw d_out h_out : szp)
-     (w_out : szp { convT3d_size_req b cin d_in h_in w_in cout kd kh kw
-                                     sd sh sw pd ph pw dd dh dw
-                                     d_out h_out w_out })
-     (gx : array1 t (l1_forward (b * cin * d_in * h_in * w_in))
-           { is_global gx })
-     (gw : array1 t (l1_forward (cin * cout * kd * kh * kw))
-           { is_global gw })
-     (gbias : array1 t (l1_forward cout)
-           { is_global gbias })
-     (gy : array1 t (l1_forward (b * cout * d_out * h_out * w_out))
-           { is_global gy })
-     (#fx #fw #fb : perm)
-     (#sx : chest1 t (b * cin * d_in * h_in * w_in))
-     (#sw_l : chest1 t (cin * cout * kd * kh * kw))
-     (#sbias : chest1 t cout)
-     (#sy0 : chest1 t (b * cout * d_out * h_out * w_out))
-     requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw_l) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       on gpu_loc (gy |-> sy0)
-     ensures
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw_l) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 t (b * cout * d_out * h_out * w_out)).
-         on gpu_loc (gy |-> sy) **
-         pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
-                 acc1 sy tid ==
-                 convT3d_out_at b cin d_in h_in w_in cout kd kh kw
-                                sd sh sw pd ph pw dd dh dw
-                                d_out h_out w_out sx sw_l sbias tid))
-
-val convt3d_general_f32 : convt3d_general_ty f32
-
-(* (b) Self-allocating entry-point type.  Takes the raw convT dims plus
-   [d_out]/[h_out]/[w_out] (supplied by the verified [convt_out_dim]).
-   Allocates the [b*cout*d_out*h_out*w_out] GPU output buffer, runs the
-   verified kernel, and returns the buffer directly — ownership passes to the
-   caller.  The post is the SAME per-thread [convT3d_out_at] functional spec
-   the underlying kernel guarantees. *)
-inline_for_extraction noextract
-type convt3d_general_alloc_ty =
-  fn
+fn convt3d_general_f32
   (b cin d_in h_in w_in cout kd kh kw sd sh sw : szp)
   (pd ph pw : sz)
   (dd dh dw d_out h_out : szp)
@@ -103,29 +53,68 @@ type convt3d_general_alloc_ty =
         { is_global gw })
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
+  (gy : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out))
+        { is_global gy })
   (#fx #fw #fb : perm)
   (#sx : chest1 f32 (b * cin * d_in * h_in * w_in))
   (#sw_l : chest1 f32 (cin * cout * kd * kh * kw))
   (#sbias : chest1 f32 cout)
-  requires
+  (#sy0 : chest1 f32 (b * cout * d_out * h_out * w_out))
+  norewrite
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) **
     on gpu_loc (gbias |-> Frac fb sbias)
-  returns gy : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out))
+  requires
+    on gpu_loc (gy |-> sy0)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw_l) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (b * cout * d_out * h_out * w_out)).
-       on gpu_loc (gy |-> sy) **
-       pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
-               acc1 sy tid ==
-               convT3d_out_at b cin d_in h_in w_in cout kd kh kw
-                              sd sh sw pd ph pw dd dh dw
-                              d_out h_out w_out sx sw_l sbias tid))
+      on gpu_loc (gy |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
+              acc1 sy tid ==
+              convT3d_out_at b cin d_in h_in w_in cout kd kh kw
+                             sd sh sw pd ph pw dd dh dw
+                             d_out h_out w_out sx sw_l sbias tid))
 
-val convt3d_general_alloc_f32 : convt3d_general_alloc_ty
+
+(* (b) Self-allocating entry-point type.  Takes the raw convT dims plus
+   [d_out]/[h_out]/[w_out] (supplied by the verified [convt_out_dim]).
+   Allocates the [b*cout*d_out*h_out*w_out] GPU output buffer, runs the
+   verified kernel, and returns the buffer directly — ownership passes to the
+   caller.  The post is the SAME per-thread [convT3d_out_at] functional spec
+   the underlying kernel guarantees. *)
+fn convt3d_general_alloc_f32
+  (b cin d_in h_in w_in cout kd kh kw sd sh sw : szp)
+(pd ph pw : sz)
+(dd dh dw d_out h_out : szp)
+(w_out : szp { convT3d_size_req b cin d_in h_in w_in cout kd kh kw
+                               sd sh sw pd ph pw dd dh dw
+                               d_out h_out w_out })
+(gx : array1 f32 (l1_forward (b * cin * d_in * h_in * w_in))
+     { is_global gx })
+(gw : array1 f32 (l1_forward (cin * cout * kd * kh * kw))
+     { is_global gw })
+(gbias : array1 f32 (l1_forward cout)
+     { is_global gbias })
+(#fx #fw #fb : perm)
+(#sx : chest1 f32 (b * cin * d_in * h_in * w_in))
+(#sw_l : chest1 f32 (cin * cout * kd * kh * kw))
+(#sbias : chest1 f32 cout)
+preserves
+ cpu **
+ on gpu_loc (gx |-> Frac fx sx) **
+ on gpu_loc (gw |-> Frac fw sw_l) **
+ on gpu_loc (gbias |-> Frac fb sbias)
+returns gy : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out))
+ensures
+ (exists* (sy : chest1 f32 (b * cout * d_out * h_out * w_out)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * d_out * h_out * w_out}).
+            acc1 sy tid ==
+            convT3d_out_at b cin d_in h_in w_in cout kd kh kw
+                           sd sh sw pd ph pw dd dh dw
+                           d_out h_out w_out sx sw_l sbias tid))
+
 
 inline_for_extraction let () = ()

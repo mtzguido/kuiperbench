@@ -266,12 +266,11 @@ fn kf
   (tid : szlt (b * c * h_out * w_out))
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre #et b c h_in w_in kh kw h_out w_out #lx #lw #lbias #ly
          gx gw gbias gy sx sw sbias sy0 fx fw fb tid
   ensures
-    gpu **
     kpost #et b c h_in w_in kh kw stride pad h_out w_out #lx #lw #lbias #ly
           gx gw gbias gy sx sw sbias fx fw fb tid
 {
@@ -583,20 +582,17 @@ fn dwconv2d_naive_gpu
   (#sy0 : chest1 et (b*c*h_out*w_out))
   (#fx #fw #fb : perm)
   norewrite
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gx /\ is_global gw /\
           is_global gbias /\ is_global gy /\
           dwconv2d_size_req b c h_in w_in kh kw stride h_out w_out)
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw |-> Frac fw sw) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 et (b*c*h_out*w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b*c*h_out*w_out}).

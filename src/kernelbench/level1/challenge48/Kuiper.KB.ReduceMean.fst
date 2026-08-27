@@ -85,12 +85,12 @@ fn reduce_mean_fw_f32_impl
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
   (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (y |-> sy)
   ensures
-    on gpu_loc (x |-> sx) **
     (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
        on gpu_loc (y |-> sy') **
        pure (meanreduce_post (SZ.v b * SZ.v m) d inv_d sx (chest1_to_seq sy')))
@@ -128,4 +128,4 @@ fn reduce_mean_fw_f32_impl
 }
 #pop-options
 
-let reduce_mean_fw_f32 : reduce_mean_fw_ty f32 = reduce_mean_fw_f32_impl
+let reduce_mean_fw_f32 = reduce_mean_fw_f32_impl

@@ -642,14 +642,13 @@ fn layer_norm
   (#sx : chest1 f32 (b * n))
   (#sg : chest1 f32 n)
   (#sbeta : chest1 f32 n)
-  preserves cpu
-  requires
-    on gpu_loc (x |-> sx) **
+  preserves
+    cpu **
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta)
+  requires
+    on gpu_loc (x |-> sx)
   ensures
-    on gpu_loc (gamma |-> Frac fg sg) **
-    on gpu_loc (beta  |-> Frac fb sbeta) **
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
        pure (layernorm_post b n eps inv_n
@@ -752,14 +751,13 @@ fn layernorm_fw
   (#sx : chest1 f32 (b * n))
   (#sg : chest1 f32 n)
   (#sbeta : chest1 f32 n)
-  preserves cpu
-  requires
-    on gpu_loc (x |-> sx) **
+  preserves
+    cpu **
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta)
+  requires
+    on gpu_loc (x |-> sx)
   ensures
-    on gpu_loc (gamma |-> Frac fg sg) **
-    on gpu_loc (beta  |-> Frac fb sbeta) **
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
        pure (layernorm_post b n eps (ln_inv_n n)
@@ -770,4 +768,4 @@ fn layernorm_fw
   layer_norm b n eps inv_n x gamma beta;
 }
 
-let layernorm_fw_f32 : layernorm_fw_ty f32 = layernorm_fw
+let layernorm_fw_f32 = layernorm_fw

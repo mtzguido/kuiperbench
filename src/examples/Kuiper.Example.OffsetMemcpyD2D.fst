@@ -6,9 +6,8 @@ open Kuiper
 module V = Pulse.Lib.Vec
 
 fn main (_:unit)
-  requires cpu
+  preserves cpu
   returns _ : u64
-  ensures cpu
 {
   let src = V.alloc 0uL 8sz;
   V.(src.(0sz) <- 10uL);

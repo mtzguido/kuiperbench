@@ -45,37 +45,32 @@ let bn_inv_n (#t:Type0) {| floating t |} (nhw : szp) : t =
   div one (of_int (FStar.Int.Cast.uint64_to_int64
                      (FStar.SizeT.sizet_to_uint64 nhw)))
 
-inline_for_extraction noextract
-type batchnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
-  fn (n  : erased nat)
-     (c  : szp)
-     (hw : szp { SZ.v hw > 0 /\
-                 SZ.fits (n * SZ.v hw) /\
-                 SZ.fits (SZ.v hw * c) /\
-                 SZ.fits (n * (SZ.v hw * c)) })
-     (nhw : szp { SZ.v nhw == n * SZ.v hw /\
-                  nhw <= max_blocks * max_threads /\
-                  SZ.fits (SZ.v nhw + 1024) })
-     (eps : t)
-     (x     : array2 t (l2_bcm_channels n c hw)
-                        { is_global x })
-     (gamma : array1 t (l1_forward c) { is_global gamma })
-     (beta  : array1 t (l1_forward c) { is_global beta  })
-     (#fg #fb : perm)
-     (#sx : chest2 t c (n * SZ.v hw))
-     (#sg #sb : chest1 t c)
-     requires
-       cpu **
-       on gpu_loc (x |-> sx) **
-       on gpu_loc (gamma |-> Frac fg sg) **
-       on gpu_loc (beta  |-> Frac fb sb)
-     ensures
-       cpu **
-       on gpu_loc (gamma |-> Frac fg sg) **
-       on gpu_loc (beta  |-> Frac fb sb) **
-       (exists* (sx' : chest2 t c (n * SZ.v hw)).
-          on gpu_loc (x |-> sx') **
-          pure (batchnorm_post c (n * SZ.v hw) eps (bn_inv_n nhw)
-                  (chest1_to_seq sg) (chest1_to_seq sb) sx sx'))
-
-val batchnorm_fw_f32 : batchnorm_fw_ty f32
+fn batchnorm_fw_f32
+  (n  : erased nat)
+  (c  : szp)
+  (hw : szp { SZ.v hw > 0 /\
+              SZ.fits (n * SZ.v hw) /\
+              SZ.fits (SZ.v hw * c) /\
+              SZ.fits (n * (SZ.v hw * c)) })
+  (nhw : szp { SZ.v nhw == n * SZ.v hw /\
+               nhw <= max_blocks * max_threads /\
+               SZ.fits (SZ.v nhw + 1024) })
+  (eps : f32)
+  (x     : array2 f32 (l2_bcm_channels n c hw)
+                     { is_global x })
+  (gamma : array1 f32 (l1_forward c) { is_global gamma })
+  (beta  : array1 f32 (l1_forward c) { is_global beta  })
+  (#fg #fb : perm)
+  (#sx : chest2 f32 c (n * SZ.v hw))
+  (#sg #sb : chest1 f32 c)
+  preserves
+    cpu **
+    on gpu_loc (gamma |-> Frac fg sg) **
+    on gpu_loc (beta  |-> Frac fb sb)
+  requires
+    on gpu_loc (x |-> sx)
+  ensures
+    (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
+       on gpu_loc (x |-> sx') **
+       pure (batchnorm_post c (n * SZ.v hw) eps (bn_inv_n nhw)
+               (chest1_to_seq sg) (chest1_to_seq sb) sx sx'))

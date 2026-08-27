@@ -110,11 +110,10 @@ fn kf
   (tid : szlt (m * n))
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre #t m n #lC #lbias #ly gC gbias gy eC sbias sy0 fc fb tid
   ensures
-    gpu **
     kpost #t m n #lC #lbias #ly gC gbias gy eC sbias fc fb tid
 {
   let i : szlt m = tid /^ n;
@@ -309,16 +308,15 @@ fn bias_add_gpu
   (#sbias : chest1 t n)
   (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
-  preserves cpu
-  requires
+  preserves
+    cpu **
     on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (is_global gC /\ is_global gbias /\ is_global gy /\
           bias_add_size_req m n)
   ensures
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 t (SZ.v m * SZ.v n)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).
@@ -336,15 +334,14 @@ fn bias_add_f32
   (#sbias : chest1 f32 n)
   (#sy0 : chest1 f32 (SZ.v m * SZ.v n))
   (#fc #fb : perm)
-  preserves cpu
-  requires
+  preserves
+    cpu **
     on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
     on gpu_loc (gy |-> sy0) **
     pure (bias_add_size_req m n)
   ensures
-    on gpu_loc (gC |-> Frac fc eC) **
-    on gpu_loc (gbias |-> Frac fb sbias) **
     (exists* (sy : chest1 f32 (SZ.v m * SZ.v n)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < SZ.v m * SZ.v n}).

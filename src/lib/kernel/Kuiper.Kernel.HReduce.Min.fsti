@@ -77,10 +77,10 @@ fn reduce_batched_min_f32
      (output : array1 f32 lout { is_global output })
      (#sx   : EM.chest2 f32 rows cols)
      (#sout : chest1 f32 rows)
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> sout)
   ensures
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows_fmin sx))

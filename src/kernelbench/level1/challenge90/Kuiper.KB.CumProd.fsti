@@ -35,26 +35,23 @@ let cumprod_post
       acc2 sy r i %~
         rprod (Seq.slice (to_real_seq (EM.ematrix_row sx r)) 0 (i + 1))
 
-inline_for_extraction noextract
-type cumprod_fw_ty (t:Type0) {| scalar t, real_like t |} =
-  fn (b : szp { b <= max_blocks })
-     (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-     (input  : array2 t (l2_row_major b d)
-               { is_global input  })
-     (output : array2 t (l2_row_major b d)
-               { is_global output })
-     (#sx #sy0 : EM.chest2 t b d)
-     requires
-       cpu **
-       on gpu_loc (input  |-> sx) **
-       on gpu_loc (output |-> sy0)
-     ensures
-       cpu **
-       on gpu_loc (input |-> sx) **
-       (exists* (sy : EM.chest2 t b d).
-          on gpu_loc (output |-> sy) **
-          pure (cumprod_post b d sx sy))
+fn cumprod_fw_f32
+  (b : szp { b <= max_blocks })
+  (d : szp { SZ.fits (SZ.v b * SZ.v d) })
+  (input  : array2 f32 (l2_row_major b d)
+            { is_global input  })
+  (output : array2 f32 (l2_row_major b d)
+            { is_global output })
+  (#sx #sy0 : EM.chest2 f32 b d)
+  preserves
+    cpu **
+    on gpu_loc (input  |-> sx)
+  requires
+    on gpu_loc (output |-> sy0)
+  ensures
+    (exists* (sy : EM.chest2 f32 b d).
+       on gpu_loc (output |-> sy) **
+       pure (cumprod_post b d sx sy))
 
-val cumprod_fw_f32 : cumprod_fw_ty f32
 
 inline_for_extraction let () = ()

@@ -158,11 +158,10 @@ fn kf
   (#fIn : perm)
   (gid : szlt (rows * cols))
   ()
+  preserves gpu
   requires
-    gpu **
     kpre m input output sx sout fIn gid
   ensures
-    gpu **
     kpost m input output sx fIn gid
 {
   let r_sz : szlt rows = gid /^ cols;

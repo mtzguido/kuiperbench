@@ -441,15 +441,14 @@ fn matmul4d
   (#eB : EMatrix.chest2 t l k)
   (#eC : chest4 t b i j k)
   (#fA #fB : perm)
-  requires
+  preserves
     cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
     pure (eA %~ rA) **
     pure (eB %~ rB) **
     on gpu_loc (gC |-> eC)
   ensures
-    cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
     (exists* (eC' : chest4 t b i j k).
       on gpu_loc (gC |-> eC') **
       pure (eC' %~ ematmul4 rA rB))

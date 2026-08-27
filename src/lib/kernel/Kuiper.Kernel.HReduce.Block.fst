@@ -273,8 +273,8 @@ fn kf_block
   (bid : szlt rows)
   (tid : szlt nth)
   ()
+  preserves gpu
   requires
-    gpu **
     pure (c_shmems_inv shmem) **
     kpre_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid **
     thread_id nth tid **
@@ -283,7 +283,6 @@ fn kf_block
                        (vr_partial pre_map_r (ematrix_row vr bid) nth)) **
     B.barrier_state 0
   ensures
-    gpu **
     kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid **
     thread_id nth tid **
     block_id rows bid **

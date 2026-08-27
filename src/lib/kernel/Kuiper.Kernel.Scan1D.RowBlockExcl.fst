@@ -177,12 +177,11 @@ fn kf
   (#fIn : perm)
   (bid : szlt rows)
   ()
+  preserves gpu
   requires
-    gpu **
     kpre m rows cols input output sx sout fIn bid **
     block_id rows bid
   ensures
-    gpu **
     kpost m rows cols input output sx fIn bid **
     block_id rows bid
 {

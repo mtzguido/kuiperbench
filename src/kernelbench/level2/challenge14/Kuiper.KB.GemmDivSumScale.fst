@@ -21,8 +21,7 @@ ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
   (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -32,8 +31,7 @@ ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
   (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -89,14 +87,13 @@ fn gemm_div_sum_scale_f32_impl
   (#sx  : EM.chest2 f32 batch input)
   (#swt : EM.chest2 f32 input hidden)
   (#sy  : chest1 f32 batch)
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x  |-> sx) **
+    on gpu_loc (wt |-> swt)
   requires
-    on gpu_loc (x  |-> sx)  **
-    on gpu_loc (wt |-> swt) **
     on gpu_loc (y  |-> sy)
   ensures
-    on gpu_loc (x  |-> sx)  **
-    on gpu_loc (wt |-> swt) **
     (exists* (sy' : chest1 f32 batch).
        on gpu_loc (y |-> sy') **
        pure (gdss_post k sx swt sy'))
@@ -158,4 +155,4 @@ fn gemm_div_sum_scale_f32_impl
 }
 #pop-options
 
-let gemm_div_sum_scale_f32 : gemm_div_sum_scale_ty f32 = gemm_div_sum_scale_f32_impl
+let gemm_div_sum_scale_f32 = gemm_div_sum_scale_f32_impl

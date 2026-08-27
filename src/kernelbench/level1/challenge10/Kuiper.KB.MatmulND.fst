@@ -33,8 +33,7 @@ ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
   (a : array2 et lay) (#f : perm) (#s : EMatrix.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -44,8 +43,7 @@ ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
   (a : array2 et lay) (#f : perm) (#s : EMatrix.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -267,16 +265,15 @@ fn matmul_nd
   (#eB : EMatrix.chest2 t k l)
   (#eC : chest3 t n m l)
   (#fA #fB : perm)
-  requires
+  preserves
     cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
     pure (K.size_req (n*m) l k) **
     pure (flat3to2 eA %~ rA) **
     pure (eB %~ rB) **
     on gpu_loc (gC |-> eC)
   ensures
-    cpu **
-    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
     (exists* (eC' : chest3 t n m l).
       on gpu_loc (gC |-> eC') **
       pure (flat3to2 eC' %~ MS.matmul rA rB))

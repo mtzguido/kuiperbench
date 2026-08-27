@@ -29,42 +29,38 @@ val conv2d_square_out_sz
   (l k : szp { SZ.v k <= SZ.v l })
   : Pure SZ.t (requires True) (ensures fun r -> SZ.v r == SZ.v l - SZ.v k + 1)
 
-inline_for_extraction noextract
-type conv2d_square_ty (t:Type0) {| scalar t |} =
-  fn (b cin h_in cout k : szp)
-     (h_out : szp { SZ.v h_out == SZ.v h_in - SZ.v k + 1 /\
-                    conv2d_size_req b cin h_in h_in cout k k 1 h_out h_out })
-     (gx : array1 t (l1_forward (b * cin * h_in * h_in))
-           { is_global gx })
-     (gw : array1 t (l1_forward (cout * cin * k * k))
-           { is_global gw })
-     (gbias : array1 t (l1_forward cout)
-           { is_global gbias })
-     (gy : array1 t (l1_forward (b * cout * h_out * h_out))
-           { is_global gy })
-     (#fx #fw #fb : perm)
-     (#sx : chest1 t (b * cin * h_in * h_in))
-     (#sw : chest1 t (cout * cin * k * k))
-     (#sbias : chest1 t cout)
-     (#sy0 : chest1 t (b * cout * h_out * h_out))
-     requires
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       on gpu_loc (gy |-> sy0)
-     ensures
-       cpu **
-       on gpu_loc (gx |-> Frac fx sx) **
-       on gpu_loc (gw |-> Frac fw sw) **
-       on gpu_loc (gbias |-> Frac fb sbias) **
-       (exists* (sy : chest1 t (b * cout * h_out * h_out)).
-         on gpu_loc (gy |-> sy) **
-         pure (forall (tid : nat{tid < b * cout * h_out * h_out}).
-                 acc1 sy tid ==
-                 conv2d_out_at b cin h_in h_in cout k k 1 0 h_out h_out
-                               sx sw sbias tid))
+fn conv2d_square_f32
+  (b cin h_in cout k : szp)
+  (h_out : szp { SZ.v h_out == SZ.v h_in - SZ.v k + 1 /\
+                 conv2d_size_req b cin h_in h_in cout k k 1 h_out h_out })
+  (gx : array1 f32 (l1_forward (b * cin * h_in * h_in))
+        { is_global gx })
+  (gw : array1 f32 (l1_forward (cout * cin * k * k))
+        { is_global gw })
+  (gbias : array1 f32 (l1_forward cout)
+        { is_global gbias })
+  (gy : array1 f32 (l1_forward (b * cout * h_out * h_out))
+        { is_global gy })
+  (#fx #fw #fb : perm)
+  (#sx : chest1 f32 (b * cin * h_in * h_in))
+  (#sw : chest1 f32 (cout * cin * k * k))
+  (#sbias : chest1 f32 cout)
+  (#sy0 : chest1 f32 (b * cout * h_out * h_out))
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  requires
+    on gpu_loc (gy |-> sy0)
+  ensures
+    (exists* (sy : chest1 f32 (b * cout * h_out * h_out)).
+      on gpu_loc (gy |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * h_out * h_out}).
+              acc1 sy tid ==
+              conv2d_out_at b cin h_in h_in cout k k 1 0 h_out h_out
+                            sx sw sbias tid))
 
-val conv2d_square_f32 : conv2d_square_ty f32
 
 inline_for_extraction let () = ()

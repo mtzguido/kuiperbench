@@ -61,29 +61,25 @@ let ematmul4 (#et:Type) {| Kuiper.scalar et |} (#b #i #j #l #k:nat)
   = mk4 (fun (b_:natlt b) (i_:natlt i) (j_:natlt j) (k_:natlt k) ->
       acc2 (MS.matmul (row_pair_slice a b_ i_) bm) j_ k_)
 
-inline_for_extraction noextract
-type matmul4d_ty (t:Type0) {| floating t, real_like t, floating_real_like t |} =
-  fn (b i j l k : szp)
-     (gA : array4 t (l4_row_major b i j l) { is_global gA })
-     (gB : array2 t (l2_row_major l k)     { is_global gB })
-     (gC : array4 t (l4_row_major b i j k) { is_global gC })
-     (rA : chest4 real b i j l)
-     (rB : EMatrix.chest2 real l k)
-     (#eA : chest4 t b i j l)
-     (#eB : EMatrix.chest2 t l k)
-     (#eC : chest4 t b i j k)
-     (#fA #fB : perm)
-     requires
-       cpu **
-       on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
-       pure (eA %~ rA) **
-       pure (eB %~ rB) **
-       on gpu_loc (gC |-> eC)
-     ensures
-       cpu **
-       on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB) **
-       (exists* (eC' : chest4 t b i j k).
-         on gpu_loc (gC |-> eC') **
-         pure (eC' %~ ematmul4 rA rB))
-
-val matmul4d_f32 : matmul4d_ty f32
+fn matmul4d_f32
+  (b i j l k : szp)
+  (gA : array4 f32 (l4_row_major b i j l) { is_global gA })
+  (gB : array2 f32 (l2_row_major l k)     { is_global gB })
+  (gC : array4 f32 (l4_row_major b i j k) { is_global gC })
+  (rA : chest4 real b i j l)
+  (rB : EMatrix.chest2 real l k)
+  (#eA : chest4 f32 b i j l)
+  (#eB : EMatrix.chest2 f32 l k)
+  (#eC : chest4 f32 b i j k)
+  (#fA #fB : perm)
+  preserves
+    cpu **
+    on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
+    pure (eA %~ rA) **
+    pure (eB %~ rB) **
+    on gpu_loc (gC |-> eC)
+  ensures
+    (exists* (eC' : chest4 f32 b i j k).
+      on gpu_loc (gC |-> eC') **
+      pure (eC' %~ ematmul4 rA rB))

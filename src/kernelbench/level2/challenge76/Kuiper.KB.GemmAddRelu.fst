@@ -19,8 +19,7 @@ ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
   (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -30,8 +29,7 @@ ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
   (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  requires on gpu_loc (a |-> Frac f s)
-  ensures  on gpu_loc (a |-> Frac f s)
+  preserves on gpu_loc (a |-> Frac f s)
 {
   rewrite (on gpu_loc (a |-> Frac f s))
        as (on gpu_loc (a |-> Frac f s));
@@ -78,16 +76,14 @@ fn gemm_add_relu_f32_impl
   (#swt  : EM.chest2 f32 input out)
   (#sbias: chest1 f32 out)
   (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x    |-> sx) **
+    on gpu_loc (wt   |-> swt) **
+    on gpu_loc (bias |-> sbias)
   requires
-    on gpu_loc (x    |-> sx)   **
-    on gpu_loc (wt   |-> swt)  **
-    on gpu_loc (bias |-> sbias)**
     on gpu_loc (y    |-> sy)
   ensures
-    on gpu_loc (x    |-> sx)   **
-    on gpu_loc (wt   |-> swt)  **
-    on gpu_loc (bias |-> sbias)**
     (exists* (sy' : chest1 f32 (SZ.v batch * SZ.v out)).
        on gpu_loc (y |-> sy') **
        pure (gemm_add_relu_post sx swt sbias sy'))
@@ -136,4 +132,4 @@ fn gemm_add_relu_f32_impl
 }
 #pop-options
 
-let gemm_add_relu_f32 : gemm_add_relu_ty f32 = gemm_add_relu_f32_impl
+let gemm_add_relu_f32 = gemm_add_relu_f32_impl

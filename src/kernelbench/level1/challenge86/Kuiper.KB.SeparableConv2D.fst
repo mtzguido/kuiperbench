@@ -263,7 +263,7 @@ fn separable_alloc
   (#sbias_dw : chest1 f32 c)
   (#sw_pw : chest1 f32 (cout * c * 1 * 1))
   (#sbias_pw : chest1 f32 cout)
-  requires
+  preserves
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
@@ -272,12 +272,6 @@ fn separable_alloc
     on gpu_loc (gbias_pw |-> Frac fbp sbias_pw)
   returns gy : array1 f32 (l1_forward (b * cout * h_out * w_out))
   ensures
-    cpu **
-    on gpu_loc (gx |-> Frac fx sx) **
-    on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
-    on gpu_loc (gbias_dw |-> Frac fbd sbias_dw) **
-    on gpu_loc (gw_pw |-> Frac fwp sw_pw) **
-    on gpu_loc (gbias_pw |-> Frac fbp sbias_pw) **
     (exists* (sy : chest1 f32 (b * cout * h_out * w_out)).
        on gpu_loc (gy |-> sy) **
        pure (forall (tid : nat{tid < b * cout * h_out * w_out}).
@@ -313,7 +307,7 @@ fn separable_alloc
   gy
 }
 
-let separable_alloc_f32 : separable_alloc_ty =
+let separable_alloc_f32 =
   fun b c h_in w_in kh kw stride pad cout h_out w_out
       gx gw_dw gbias_dw gw_pw gbias_pw
       #fx #fwd #fbd #fwp #fbp #sx #sw_dw #sbias_dw #sw_pw #sbias_pw ->

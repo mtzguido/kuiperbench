@@ -148,11 +148,10 @@ fn kf_batched_min
   (gid : szlt rows)
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre_batched_min rows cols x output sx sout gid
   ensures
-    gpu **
     kpost_batched_min rows cols x output sx sout gid
 {
   unfold kpre_batched_min rows cols x output sx sout gid;
@@ -311,12 +310,12 @@ fn reduce_batched_min_f32
   (output : array1 f32 lout { is_global output })
   (#sx   : EM.chest2 f32 rows cols)
   (#sout : chest1 f32 rows)
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> sout)
   ensures
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows_fmin sx))
 {
   launch_sync (kdesc_batched_min rows cols x output #sx #sout);

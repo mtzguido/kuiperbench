@@ -294,11 +294,10 @@ fn kf_batched_argmin
   (gid : szlt rows)
   ()
   norewrite
+  preserves gpu
   requires
-    gpu **
     kpre_batched_argmin rows cols x output sx sout gid
   ensures
-    gpu **
     kpost_batched_argmin rows cols x output sx sout gid
 {
   unfold kpre_batched_argmin rows cols x output sx sout gid;
@@ -478,12 +477,12 @@ fn reduce_batched_argmin_f32
   (output : array1 i64 lout { is_global output })
   (#sx   : EM.chest2 f32 rows cols)
   (#sout : chest1 i64 rows)
-  preserves cpu
+  preserves
+    cpu **
+    on gpu_loc (x |-> sx)
   requires
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> sout)
   ensures
-    on gpu_loc (x |-> sx) **
     on gpu_loc (output |-> seq_to_chest1 (seq_reduce_rows_argmin cols sx))
 {
   launch_sync (kdesc_batched_argmin rows cols x output #sx #sout);

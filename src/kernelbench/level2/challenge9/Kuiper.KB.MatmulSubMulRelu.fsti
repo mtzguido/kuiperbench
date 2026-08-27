@@ -48,36 +48,30 @@ let matmul_sub_mul_relu_post
       acc1 sy' (i * out + j) ==
         relu (mul (sub (add (acc2 (MS.matmul sx swt) i j) (acc1 sbias j)) sub_v) mul_v)
 
-inline_for_extraction noextract
-type matmul_sub_mul_relu_ty (t:Type0) {| floating t |} =
-  fn (batch input : szp)
-     (out : szp {
-        SZ.v batch * SZ.v out <= max_blocks * max_threads /\
-        SZ.fits (SZ.v batch * SZ.v input) /\
-        SZ.fits (SZ.v input * SZ.v out) /\
-        SZ.fits (SZ.v batch * SZ.v out) })
-     (sub_v mul_v : t)
-     (x    : array2 t (l2_row_major batch input) { is_global x    })
-     (wt   : array2 t (l2_row_major input out)   { is_global wt   })
-     (bias : array1 t (l1_forward out)                  { is_global bias })
-     (y    : array1 t (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-     (#sx   : EM.chest2 t batch input)
-     (#swt  : EM.chest2 t input out)
-     (#sbias: chest1 t out)
-     (#sy   : chest1 t (SZ.v batch * SZ.v out))
-     requires
-       cpu **
-       on gpu_loc (x    |-> sx)   **
-       on gpu_loc (wt   |-> swt)  **
-       on gpu_loc (bias |-> sbias)**
-       on gpu_loc (y    |-> sy)
-     ensures
-       cpu **
-       on gpu_loc (x    |-> sx)   **
-       on gpu_loc (wt   |-> swt)  **
-       on gpu_loc (bias |-> sbias)**
-       (exists* (sy' : chest1 t (SZ.v batch * SZ.v out)).
-          on gpu_loc (y |-> sy') **
-          pure (matmul_sub_mul_relu_post sub_v mul_v sx swt sbias sy'))
-
-val matmul_sub_mul_relu_f32 : matmul_sub_mul_relu_ty f32
+fn matmul_sub_mul_relu_f32
+  (batch input : szp)
+  (out : szp {
+     SZ.v batch * SZ.v out <= max_blocks * max_threads /\
+     SZ.fits (SZ.v batch * SZ.v input) /\
+     SZ.fits (SZ.v input * SZ.v out) /\
+     SZ.fits (SZ.v batch * SZ.v out) })
+  (sub_v mul_v : f32)
+  (x    : array2 f32 (l2_row_major batch input) { is_global x    })
+  (wt   : array2 f32 (l2_row_major input out)   { is_global wt   })
+  (bias : array1 f32 (l1_forward out)                  { is_global bias })
+  (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
+  (#sx   : EM.chest2 f32 batch input)
+  (#swt  : EM.chest2 f32 input out)
+  (#sbias: chest1 f32 out)
+  (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
+  preserves
+    cpu **
+    on gpu_loc (x    |-> sx) **
+    on gpu_loc (wt   |-> swt) **
+    on gpu_loc (bias |-> sbias)
+  requires
+    on gpu_loc (y    |-> sy)
+  ensures
+    (exists* (sy' : chest1 f32 (SZ.v batch * SZ.v out)).
+       on gpu_loc (y |-> sy') **
+       pure (matmul_sub_mul_relu_post sub_v mul_v sx swt sbias sy'))
