@@ -23,32 +23,6 @@ open Kuiper.Injection
 open Kuiper.Shape
 open Kuiper.Bijection
 
-(* Bridges between flat array2 ownership and its zero-cost rank-2 tensor view,
-   required to feed the (tensor-based) Naive3 GEMM API while keeping the rest
-   of the proof array2-based.  Mirror of
-   [Kuiper.KB.GemmDivSumScale.bridge_fwd/bwd].  Both are [ghost] and
-   [as_tensor] is [inline_for_extraction noextract], so no extracted CUDA
-   changes. *)
-ghost
-fn bridge_fwd
-  (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
-  (a : array2 et lay) (#f : perm) (#s : EMatrix.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
-ghost
-fn bridge_bwd
-  (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
-  (a : array2 et lay) (#f : perm) (#s : EMatrix.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
 
 (* ----------------------------------------------------------------------- *)
 (* Reshape lemmas (moved from Scratch.Reshape — these verify clean and      *)
@@ -295,11 +269,7 @@ fn matmul_nd
   (* on gpu_loc (gC2 |-> Frac 1.0 (flat3to2 eC)) *)
 
   (* 3. Run the layout-polymorphic Naive3 GEMM on the flattened operands.
-        Preserves gA2, gB; turns gC2 into the matmul result.
-        Bridge Array2 ownership into tensor ownership for the GEMM API. *)
-  bridge_fwd (from_array (l2_row_major pnm k) (core gA));
-  bridge_fwd gB;
-  bridge_fwd (from_array (l2_row_major pnm l) (core gC));
+        Preserves gA2, gB; turns gC2 into the matmul result. *)
   Klas3.spec t l2_row_major l2_row_major l2_row_major nm l k
     ((from_array (l2_row_major pnm k) (core gA)))
     (gB)
@@ -308,9 +278,6 @@ fn matmul_nd
   with eGemm.
     assert on gpu_loc
       ((from_array (l2_row_major pnm l) (core gC)) |-> eGemm);
-  bridge_bwd (from_array (l2_row_major pnm k) (core gA));
-  bridge_bwd gB;
-  bridge_bwd (from_array (l2_row_major pnm l) (core gC));
   (* context hyp:  eGemm %~ MS.matmul rA rB   (at the [pnm] row dimension) *)
 
   (* 4. Backward-reshape gA2 -> gA (recover gA |-> eA). *)

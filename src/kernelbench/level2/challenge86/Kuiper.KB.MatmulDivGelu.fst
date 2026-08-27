@@ -12,29 +12,6 @@ module Map = Kuiper.Kernel.Map
 module BA = Kuiper.Kernel.BiasAdd
 module P = Kuiper.Kernel.GEMM.Naive2
 
-(* Bridges between flat array2 ownership and its zero-cost rank-2 tensor view,
-   required to feed the (tensor-based) GEMM API while keeping the rest of the
-   proof array2-based. *)
-ghost
-fn bridge_fwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
-ghost
-fn bridge_bwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
 (* Per-(i,j) discharge of [matmul_div_gelu_post].  Given the EXACT bias-add
    per-element fact for the flat index [i*out+j], the pointwise [div_gelu
    divisor] map yields the desired float expression.  [bias_add_at_ij]
@@ -96,9 +73,6 @@ fn matmul_div_gelu_f32_impl
   (* Scratch GEMM output: gC = x @ wt  (batch × out). *)
   let gC = alloc0 #f32 (batch *^ out) (l2_row_major batch out);
   with sc0. assert on gpu_loc (gC |-> sc0);
-  bridge_fwd x;
-  bridge_fwd wt;
-  bridge_fwd gC;
 
   (* Launch 1: exact GEMM.  comb2 ignores the old gC value, so the result is
      exactly [matmul sx swt] (matmul_is_gemm SMTPat). *)
@@ -106,9 +80,6 @@ fn matmul_div_gelu_f32_impl
     #batch #out #input
     (x) (wt) (gC);
   with eC'. assert on gpu_loc (gC |-> eC');
-  bridge_bwd x;
-  bridge_bwd wt;
-  bridge_bwd gC;
   assert pure (reveal eC' == MS.matmul (reveal sx) (reveal swt));
 
   let mm : EM.chest2 f32 batch out =

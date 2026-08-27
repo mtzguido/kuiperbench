@@ -14,29 +14,6 @@ module HRedB = Kuiper.Kernel.HReduce.Block
 module P = Kuiper.Kernel.GEMM.Naive2
 module PApprox = Kuiper.Kernel.GEMM.Naive3
 
-(* Bridges between flat array2 ownership and its zero-cost rank-2 tensor view,
-   required to feed the (tensor-based) GEMM API while keeping the rest of the
-   proof array2-based. *)
-ghost
-fn bridge_fwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
-ghost
-fn bridge_bwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
 (* [lseq_map id s == s], hence the two rsums agree. *)
 let row_simpl
   (#rows #cols : nat)
@@ -114,11 +91,6 @@ fn gemm_div_sum_scale_f32_impl
 
   assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
 
-  (* Bridge Array2 ownership into tensor ownership for the new GEMM API. *)
-  bridge_fwd x;
-  bridge_fwd wt;
-  bridge_fwd gC;
-
   (* Launch 1: GEMM. comb2 ignores the old gC value, so the result is the
      plain real matmul (matmul_is_gemm SMTPat). *)
   PApprox.mmcomb_gpu_approx (MS.comb2 #f32) (MS.comb2 #real)
@@ -126,9 +98,6 @@ fn gemm_div_sum_scale_f32_impl
     (x) (wt) (gC)
     (reveal rA) (reveal rB) (reveal rC);
   with eC'. assert on gpu_loc (gC |-> eC');
-  bridge_bwd x;
-  bridge_bwd wt;
-  bridge_bwd gC;
   assert pure (eC' %~ MS.matmul (reveal rA) (reveal rB));
 
   (* Launch 2: per-row tree reduction (sum over hidden). cols = hidden is

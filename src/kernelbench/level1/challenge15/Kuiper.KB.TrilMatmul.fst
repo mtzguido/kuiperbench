@@ -11,31 +11,6 @@ module MS = Kuiper.Spec.GEMM
 module Tril = Kuiper.Kernel.Tril
 module P = Kuiper.Kernel.GEMM.Naive3
 
-(* Bridges between flat array2 ownership and its zero-cost rank-2 tensor view,
-   required to feed the (tensor-based) GEMM API while keeping the rest of the
-   proof array2-based.  Mirror of [Kuiper.KB.GemmDivSumScale.bridge_fwd/bwd].
-   Both are [ghost] and [as_tensor] is [inline_for_extraction noextract], so
-   no extracted CUDA changes. *)
-ghost
-fn bridge_fwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
-ghost
-fn bridge_bwd
-  (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
-  preserves on gpu_loc (a |-> Frac f s)
-{
-  rewrite (on gpu_loc (a |-> Frac f s))
-       as (on gpu_loc (a |-> Frac f s));
-}
-
 (* Per-(i,j) discharge of [tril_matmul_post].  After the in-place mask the
    output matrix is [s_tril eC'], so entry [(i, j)] is [acc2 eC' i j] on/below
    the diagonal and exactly [zero] above it.  The GEMM's elementwise
@@ -95,19 +70,11 @@ fn tril_matmul_f32_impl
   (* Launch 1: Kahan GEMM straight into the output buffer [y].  comb2 ignores
      the old [y] value, so the result is the plain real matmul
      (matmul_is_gemm SMTPat). *)
-  (* Bridge Array2 ownership into tensor ownership for the new GEMM API. *)
-  bridge_fwd gA;
-  bridge_fwd gB;
-  bridge_fwd y;
-
   P.mmcomb_gpu_approx (MS.comb2 #f32) (MS.comb2 #real)
     #n #n #n
     (gA) (gB) (y)
     (reveal rA) (reveal rB) (reveal rC);
   with eC'. assert on gpu_loc (y |-> eC');
-  bridge_bwd gA;
-  bridge_bwd gB;
-  bridge_bwd y;
   assert pure (reveal eC' %~ MS.matmul (reveal rA) (reveal rB));
 
   (* Launch 2: in-place lower-triangular mask.  [y] now holds [s_tril eC']. *)
