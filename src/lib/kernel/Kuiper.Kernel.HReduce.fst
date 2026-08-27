@@ -777,16 +777,17 @@ fn kf
   ()
   requires
     gpu **
+    pure (c_shmems_inv shmem) **
     kpre pre_map pre_map_r nth lena a va vr out shmem bid tid **
     thread_id nth tid **
-    block_id 1 bid **
+    block_id 1sz bid **
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1) (vr_partial pre_map_r (chest1_to_seq vr) nth)) **
     B.barrier_state 0
   ensures
     gpu **
     kpost pre_map pre_map_r nth lena a va vr out shmem bid tid **
     thread_id nth tid **
-    block_id 1 bid **
+    block_id 1sz bid **
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1) (vr_partial pre_map_r (chest1_to_seq vr) nth)) **
     B.barrier_state (hreduce_barrier_count nth)
 {

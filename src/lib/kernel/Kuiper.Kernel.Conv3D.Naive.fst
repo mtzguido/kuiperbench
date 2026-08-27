@@ -23,6 +23,77 @@ module Seq = FStar.Seq
 module SZ = Kuiper.SizeT
 module Math = FStar.Math.Lemmas
 
+let div_lt_product (x b : nat) (d : pos)
+  : Lemma (requires x < b * d) (ensures x / d < b)
+  = let q = x / d in
+    Math.division_definition x d q;
+    ()
+
+let output_decode_facts
+  (b cout d h w : pos)
+  (tid : natlt (b * cout * d * h * w))
+  (how dhw cdhw : nat)
+  : Lemma
+      (requires
+        how == h * w /\
+        dhw == d * how /\
+        cdhw == cout * dhw)
+      (ensures
+        cdhw == cout * d * h * w /\
+        tid < b * cdhw)
+  = ()
+
+let named_mul_value
+  (x : sz)
+  (y : sz{FStar.SizeT.fits (SZ.v x * SZ.v y)})
+  (xy : sz)
+  : Lemma
+      (requires xy == SZ.mul x y)
+      (ensures SZ.v xy == SZ.v x * SZ.v y)
+  = ()
+
+let flatten_taps
+  (cin kd kh kw kh_kw kd_kh_kw n_taps : nat)
+  : Lemma
+      (requires
+        kh_kw == kh * kw /\
+        kd_kh_kw == kd * kh_kw /\
+        n_taps == cin * kd_kh_kw)
+      (ensures n_taps == cin * kd * kh * kw)
+  = ()
+
+let flattened_taps_fit
+  (cin kd kh kw kh_kw kd_kh_kw : nat)
+  : Lemma
+      (requires
+        SZ.fits (cin * kd * kh * kw) /\
+        kh_kw == kh * kw /\
+        kd_kh_kw == kd * kh_kw)
+      (ensures SZ.fits (cin * kd_kh_kw))
+  = ()
+
+let unrank3_from_steps
+  (cin kd kh kw : pos)
+  (i : nat { i < cin * kd * kh * kw })
+  (kh_kw kd_kh_kw n_taps ic r kd_i r2 kh_i kw_i : nat)
+  : Lemma
+      (requires
+        kh_kw == kh * kw /\ kd_kh_kw == kd * kh_kw /\
+        n_taps == cin * kd_kh_kw /\
+        ic == i / kd_kh_kw /\ r == i % kd_kh_kw /\
+        kd_i == r / kh_kw /\ r2 == r % kh_kw /\
+        kh_i == r2 / kw /\ kw_i == r2 % kw)
+      (ensures
+        ic == unrank3_ic cin kd kh kw i /\
+        kd_i == unrank3_kd cin kd kh kw i /\
+        kh_i == unrank3_kh cin kd kh kw i /\
+        kw_i == unrank3_kw cin kd kh kw i)
+  = ()
+
+let decreases_after_increment (bound k : nat)
+  : Lemma (requires k < bound) (ensures (bound - (k + 1) < bound - k))
+  = ()
+
 (* [abs (n @| INil)] is definitionally [natlt n & unit]; expose this to the SMT
    solver so that the abstract 1-D tensor index unifies with the explicit
    [(i, ())] tuples produced by reads/writes and [forevery] reindexings. *)
@@ -214,18 +285,6 @@ fn read_w_tap
 
 #push-options "--z3rlimit 50 --fuel 2 --ifuel 1"
 
-(* Expose the body of [unrank3_*] to SMT.  These functions are not
-   tagged [unfold] in [Kuiper.Spec.Conv3D] (their bodies contain
-   [FStar.Math.Lemmas] calls used to discharge the result refinement),
-   so the SMT solver cannot see them directly inside [kf].  This local
-   lemma re-states each one as the underlying div/mod expression. *)
-let unrank3_unfold (cin kd kh kw : pos) (i : nat{i < cin*kd*kh*kw})
-  : Lemma (unrank3_ic cin kd kh kw i == i / (kd*kh*kw) /\
-           unrank3_kd cin kd kh kw i == (i % (kd*kh*kw)) / (kh*kw) /\
-           unrank3_kh cin kd kh kw i == ((i % (kd*kh*kw)) % (kh*kw)) / kw /\
-           unrank3_kw cin kd kh kw i == ((i % (kd*kh*kw)) % (kh*kw)) % kw)
-  = ()
-
 (* Local helper: partial conv3d sum over the linearised
    [(ic, kd_i, kh_i, kw_i)] index up to [to], with all parameters
    explicit and dilation hard-wired to 1 (matching the kernel and
@@ -286,7 +345,7 @@ let conv3d_partial_at_step
 
 #pop-options
 
-#push-options "--z3rlimit 50 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 400 --fuel 2 --ifuel 1"
 
 (* Per-thread conv body: decode tid, run the inner accumulator loop,
    add bias, write to output cell.  The body proves
@@ -340,8 +399,14 @@ fn kf
           #lx #lw #lbias #ly gx gw gbias gy sx sw sbias fx fw fb tid
 {
   let how : sz = h_out *^ w_out;
+  named_mul_value h_out w_out how;
   let dhw : sz = d_out *^ how;
+  named_mul_value d_out how dhw;
   let cdhw : sz = cout *^ dhw;
+  named_mul_value cout dhw cdhw;
+  output_decode_facts (SZ.v b) (SZ.v cout) (SZ.v d_out) (SZ.v h_out)
+    (SZ.v w_out) (SZ.v tid) (SZ.v how) (SZ.v dhw) (SZ.v cdhw);
+  div_lt_product (SZ.v tid) (SZ.v b) (SZ.v cdhw);
   let bi : szlt b = tid /^ cdhw;
   let r1 : szlt cdhw = tid %^ cdhw;
   let oc : szlt cout = r1 /^ dhw;
@@ -352,11 +417,13 @@ fn kf
   let ow : szlt w_out = r3 %^ w_out;
 
   let kh_kw : sz = kh *^ kw;
+  named_mul_value kh kw kh_kw;
   let kd_kh_kw : sz = kd *^ kh_kw;
-  Math.paren_mul_right cin kd (kh * kw);
-  Math.paren_mul_right (cin * kd) kh kw;
-  assert pure (cin * kd * kh * kw == cin * (kd * (kh * kw)));
+  named_mul_value kd kh_kw kd_kh_kw;
+  flattened_taps_fit cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw);
   let n_taps : sz = cin *^ kd_kh_kw;
+  named_mul_value cin kd_kh_kw n_taps;
+  flatten_taps cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw) (SZ.v n_taps);
 
   let od_s : sz = od *^ stride;
   let oh_s : sz = oh *^ stride;
@@ -380,12 +447,29 @@ fn kf
     decreases (cin * kd * kh * kw - SZ.v !k)
   {
     let kk = !k;
+    assert pure (SZ.v kk < cin * SZ.v kd_kh_kw);
+    div_lt_product (SZ.v kk) cin (SZ.v kd_kh_kw);
     let ic : szlt cin = kk /^ kd_kh_kw;
     let r  : szlt kd_kh_kw = kk %^ kd_kh_kw;
+    assert pure (SZ.v r < kd * SZ.v kh_kw);
+    div_lt_product (SZ.v r) kd (SZ.v kh_kw);
     let kd_i : szlt kd = r /^ kh_kw;
     let r2  : szlt kh_kw = r %^ kh_kw;
+    assert pure (SZ.v r2 < kh * kw);
+    div_lt_product (SZ.v r2) kh kw;
     let kh_i : szlt kh = r2 /^ kw;
     let kw_i : szlt kw = r2 %^ kw;
+
+    assert pure (SZ.v kk < cin * kd * kh * kw);
+    assert pure (SZ.v ic == SZ.v kk / SZ.v kd_kh_kw);
+    assert pure (SZ.v r == SZ.v kk % SZ.v kd_kh_kw);
+    assert pure (SZ.v kd_i == SZ.v r / SZ.v kh_kw);
+    assert pure (SZ.v r2 == SZ.v r % SZ.v kh_kw);
+    assert pure (SZ.v kh_i == SZ.v r2 / kw);
+    assert pure (SZ.v kw_i == SZ.v r2 % kw);
+    unrank3_from_steps cin kd kh kw (SZ.v kk) (SZ.v kh_kw)
+      (SZ.v kd_kh_kw) (SZ.v n_taps) (SZ.v ic) (SZ.v r) (SZ.v kd_i)
+      (SZ.v r2) (SZ.v kh_i) (SZ.v kw_i);
 
     let d_signed = od_s +^ kd_i;
     let h_signed = oh_s +^ kh_i;
@@ -395,14 +479,6 @@ fn kf
     let wv = read_w_tap cout cin kd kh kw gw oc ic kd_i kh_i kw_i;
     let prod = mul xv wv;
     let acc0 = !acc;
-
-    Math.paren_mul_right cin kd (kh * kw);
-    Math.paren_mul_right (cin * kd) kh kw;
-    Math.paren_mul_right kd kh kw;
-    assert pure (SZ.v n_taps == cin * kd * kh * kw);
-    assert pure (SZ.v kd_kh_kw == kd * kh * kw);
-    assert pure (SZ.v kh_kw == kh * kw);
-    unrank3_unfold cin kd kh kw (SZ.v kk);
 
     (* Establish the step equation: prod equals the lemma's per-tap product. *)
     assert pure (xv ==
@@ -421,7 +497,10 @@ fn kf
                             sx sw bi oc od oh ow (SZ.v kk + 1);
 
     acc := add acc0 prod;
+    assert pure (SZ.v kk < cin * kd * kh * kw);
+    decreases_after_increment (cin * kd * kh * kw) (SZ.v kk);
     let knew : sz = !k +^ 1sz;
+    assert pure (SZ.v knew == SZ.v kk + 1);
     assert pure (SZ.v knew <= cin * kd * kh * kw);
     k := knew;
   };
