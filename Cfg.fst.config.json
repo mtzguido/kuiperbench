@@ -1,0 +1,10 @@
+{
+  "fstar_exe": "./.kuiper/fstar.sh",
+  "options": [
+    "--query_cache"
+  ],
+  "include_dirs": [
+    "src",
+    "obj"
+  ]
+}
