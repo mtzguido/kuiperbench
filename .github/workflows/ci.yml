@@ -60,6 +60,7 @@ jobs:
         run: |
           make -skj4 dist
           git diff --exit-code -- dist
+          test -z "$(git ls-files --others --exclude-standard -- dist)"
 
   build-kernelbench:
     name: Build KernelBench wrappers (${{ matrix.shard }})
