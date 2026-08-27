@@ -43,7 +43,7 @@ type rmsnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
      (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
      (eps : t)
      (x : array2 t (l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)) { is_global x })
-     (#sx : erased (EM.chest2 t (SZ.v b * SZ.v hw) (SZ.v c)))
+     (#sx : EM.chest2 t (SZ.v b * SZ.v hw) (SZ.v c))
      requires
        cpu **
        on gpu_loc (x |-> sx) **

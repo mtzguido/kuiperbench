@@ -32,7 +32,7 @@ fn tril
   (#lb : layout2 m n) {| ctlayout lb |}
   (b : array2 t lb)
   (#_ : squash (is_global b))
-  (#sb : erased (chest2 t m n))
+  (#sb : chest2 t m n)
   preserves cpu
   requires
     on gpu_loc (b |-> sb)

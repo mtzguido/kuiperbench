@@ -44,8 +44,8 @@ fn maxpool3d_axis_fw
   (input  : array2 t lin  { is_global input  })
   (output : array2 t lout { is_global output })
   (#fIn  : perm)
-  (#sx   : erased (EM.chest2 t (SZ.v bc) (SZ.v l)))
-  (#sout : erased (EM.chest2 t (SZ.v bc) (SZ.v l_out)))
+  (#sx   : EM.chest2 t (SZ.v bc) (SZ.v l))
+  (#sout : EM.chest2 t (SZ.v bc) (SZ.v l_out))
   requires
     cpu **
     on gpu_loc (input  |-> Frac fIn sx) **
@@ -109,7 +109,7 @@ fn maxpool3d_axis_alloc
   (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (input : array2 f32 (l2_row_major bc l) { is_global input })
   (#fIn : perm)
-  (#sx  : erased (EM.chest2 f32 (SZ.v bc) (SZ.v l)))
+  (#sx  : EM.chest2 f32 (SZ.v bc) (SZ.v l))
   requires
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **

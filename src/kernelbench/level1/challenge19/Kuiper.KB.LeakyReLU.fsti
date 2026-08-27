@@ -14,7 +14,7 @@ type leaky_relu_fw_ty (t:Type0) {| floating t |} =
   fn (slope : t)
      (lena : szp { lena <= max_blocks * max_threads })
      (a : array1 t (l1_forward lena) { is_global a })
-     (#s : erased (chest1 t lena))
+     (#s : chest1 t lena)
      preserves cpu
      requires  on gpu_loc (a |-> s)
      ensures   on gpu_loc (a |-> chest_map (leaky_step slope) s)

@@ -91,7 +91,7 @@ fn rmsnorm_fw_f32_impl
   (eps : f32)
   (inv_c : f32)
   (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)) { is_global x })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c)))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c))
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -142,7 +142,7 @@ fn rmsnorm_fw
   (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
   (eps : f32)
   (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)) { is_global x })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c)))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c))
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **

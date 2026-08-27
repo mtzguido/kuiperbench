@@ -50,8 +50,8 @@ fn avgpool1d_fw
   (input  : array2 t lin  { is_global input  })
   (output : array2 t lout { is_global output })
   (#fIn  : perm)
-  (#sx   : erased (EM.chest2 t (SZ.v bc) (SZ.v l)))
-  (#sout : erased (EM.chest2 t (SZ.v bc) (SZ.v l_out)))
+  (#sx   : EM.chest2 t (SZ.v bc) (SZ.v l))
+  (#sout : EM.chest2 t (SZ.v bc) (SZ.v l_out))
   requires
     cpu **
     on gpu_loc (input  |-> Frac fIn sx) **
@@ -235,7 +235,7 @@ fn avgpool1d_alloc
   (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (input : array2 f32 (l2_row_major bc l) { is_global input })
   (#fIn : perm)
-  (#sx  : erased (EM.chest2 f32 (SZ.v bc) (SZ.v l)))
+  (#sx  : EM.chest2 f32 (SZ.v bc) (SZ.v l))
   requires
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **
@@ -269,7 +269,7 @@ fn avgpool1d_alloc
   let n : szp = bc *^ l_out;
   assert pure (SZ.v n == SZ.v bc * SZ.v l_out);
   let pp : erased nat = SZ.v n;
-  let wr : erased (EM.chest2 f32 (SZ.v bc) (SZ.v l_out)) =
+  let wr : EM.chest2 f32 (SZ.v bc) (SZ.v l_out) =
     hide (windowreduce_result cmonoid_fadd_f32 sx
             (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out));
   (* View the row-major output buffer as a flat array1 over the same store. *)

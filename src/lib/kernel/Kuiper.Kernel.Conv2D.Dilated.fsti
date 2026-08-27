@@ -91,10 +91,10 @@ fn conv2d_dilated_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*h_out*w_out)))
+  (#sx : chest1 et (b*cin*h_in*w_in))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*h_out*w_out))
   (#fx #fw #fb : perm)
   requires
     cpu **

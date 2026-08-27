@@ -58,9 +58,9 @@ type gemm_div_sum_scale_ty (t:Type0) {| scalar t, real_like t |} =
      (x  : array2 t (l2_row_major (SZ.v batch) (SZ.v input))  { is_global x  })
      (wt : array2 t (l2_row_major (SZ.v input) (SZ.v hidden)) { is_global wt })
      (y  : array1 t (l1_forward (SZ.v batch))                 { is_global y  })
-     (#sx  : erased (EM.chest2 t (SZ.v batch) (SZ.v input)))
-     (#swt : erased (EM.chest2 t (SZ.v input) (SZ.v hidden)))
-     (#sy  : erased (chest1 t (SZ.v batch)))
+     (#sx  : EM.chest2 t (SZ.v batch) (SZ.v input))
+     (#swt : EM.chest2 t (SZ.v input) (SZ.v hidden))
+     (#sy  : chest1 t (SZ.v batch))
      requires
        cpu **
        on gpu_loc (x  |-> sx)  **

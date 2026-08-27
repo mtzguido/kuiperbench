@@ -44,8 +44,8 @@ fn maxpool1d_fw
   (input  : array2 t lin  { is_global input  })
   (output : array2 t lout { is_global output })
   (#fIn  : perm)
-  (#sx   : erased (EM.chest2 t (SZ.v bc) (SZ.v l)))
-  (#sout : erased (EM.chest2 t (SZ.v bc) (SZ.v l_out)))
+  (#sx   : EM.chest2 t (SZ.v bc) (SZ.v l))
+  (#sout : EM.chest2 t (SZ.v bc) (SZ.v l_out))
   requires
     cpu **
     on gpu_loc (input  |-> Frac fIn sx) **
@@ -111,7 +111,7 @@ fn maxpool1d_alloc
   (k s p d : szp)
   (input : array2 f32 (l2_row_major (b *^ c) l) { is_global input })
   (#fIn : perm)
-  (#sx  : erased (EM.chest2 f32 (SZ.v (b *^ c)) (SZ.v l)))
+  (#sx  : EM.chest2 f32 (SZ.v (b *^ c)) (SZ.v l))
   requires
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **

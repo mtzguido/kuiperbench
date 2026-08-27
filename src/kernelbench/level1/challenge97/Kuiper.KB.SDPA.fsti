@@ -72,11 +72,11 @@ type sdpa_ty (t:Type0) {| floating t, real_like t, floating_real_like t |} =
      (gV  : array3 t (l3_batched_row_major bh s d) { is_global gV })
      (gScores : array3 t (l3_batched_row_major bh s s) { is_global gScores })
      (gOut : array3 t (l3_batched_row_major bh s d) { is_global gOut })
-     (#sQ  : erased (chest3 t bh s d))
-     (#sKT : erased (chest3 t bh d s))
-     (#sV  : erased (chest3 t bh s d))
-     (#sScores0 : erased (chest3 t bh s s))
-     (#sOut0 : erased (chest3 t bh s d))
+     (#sQ  : chest3 t bh s d)
+     (#sKT : chest3 t bh d s)
+     (#sV  : chest3 t bh s d)
+     (#sScores0 : chest3 t bh s s)
+     (#sOut0 : chest3 t bh s d)
      (#fQ #fKT #fV : perm)
      requires
        cpu **

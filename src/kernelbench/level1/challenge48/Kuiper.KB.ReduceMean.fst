@@ -83,8 +83,8 @@ fn reduce_mean_fw_f32_impl
   (inv_d : f32)
   (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d)))
-  (#sy : erased (chest1 f32 (SZ.v b * SZ.v m)))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d))
+  (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -98,10 +98,10 @@ fn reduce_mean_fw_f32_impl
   (* Build the real-valued ghost chest2 and the sx %~ vr witness. *)
   let bm : szp = b *^ m;
   assert pure (SZ.v bm == SZ.v b * SZ.v m);
-  let vr : erased (EM.chest2 real (SZ.v b * SZ.v m) (SZ.v d)) =
+  let vr : EM.chest2 real (SZ.v b * SZ.v m) (SZ.v d) =
     hide (EM.to_real_matrix (reveal sx));
   assert pure (reveal sx %~ reveal vr);
-  let vr' : erased (EM.chest2 real (SZ.v bm) (SZ.v d)) = vr;
+  let vr' : EM.chest2 real (SZ.v bm) (SZ.v d) = vr;
 
   (* Launch 1: row-wise tree reduction (identity pre_map). *)
   HRedB.reduce_batched_block #f32 id id bm d 1024sz

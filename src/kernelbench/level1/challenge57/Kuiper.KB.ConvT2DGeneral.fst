@@ -59,10 +59,10 @@ fn convt2d_general_impl
   (gy : array1 et (l1_forward (b * cout * h_out * w_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * h_in * w_in)))
-  (#sw_l : erased (chest1 et (cin * cout * kh * kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * h_out * w_out)))
+  (#sx : chest1 et (b * cin * h_in * w_in))
+  (#sw_l : chest1 et (cin * cout * kh * kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * h_out * w_out))
   norewrite
   requires
     cpu **
@@ -109,9 +109,9 @@ fn convt2d_general_alloc
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 f32 (b * cin * h_in * w_in)))
-  (#sw_l : erased (chest1 f32 (cin * cout * kh * kw)))
-  (#sbias : erased (chest1 f32 cout))
+  (#sx : chest1 f32 (b * cin * h_in * w_in))
+  (#sw_l : chest1 f32 (cin * cout * kh * kw))
+  (#sbias : chest1 f32 cout)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

@@ -111,8 +111,8 @@ type windowreduce_ty =
      (#lout : layout2 (SZ.v rows) (SZ.v l_out)) {| ctlayout lout |}
      (input  : array2 et lin  { is_global input  })
      (output : array2 et lout { is_global output })
-     (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v l)))
-     (#sout : erased (EM.chest2 et (SZ.v rows) (SZ.v l_out)))
+     (#sx   : EM.chest2 et (SZ.v rows) (SZ.v l))
+     (#sout : EM.chest2 et (SZ.v rows) (SZ.v l_out))
      (#fIn  : perm)
      preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
      requires

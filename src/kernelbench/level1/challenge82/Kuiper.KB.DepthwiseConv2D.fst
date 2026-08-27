@@ -51,10 +51,10 @@ fn dwconv2d_impl
   (gy : array1 et (l1_forward (b * c * h_out * w_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * c * h_in * w_in)))
-  (#sw : erased (chest1 et (c * 1 * kh * kw)))
-  (#sbias : erased (chest1 et c))
-  (#sy0 : erased (chest1 et (b * c * h_out * w_out)))
+  (#sx : chest1 et (b * c * h_in * w_in))
+  (#sw : chest1 et (c * 1 * kh * kw))
+  (#sbias : chest1 et c)
+  (#sy0 : chest1 et (b * c * h_out * w_out))
   norewrite
   requires
     cpu **
@@ -101,9 +101,9 @@ fn dwconv2d_alloc
   (gbias : array1 f32 (l1_forward c)
         { is_global gbias })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
-  (#sw : erased (chest1 f32 (c * 1 * kh * kw)))
-  (#sbias : erased (chest1 f32 c))
+  (#sx : chest1 f32 (b * c * h_in * w_in))
+  (#sw : chest1 f32 (c * 1 * kh * kw))
+  (#sbias : chest1 f32 c)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

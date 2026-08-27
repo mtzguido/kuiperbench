@@ -54,10 +54,10 @@ type dwconv2d_ty (t:Type0) {| scalar t |} =
      (gy : array1 t (l1_forward (b * c * h_out * w_out))
            { is_global gy })
      (#fx #fw #fb : perm)
-     (#sx : erased (chest1 t (b * c * h_in * w_in)))
-     (#sw : erased (chest1 t (c * 1 * kh * kw)))
-     (#sbias : erased (chest1 t c))
-     (#sy0 : erased (chest1 t (b * c * h_out * w_out)))
+     (#sx : chest1 t (b * c * h_in * w_in))
+     (#sw : chest1 t (c * 1 * kh * kw))
+     (#sbias : chest1 t c)
+     (#sy0 : chest1 t (b * c * h_out * w_out))
      requires
        cpu **
        on gpu_loc (gx |-> Frac fx sx) **
@@ -99,9 +99,9 @@ type dwconv2d_alloc_ty =
   (gbias : array1 f32 (l1_forward c)
         { is_global gbias })
   (#fx #fw #fb : perm)
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
-  (#sw : erased (chest1 f32 (c * 1 * kh * kw)))
-  (#sbias : erased (chest1 f32 c))
+  (#sx : chest1 f32 (b * c * h_in * w_in))
+  (#sw : chest1 f32 (c * 1 * kh * kw))
+  (#sbias : chest1 f32 c)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

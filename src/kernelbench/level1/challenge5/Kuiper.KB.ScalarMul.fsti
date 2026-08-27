@@ -10,7 +10,7 @@ type smul_fw_ty (t:Type0) {| scalar t |} =
   fn (c : t)
      (lena : szp { lena <= max_blocks * max_threads })
      (a : array1 t (l1_forward lena) { is_global a })
-     (#s : erased (chest1 t lena))
+     (#s : chest1 t lena)
      preserves cpu
      requires  on gpu_loc (a |-> s)
      ensures   on gpu_loc (a |-> chest_map (mul c) s)
@@ -30,7 +30,7 @@ type smul_out_ty (t:Type0) {| scalar t |} =
      (lena : szp { lena <= max_blocks * max_threads })
      (c : array1 t (l1_forward lena) { is_global c })
      (a : array1 t (l1_forward lena) { is_global a })
-     (#sc #sa : erased (chest1 t lena))
+     (#sc #sa : chest1 t lena)
      (#fa : perm)
      preserves cpu ** on gpu_loc (a |-> Frac fa sa)
      requires  on gpu_loc (c |-> sc)

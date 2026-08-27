@@ -464,11 +464,11 @@ fn sdpa
   (gV  : array3 f32 (l3_batched_row_major bh s d) { is_global gV })
   (gScores : array3 f32 (l3_batched_row_major bh s s) { is_global gScores })
   (gOut : array3 f32 (l3_batched_row_major bh s d) { is_global gOut })
-  (#sQ  : erased (chest3 f32 bh s d))
-  (#sKT : erased (chest3 f32 bh d s))
-  (#sV  : erased (chest3 f32 bh s d))
-  (#sScores0 : erased (chest3 f32 bh s s))
-  (#sOut0 : erased (chest3 f32 bh s d))
+  (#sQ  : chest3 f32 bh s d)
+  (#sKT : chest3 f32 bh d s)
+  (#sV  : chest3 f32 bh s d)
+  (#sScores0 : chest3 f32 bh s s)
+  (#sOut0 : chest3 f32 bh s d)
   (#fQ #fKT #fV : perm)
   requires
     cpu **

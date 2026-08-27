@@ -41,8 +41,8 @@ type reduce_mean_fw_ty (t:Type0) {| scalar t, real_like t |} =
      (inv_d : t)
      (x : array2 t (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
      (y : array1 t (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-     (#sx : erased (EM.chest2 t (SZ.v b * SZ.v m) (SZ.v d)))
-     (#sy : erased (chest1 t (SZ.v b * SZ.v m)))
+     (#sx : EM.chest2 t (SZ.v b * SZ.v m) (SZ.v d))
+     (#sy : chest1 t (SZ.v b * SZ.v m))
      requires
        cpu **
        on gpu_loc (x |-> sx) **

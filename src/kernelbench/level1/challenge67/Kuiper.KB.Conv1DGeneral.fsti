@@ -26,10 +26,10 @@ type conv1d_general_ty (t:Type0) {| scalar t |} =
      (gy : array1 t (l1_forward (b * cout * l_out))
            { is_global gy })
      (#fx #fw #fb : perm)
-     (#sx : erased (chest1 t (b * cin * l_in)))
-     (#sw : erased (chest1 t (cout * cin * kk)))
-     (#sbias : erased (chest1 t cout))
-     (#sy0 : erased (chest1 t (b * cout * l_out)))
+     (#sx : chest1 t (b * cin * l_in))
+     (#sw : chest1 t (cout * cin * kk))
+     (#sbias : chest1 t cout)
+     (#sy0 : chest1 t (b * cout * l_out))
      requires
        cpu **
        on gpu_loc (gx |-> Frac fx sx) **

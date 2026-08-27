@@ -134,7 +134,7 @@ fn array1_read_from_slice
   (r : array1 et l)
   (#i #j : erased nat{i <= j /\ j <= len})
   (idx : sz{i <= idx /\ idx < j})
-  (#s : erased (chest1 et (j - i)))
+  (#s : chest1 et (j - i))
   preserves
     array1_pts_to_slice r i j s
   returns
@@ -158,7 +158,7 @@ fn array1_write_to_slice
   (r : array1 et l)
   (#i #j : erased nat{i <= j /\ j <= len})
   (idx : sz{i <= idx /\ idx < j})
-  (#s : erased (chest1 et (j - i)))
+  (#s : chest1 et (j - i))
   (v : et)
   requires
     array1_pts_to_slice r i j s
@@ -168,7 +168,7 @@ fn array1_write_to_slice
   unfold array1_pts_to_slice r i j s;
   forevery_extract' #(x:nat{i <= x /\ x < j}) (SZ.v idx) _;
   tensor_write_cell r ((idx <: szlt len), ()) v;
-  let s' : erased (chest1 et (j - i)) = upd1 s (idx - i) v;
+  let s' : chest1 et (j - i) = upd1 s (idx - i) v;
   Pulse.Lib.Forall.elim_forall
     (fun (x:nat{i <= x /\ x < j}) ->
       tensor_pts_to_cell r ((x <: natlt len), ()) (acc1 s' (x - i)));
@@ -672,8 +672,8 @@ fn sum_stride_map
   (a : array1 et l)
   (stride : szp)
   (off : szlt stride)
-  (#va : erased (chest1 et lena))
-  (vr : erased (chest1 real lena))
+  (#va : chest1 et lena)
+  (vr : chest1 real lena)
   (#f : perm)
   preserves
     gpu ** a |-> Frac f va ** pure (va %~ vr) ** pure (SZ.fits (lena + stride))
@@ -768,8 +768,8 @@ fn kf
   (lena : sz { SZ.fits (lena + nth) })
   (#l : layout1 lena) {| ctlayout l |}
   (a : array1 et l)
-  (va : erased (chest1 et lena))
-  (vr : erased (chest1 real lena) { va %~ vr })
+  (va : chest1 et lena)
+  (vr : chest1 real lena { va %~ vr })
   (out : gpu_ref et)
   (shmem : c_shmems [SHArray et nth])
   (bid : szlt 1sz)
@@ -846,7 +846,7 @@ fn kf
     gpu_write out (array1_read_from_slice sa 0sz);
     with ss. assert array1_pts_to_slice sa 0 nth ss;
     unfold array1_pts_to_slice sa;
-    let css : erased (chest1 et nth) = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
+    let css : chest1 et nth = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
     (* Clean the index refinement [0<=k /\ k<nth] down to [k<nth] (= natlt nth),
        then reindex to the abstract tensor index and implode. *)
     forevery_refine_ext' #nat #(fun (k:nat) -> 0 <= k /\ k < nth) (fun (k:nat) -> k < nth) _;
@@ -1169,7 +1169,7 @@ let kpre_batched
   (#lout : layout1 (SZ.v rows))
   (x      : array2 et lin)
   (output : array1 et lout)
-  (sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (sout : chest1 et (SZ.v rows))
   (r : natlt (SZ.v rows))
   : slprop
@@ -1186,7 +1186,7 @@ let kpost_batched
   (#lout : layout1 (SZ.v rows))
   (x      : array2 et lin)
   (output : array1 et lout)
-  (sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (sout : chest1 et (SZ.v rows))
   (r : natlt (SZ.v rows))
   : slprop
@@ -1206,7 +1206,7 @@ fn kf_batched
   (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (#sout : chest1 et (SZ.v rows))
   (gid : szlt rows)
   ()
@@ -1264,7 +1264,7 @@ fn setup_batched
   (#lout : layout1 (SZ.v rows))
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (#sout : chest1 et (SZ.v rows))
   ()
   norewrite
@@ -1310,7 +1310,7 @@ fn teardown_batched
   (#lout : layout1 (SZ.v rows))
   (x      : array2 et lin)
   (output : array1 et lout)
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (#sout : chest1 et (SZ.v rows))
   ()
   norewrite
@@ -1336,7 +1336,7 @@ fn teardown_batched
   tensor_gather_n x (SZ.v rows);
 
   (* Rewrite output cells to use sout'. *)
-  let sout' : erased (chest1 et (SZ.v rows)) = hide (seq_to_chest1 (seq_reduce_rows pre_map sx));
+  let sout' : chest1 et (SZ.v rows) = hide (seq_to_chest1 (seq_reduce_rows pre_map sx));
   forevery_ext #(natlt (SZ.v rows))
     (fun (r : natlt (SZ.v rows)) -> Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_reduce pre_map sx r)
     (fun (r : natlt (SZ.v rows)) -> Cell output (abs_bij.gg r) |-> acc (reveal sout') (abs_bij.gg r));
@@ -1362,7 +1362,7 @@ let kdesc_batched
   (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (#sout : chest1 et (SZ.v rows))
   : kernel_desc
       (x |-> sx ** output |-> sout)
@@ -1392,7 +1392,7 @@ fn reduce_batched
   (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
   (x      : array2 et lin  { is_global x      })
   (output : array1 et lout { is_global output })
-  (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
   (#sout : chest1 et (SZ.v rows))
   preserves cpu
   requires

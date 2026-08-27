@@ -80,8 +80,8 @@ fn cumsum_fw_f32_impl
             { is_global input  })
   (output : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
             { is_global output })
-  (#sx  : erased (EM.chest2 f32 (SZ.v b) (SZ.v d)))
-  (#sy0 : erased (EM.chest2 f32 (SZ.v b) (SZ.v d)))
+  (#sx  : EM.chest2 f32 (SZ.v b) (SZ.v d))
+  (#sy0 : EM.chest2 f32 (SZ.v b) (SZ.v d))
   requires
     cpu **
     on gpu_loc (input  |-> sx) **

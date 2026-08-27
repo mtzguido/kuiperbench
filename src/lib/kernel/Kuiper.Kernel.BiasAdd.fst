@@ -102,9 +102,9 @@ fn kf
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
-  (#sy0 : erased (chest1 t (m * n)))
+  (#eC : EM.chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (m * n))
   (#fc #fb : perm)
   (#_ : squash (SZ.fits (m * n)))
   (tid : szlt (m * n))
@@ -139,9 +139,9 @@ fn bias_add_setup
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
-  (#sy0 : erased (chest1 t (m * n)))
+  (#eC : EM.chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (m * n))
   (#fc #fb : perm)
   (#_ : squash (SZ.fits (m * n)))
   ()
@@ -194,8 +194,8 @@ fn bias_add_teardown
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
+  (#eC : EM.chest2 t m n)
+  (#sbias : chest1 t n)
   (#fc #fb : perm)
   (#_ : squash (SZ.fits (m * n)))
   ()
@@ -227,7 +227,7 @@ fn bias_add_teardown
        Cell gy (idx1 i) |-> bias_add_at m n eC sbias i);
   tensor_gather_n gC (m * n);
   tensor_gather_n gbias (m * n);
-  let sy : erased (chest1 t (m * n)) =
+  let sy : chest1 t (m * n) =
     hide (mk1 #t #(m * n)
             (fun (tid : natlt (m * n)) -> bias_add_at m n eC sbias tid));
   forevery_ext
@@ -262,9 +262,9 @@ let kdesc
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t m n))
-  (#sbias : erased (chest1 t n))
-  (#sy0 : erased (chest1 t (m * n)))
+  (#eC : EM.chest2 t m n)
+  (#sbias : chest1 t n)
+  (#sy0 : chest1 t (m * n))
   (#fc #fb : perm)
   (#_ : squash (is_global gC /\ is_global gbias /\
                 is_global gy /\
@@ -304,9 +304,9 @@ fn bias_add_gpu
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t (SZ.v m) (SZ.v n)))
-  (#sbias : erased (chest1 t (SZ.v n)))
-  (#sy0 : erased (chest1 t (SZ.v m * SZ.v n)))
+  (#eC : EM.chest2 t (SZ.v m) (SZ.v n))
+  (#sbias : chest1 t (SZ.v n))
+  (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
   preserves cpu
   requires
@@ -331,9 +331,9 @@ fn bias_add_f32
   (gC : array2 f32 (l2_row_major (SZ.v m) (SZ.v n)) { is_global gC })
   (gbias : array1 f32 (l1_forward (SZ.v n)) { is_global gbias })
   (gy : array1 f32 (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
-  (#eC : erased (EM.chest2 f32 (SZ.v m) (SZ.v n)))
-  (#sbias : erased (chest1 f32 (SZ.v n)))
-  (#sy0 : erased (chest1 f32 (SZ.v m * SZ.v n)))
+  (#eC : EM.chest2 f32 (SZ.v m) (SZ.v n))
+  (#sbias : chest1 f32 (SZ.v n))
+  (#sy0 : chest1 f32 (SZ.v m * SZ.v n))
   (#fc #fb : perm)
   preserves cpu
   requires

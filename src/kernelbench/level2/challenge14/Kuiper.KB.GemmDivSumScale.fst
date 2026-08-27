@@ -20,7 +20,7 @@ module PApprox = Kuiper.Kernel.GEMM.Naive3
 ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
+  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -31,7 +31,7 @@ fn bridge_fwd
 ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
+  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -86,9 +86,9 @@ fn gemm_div_sum_scale_f32_impl
   (x  : array2 f32 (l2_row_major (SZ.v batch) (SZ.v input))  { is_global x  })
   (wt : array2 f32 (l2_row_major (SZ.v input) (SZ.v hidden)) { is_global wt })
   (y  : array1 f32 (l1_forward (SZ.v batch))                 { is_global y  })
-  (#sx  : erased (EM.chest2 f32 (SZ.v batch) (SZ.v input)))
-  (#swt : erased (EM.chest2 f32 (SZ.v input) (SZ.v hidden)))
-  (#sy  : erased (chest1 f32 (SZ.v batch)))
+  (#sx  : EM.chest2 f32 (SZ.v batch) (SZ.v input))
+  (#swt : EM.chest2 f32 (SZ.v input) (SZ.v hidden))
+  (#sy  : chest1 f32 (SZ.v batch))
   preserves cpu
   requires
     on gpu_loc (x  |-> sx)  **
@@ -108,11 +108,11 @@ fn gemm_div_sum_scale_f32_impl
   with sc0. assert on gpu_loc (gC |-> sc0);
 
   (* Real witnesses for the approximate GEMM spec. *)
-  let rA : erased (EM.chest2 real (SZ.v batch) (SZ.v input))  =
+  let rA : EM.chest2 real (SZ.v batch) (SZ.v input)  =
     hide (EM.to_real_matrix (reveal sx));
-  let rB : erased (EM.chest2 real (SZ.v input) (SZ.v hidden)) =
+  let rB : EM.chest2 real (SZ.v input) (SZ.v hidden) =
     hide (EM.to_real_matrix (reveal swt));
-  let rC : erased (EM.chest2 real (SZ.v batch) (SZ.v hidden)) =
+  let rC : EM.chest2 real (SZ.v batch) (SZ.v hidden) =
     hide (EM.to_real_matrix (reveal sc0));
 
   assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
@@ -136,7 +136,7 @@ fn gemm_div_sum_scale_f32_impl
 
   (* Launch 2: per-row tree reduction (sum over hidden). cols = hidden is
      NOT capped at max_threads in reduce_batched_block; only nth (=1024) is. *)
-  let vr : erased (EM.chest2 real (SZ.v batch) (SZ.v hidden)) =
+  let vr : EM.chest2 real (SZ.v batch) (SZ.v hidden) =
     hide (MS.matmul (reveal rA) (reveal rB));
   HRedB.reduce_batched_block #f32 id id batch hidden 1024sz
     #_ #(c_l2_row_major (SZ.v batch) hidden)

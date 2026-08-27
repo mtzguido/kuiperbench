@@ -37,7 +37,7 @@ type l2norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
              SZ.fits (b * d) /\
              b * d <= max_blocks * max_threads })
   (x : array1 t (l1_forward (b *^ d)) { is_global x })
-  (#s : erased (chest1 t (b *^ d)))
+  (#s : chest1 t (b *^ d))
   preserves cpu
   requires on gpu_loc (x |-> s)
   ensures

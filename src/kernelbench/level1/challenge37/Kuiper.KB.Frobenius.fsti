@@ -42,7 +42,7 @@ inline_for_extraction noextract
 type frobenius_fw_ty (t:Type0) {| floating t, real_like t |} =
   fn (lena : szp { lena <= max_blocks * max_threads })
      (a : array1 t (l1_forward lena) { is_global a })
-     (#s : erased (chest1 t lena))
+     (#s : chest1 t lena)
      requires cpu ** on gpu_loc (a |-> s)
      ensures
        cpu **

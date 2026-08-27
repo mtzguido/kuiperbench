@@ -18,7 +18,7 @@ module P = Kuiper.Kernel.GEMM.Naive2
 ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
+  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -29,7 +29,7 @@ fn bridge_fwd
 ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
+  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -77,10 +77,10 @@ fn matmul_div_gelu_f32_impl
   (wt   : array2 f32 (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
   (bias : array1 f32 (l1_forward (SZ.v out))                  { is_global bias })
   (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-  (#sx   : erased (EM.chest2 f32 (SZ.v batch) (SZ.v input)))
-  (#swt  : erased (EM.chest2 f32 (SZ.v input) (SZ.v out)))
-  (#sbias: erased (chest1 f32 (SZ.v out)))
-  (#sy   : erased (chest1 f32 (SZ.v batch * SZ.v out)))
+  (#sx   : EM.chest2 f32 (SZ.v batch) (SZ.v input))
+  (#swt  : EM.chest2 f32 (SZ.v input) (SZ.v out))
+  (#sbias: chest1 f32 (SZ.v out))
+  (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
   preserves cpu
   requires
     on gpu_loc (x    |-> sx)   **
@@ -115,7 +115,7 @@ fn matmul_div_gelu_f32_impl
   bridge_bwd gC;
   assert pure (reveal eC' == MS.matmul (reveal sx) (reveal swt));
 
-  let mm : erased (EM.chest2 f32 (SZ.v batch) (SZ.v out)) =
+  let mm : EM.chest2 f32 (SZ.v batch) (SZ.v out) =
     hide (MS.matmul (reveal sx) (reveal swt));
   assert pure (eC' == mm);
 

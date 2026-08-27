@@ -52,7 +52,7 @@ type l1norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
   fn (b : szp)
      (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
      (x : array2 t (l2_row_major (SZ.v b) (SZ.v d)) { is_global x })
-     (#sx : erased (EM.chest2 t (SZ.v b) (SZ.v d)))
+     (#sx : EM.chest2 t (SZ.v b) (SZ.v d))
      requires
        cpu **
        on gpu_loc (x |-> sx) **

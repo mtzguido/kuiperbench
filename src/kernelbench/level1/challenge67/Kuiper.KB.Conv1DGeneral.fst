@@ -23,10 +23,10 @@ fn conv1d_general_impl
   (gy : array1 et (l1_forward (b * cout * l_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * l_in)))
-  (#sw : erased (chest1 et (cout * cin * kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * l_out)))
+  (#sx : chest1 et (b * cin * l_in))
+  (#sw : chest1 et (cout * cin * kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * l_out))
   norewrite
   requires
     cpu **

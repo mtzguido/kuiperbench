@@ -66,8 +66,8 @@ fn t_memcpy_d2d'
   (src_off : SZ.t)
   (cnt : SZ.t { SZ.v dst_off + SZ.v cnt <= dst_sz /\ SZ.v src_off + SZ.v cnt <= src_sz })
   (#f : perm)
-  (#v : erased (chest1 a src_sz))
-  (#gv : erased (chest1 a dst_sz))
+  (#v : chest1 a src_sz)
+  (#gv : chest1 a dst_sz)
   preserves cpu ** on gpu_loc (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv)
   ensures exists* (s' : chest1 a dst_sz).
@@ -109,7 +109,7 @@ fn t_memcpy_h2d
   (cnt : SZ.t)
   (#f : perm)
   (#v : erased (Seq.seq a))
-  (#gv : erased (chest1 a sz))
+  (#gv : chest1 a sz)
   preserves cpu ** (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv) **
     pure (SZ.v cnt == sz /\ (Vec.length src == sz \/ Seq.length v == reveal sz))
@@ -140,7 +140,7 @@ fn t_read_1
   (i : SZ.t { SZ.v i < sz })
   (dummy : a)
   (#f : perm)
-  (#va : erased (chest1 a sz))
+  (#va : chest1 a sz)
   preserves cpu ** on gpu_loc (arr |-> Frac f va)
   returns x : a
   ensures pure (x == acc1 va (SZ.v i))
@@ -283,8 +283,8 @@ fn ce_loss_impl
   (inv_b : f32)
   (predictions : array1 f32 (l1_forward (b *^ c)) { is_global predictions })
   (targets : array1 SZ.t (l1_forward b) { is_global targets })
-  (#sp : erased (chest1 f32 (b *^ c)))
-  (#stv : erased (chest1 SZ.t b))
+  (#sp : chest1 f32 (b *^ c))
+  (#stv : chest1 SZ.t b)
   (#fp #ft : perm)
   norewrite
   preserves cpu **
@@ -351,7 +351,7 @@ fn ce_loss_impl
     assert pure (chest1_to_seq (reveal sca) == crow (reveal sp_c) (SZ.v c) (SZ.v i));
 
     (* ── verified numerically-stable log-softmax in place ───────── *)
-    let ra : erased (chest1 real (SZ.v c)) = hide (to_real_chest (reveal sca));
+    let ra : chest1 real (SZ.v c) = hide (to_real_chest (reveal sca));
     lemma_to_real_chest_approximates (reveal sca);
     assert pure (reveal sca %~ reveal ra);
     LSM.log_softmax_gpu #f32 1024sz scratch ra;
@@ -397,7 +397,7 @@ fn ce_loss_impl
   with vt_dev_final. assert (on gpu_loc (t_dev |-> reveal vt_dev_final));
   assert pure (chest1_to_seq (reveal vt_dev_final) == reveal vt_loop);
 
-  let vr : erased (chest1 real (SZ.v b)) = hide (to_real_chest (reveal vt_dev_final));
+  let vr : chest1 real (SZ.v b) = hide (to_real_chest (reveal vt_dev_final));
   lemma_to_real_chest_approximates (reveal vt_dev_final);
   let s = HRed.reduce #f32 id id 1024sz b t_dev vr;
   assert pure (equal (chest_map id (reveal vr)) (reveal vr));

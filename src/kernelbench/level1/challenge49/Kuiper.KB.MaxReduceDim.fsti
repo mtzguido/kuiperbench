@@ -40,8 +40,8 @@ fn maxreduce_dim_fw_f32
              SZ.fits (SZ.v d + max_threads) })
   (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : erased (EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d)))
-  (#sy : erased (chest1 f32 (SZ.v b * SZ.v m)))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d))
+  (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires
     on gpu_loc (y |-> sy)

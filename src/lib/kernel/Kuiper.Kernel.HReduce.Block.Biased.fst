@@ -298,9 +298,9 @@ fn kf_block
   (output : array1 et lout)
   (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : erased (chest1 et (SZ.v rows)))
-  (vbias : erased (chest1 real (SZ.v rows)) { sbias %~ vbias })
-  (sout  : erased (chest1 et (SZ.v rows)))
+  (sbias : chest1 et (SZ.v rows))
+  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
+  (sout  : chest1 et (SZ.v rows))
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
   (bid : szlt rows)
@@ -401,7 +401,7 @@ fn kf_block
 
     with ss. assert array1_pts_to_slice sa 0 nth ss;
     unfold array1_pts_to_slice sa;
-    let css : erased (chest1 et nth) = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
+    let css : chest1 et nth = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
     forevery_refine_ext' #nat #(fun (k:nat) -> 0 <= k /\ k < nth) (fun (k:nat) -> k < nth) _;
     forevery_ext
       (fun (k:natlt nth) -> tensor_pts_to_cell sa ((k <: natlt nth), ()) (acc1 ss (k - 0)))
@@ -451,9 +451,9 @@ fn block_setup_block
   (output : array1 et lout)
   (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : erased (chest1 et (SZ.v rows)))
-  (vbias : erased (chest1 real (SZ.v rows)) { sbias %~ vbias })
-  (sout  : erased (chest1 et (SZ.v rows)))
+  (sbias : chest1 et (SZ.v rows))
+  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
+  (sout  : chest1 et (SZ.v rows))
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
   (bid : natlt (SZ.v rows))
@@ -542,9 +542,9 @@ fn block_teardown_block
   (output : array1 et lout)
   (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : erased (chest1 et (SZ.v rows)))
-  (vbias : erased (chest1 real (SZ.v rows)) { sbias %~ vbias })
-  (sout  : erased (chest1 et (SZ.v rows)))
+  (sbias : chest1 et (SZ.v rows))
+  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
+  (sout  : chest1 et (SZ.v rows))
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
   (bid : natlt (SZ.v rows))
@@ -616,9 +616,9 @@ fn setup_block_outer
   (output : array1 et lout)
   (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : erased (chest1 et (SZ.v rows)))
-  (vbias : erased (chest1 real (SZ.v rows)) { sbias %~ vbias })
-  (sout  : erased (chest1 et (SZ.v rows)))
+  (sbias : chest1 et (SZ.v rows))
+  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
+  (sout  : chest1 et (SZ.v rows))
   (fbias : perm)
   ()
   norewrite
@@ -669,9 +669,9 @@ fn teardown_block_outer
   (output : array1 et lout)
   (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : erased (chest1 et (SZ.v rows)))
-  (vbias : erased (chest1 real (SZ.v rows)) { sbias %~ vbias })
-  (sout  : erased (chest1 et (SZ.v rows)))
+  (sbias : chest1 et (SZ.v rows))
+  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
+  (sout  : chest1 et (SZ.v rows))
   (fbias : perm)
   ()
   norewrite
@@ -714,7 +714,7 @@ fn teardown_block_outer
          Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> v **
          pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid))));
 
-  let sout' : erased (chest1 et (SZ.v rows)) =
+  let sout' : chest1 et (SZ.v rows) =
     hide (mk1 #et #(SZ.v rows) (fun (bid : natlt (SZ.v rows)) -> f bid));
 
   forevery_extract_pure
@@ -762,9 +762,9 @@ let kdesc_block
   (output : array1 et lout  { is_global output })
   (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : erased (chest1 et (SZ.v rows)))
-  (vbias : erased (chest1 real (SZ.v rows)) { sbias %~ vbias })
-  (sout  : erased (chest1 et (SZ.v rows)))
+  (sbias : chest1 et (SZ.v rows))
+  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
+  (sout  : chest1 et (SZ.v rows))
   (fbias : perm)
   : kernel_desc
       (x |-> sx ** bias |-> Frac fbias sbias ** output |-> sout)
@@ -835,9 +835,9 @@ fn reduce_batched_block_biased
   (output : array1 et lout  { is_global output })
   (#sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr     : chest2 real (SZ.v rows) (SZ.v cols))
-  (#sbias : erased (chest1 et (SZ.v rows)))
-  (vbias  : erased (chest1 real (SZ.v rows)))
-  (#sout  : erased (chest1 et (SZ.v rows)))
+  (#sbias : chest1 et (SZ.v rows))
+  (vbias  : chest1 real (SZ.v rows))
+  (#sout  : chest1 et (SZ.v rows))
   (#fbias : perm)
   preserves
     cpu **

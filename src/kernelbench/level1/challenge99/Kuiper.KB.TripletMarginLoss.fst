@@ -94,8 +94,8 @@ fn t_memcpy_d2d'
   (src_off : SZ.t)
   (cnt : SZ.t { SZ.v dst_off + SZ.v cnt <= dst_sz /\ SZ.v src_off + SZ.v cnt <= src_sz })
   (#f : perm)
-  (#v : erased (chest1 a src_sz))
-  (#gv : erased (chest1 a dst_sz))
+  (#v : chest1 a src_sz)
+  (#gv : chest1 a dst_sz)
   preserves cpu ** on gpu_loc (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv)
   ensures exists* (s' : chest1 a dst_sz).
@@ -137,7 +137,7 @@ fn t_memcpy_h2d
   (cnt : SZ.t)
   (#f : perm)
   (#v : erased (Seq.seq a))
-  (#gv : erased (chest1 a sz))
+  (#gv : chest1 a sz)
   preserves cpu ** (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv) **
     pure (SZ.v cnt == sz /\ (Vec.length src == sz \/ Seq.length v == reveal sz))
@@ -384,10 +384,10 @@ fn dist_sq_row
   (scratch_b : array1 f32 (l1_forward d) { is_global scratch_b })
   (off : sz)
   (ri : erased nat)
-  (#sx : erased (chest1 f32 len))
-  (#sy : erased (chest1 f32 len))
-  (#va0 : erased (chest1 f32 d))
-  (#vb0 : erased (chest1 f32 d))
+  (#sx : chest1 f32 len)
+  (#sy : chest1 f32 len)
+  (#va0 : chest1 f32 d)
+  (#vb0 : chest1 f32 d)
   (#fx #fy : perm)
   preserves cpu **
             on gpu_loc (x |-> Frac fx sx) **
@@ -432,7 +432,7 @@ fn dist_sq_row
     (Map.chest1_map2 sq_diff_step_f32 (reveal sca) (reveal scb)));
   Kuiper.Chest.ext (reveal v)
     (Map.chest1_map2 sq_diff_step_f32 (reveal sca) (reveal scb));
-  let vr : erased (chest1 real d) =
+  let vr : chest1 real d =
     hide (seq_to_chest1 (sqdiff_row_real (SZ.v d) (reveal sca) (reveal scb)));
   sqdiff_map_approx (SZ.v d) (reveal sca) (reveal scb);
   assert pure (reveal v %~ reveal vr);
@@ -468,9 +468,9 @@ fn triplet_loss_impl
   (anchor   : array1 f32 (l1_forward (b *^ d)) { is_global anchor })
   (positive : array1 f32 (l1_forward (b *^ d)) { is_global positive })
   (negative : array1 f32 (l1_forward (b *^ d)) { is_global negative })
-  (#sa : erased (chest1 f32 (b *^ d)))
-  (#sp : erased (chest1 f32 (b *^ d)))
-  (#sn : erased (chest1 f32 (b *^ d)))
+  (#sa : chest1 f32 (b *^ d))
+  (#sp : chest1 f32 (b *^ d))
+  (#sn : chest1 f32 (b *^ d))
   (#fanc #fpos #fneg : perm)
   norewrite
   preserves cpu **
@@ -573,7 +573,7 @@ fn triplet_loss_impl
   with vt_dev_final. assert (on gpu_loc (t_dev |-> reveal vt_dev_final));
   assert pure (chest1_to_seq (reveal vt_dev_final) == reveal vt_loop);
 
-  let vt_r : erased (chest1 real (SZ.v b)) = hide (to_real_chest (reveal vt_dev_final));
+  let vt_r : chest1 real (SZ.v b) = hide (to_real_chest (reveal vt_dev_final));
   lemma_to_real_chest_approximates (reveal vt_dev_final);
   let s = HRed.reduce #f32 id id 1024sz b t_dev vt_r;
   assert pure (equal (chest_map id (reveal vt_r)) (reveal vt_r));

@@ -112,7 +112,7 @@ type reduce_batched_ty (et : Type0) {| scalar et |} =
      (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
      (x      : array2 et lin  { is_global x      })
      (output : array1 et lout { is_global output })
-     (#sx   : erased (EM.chest2 et (SZ.v rows) (SZ.v cols)))
+     (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
      (#sout : chest1 et (SZ.v rows))
      preserves cpu
      requires

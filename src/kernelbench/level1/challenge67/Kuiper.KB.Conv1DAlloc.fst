@@ -67,9 +67,9 @@ fn conv1d_general_alloc
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 f32 (b * cin * l_in)))
-  (#sw : erased (chest1 f32 (cout * cin * kk)))
-  (#sbias : erased (chest1 f32 cout))
+  (#sx : chest1 f32 (b * cin * l_in))
+  (#sw : chest1 f32 (cout * cin * kk))
+  (#sbias : chest1 f32 cout)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

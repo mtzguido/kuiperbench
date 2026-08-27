@@ -20,7 +20,7 @@ type hinge_fw_ty (t:Type0) {| scalar t, real_like t, floating t, floating_real_l
     (n : szp {n <= max_blocks * max_threads})
     (predictions : array1 t (l1_forward n) { is_global predictions })
     (targets     : array1 t (l1_forward n) { is_global targets })
-    (#sp #st : erased (chest1 t n))
+    (#sp #st : chest1 t n)
     (rp  rt  : erased (lseq real n))
     (#fb : perm)
     preserves

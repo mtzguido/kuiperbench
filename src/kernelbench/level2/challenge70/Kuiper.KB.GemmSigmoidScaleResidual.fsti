@@ -73,10 +73,10 @@ type gemm_sigmoid_scale_residual_ty (t:Type0) {| floating t |} =
      (wt   : array2 t (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
      (bias : array1 t (l1_forward (SZ.v out))                  { is_global bias })
      (y    : array1 t (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-     (#sx   : erased (EM.chest2 t (SZ.v batch) (SZ.v input)))
-     (#swt  : erased (EM.chest2 t (SZ.v input) (SZ.v out)))
-     (#sbias: erased (chest1 t (SZ.v out)))
-     (#sy   : erased (chest1 t (SZ.v batch * SZ.v out)))
+     (#sx   : EM.chest2 t (SZ.v batch) (SZ.v input))
+     (#swt  : EM.chest2 t (SZ.v input) (SZ.v out))
+     (#sbias: chest1 t (SZ.v out))
+     (#sy   : chest1 t (SZ.v batch * SZ.v out))
      requires
        cpu **
        on gpu_loc (x    |-> sx)   **

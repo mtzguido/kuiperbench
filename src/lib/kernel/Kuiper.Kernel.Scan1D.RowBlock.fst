@@ -183,8 +183,8 @@ fn kf
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : erased (chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : erased (chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
   (#fIn : perm)
   (bid : szlt rows)
   ()
@@ -332,8 +332,8 @@ fn setup_rowblock
   (#lout : layout2 (SZ.v rows) (SZ.v cols))
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : erased (chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : erased (chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
   (#fIn  : perm)
   ()
   norewrite
@@ -376,7 +376,7 @@ fn teardown_rowblock
   (#lout : layout2 (SZ.v rows) (SZ.v cols))
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : erased (chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
   (#fIn  : perm)
   ()
   norewrite
@@ -437,8 +437,8 @@ let kdesc
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : erased (chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : erased (chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
   (#fIn  : perm)
   : kernel_desc
       (requires
@@ -476,8 +476,8 @@ fn scan1d_inclusive_rowblock
   (#lout : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : erased (chest2 et (SZ.v rows) (SZ.v cols)))
-  (#sout : erased (chest2 et (SZ.v rows) (SZ.v cols)))
+  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
   (#fIn  : perm)
   norewrite
   preserves cpu ** on gpu_loc (input |-> Frac fIn sx)

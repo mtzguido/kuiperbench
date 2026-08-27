@@ -134,7 +134,7 @@ fn read_x_padded_axis
   (b cin h_in w_in : szp)
   (#lx : layout1 (b * cin * h_in * w_in)) {| ctlayout lx |}
   (gx : array1 et lx)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
+  (#sx : chest1 et (b*cin*h_in*w_in))
   (#fx : perm)
   (bi : szlt b)
   (ic : szlt cin)
@@ -189,7 +189,7 @@ fn read_w_tap
   (cout cin kh kw : szp)
   (#lw : layout1 (cout * cin * kh * kw)) {| ctlayout lw |}
   (gw : array1 et lw)
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
   (#fw : perm)
   (oc : szlt cout) (ic : szlt cin)
   (kh_i : szlt kh) (kw_i : szlt kw)
@@ -290,10 +290,10 @@ fn kf
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*h_out*w_out)))
+  (#sx : chest1 et (b*cin*h_in*w_in))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (b * cout * h_out * w_out > 0))
   (#_ : squash (SZ.fits (cin * kh * kw) /\
@@ -414,10 +414,10 @@ fn conv2d_dilated_setup
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*h_out*w_out)))
+  (#sx : chest1 et (b*cin*h_in*w_in))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (conv2dd_size_req b cin h_in w_in cout kh kw sh sw ph pw dh dw
                                  h_out w_out))
@@ -489,9 +489,9 @@ fn conv2d_dilated_teardown
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
-  (#sbias : erased (chest1 et cout))
+  (#sx : chest1 et (b*cin*h_in*w_in))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
+  (#sbias : chest1 et cout)
   (#fx #fw #fb : perm)
   (#_ : squash (conv2dd_size_req b cin h_in w_in cout kh kw sh sw ph pw dh dw
                                  h_out w_out))
@@ -543,7 +543,7 @@ fn conv2d_dilated_teardown
   tensor_gather_n gx (b * cout * h_out * w_out);
   tensor_gather_n gw (b * cout * h_out * w_out);
   tensor_gather_n gbias (b * cout * h_out * w_out);
-  let sy : erased (chest1 et (b * cout * h_out * w_out)) =
+  let sy : chest1 et (b * cout * h_out * w_out) =
     hide (mk1
             (fun (tid : nat{tid < b * cout * h_out * w_out}) ->
                conv2dd_out_at b cin h_in w_in cout kh kw sh sw ph pw dh dw
@@ -581,10 +581,10 @@ let kdesc
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*h_out*w_out)))
+  (#sx : chest1 et (b*cin*h_in*w_in))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*h_out*w_out))
   (#fx #fw #fb : perm)
   (#_ : squash (is_global gx /\ is_global gw /\
                 is_global gbias /\ is_global gy /\
@@ -638,10 +638,10 @@ fn conv2d_dilated_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*h_in*w_in)))
-  (#sw_ : erased (chest1 et (cout*cin*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*h_out*w_out)))
+  (#sx : chest1 et (b*cin*h_in*w_in))
+  (#sw_ : chest1 et (cout*cin*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*h_out*w_out))
   (#fx #fw #fb : perm)
   norewrite
   requires

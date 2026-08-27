@@ -133,7 +133,7 @@ fn t_read_1
   (a : array1 f32 (l1_forward len))
   (i : szlt len)
   (#f : perm)
-  (#va : erased (chest1 f32 len))
+  (#va : chest1 f32 len)
   preserves cpu
   preserves on gpu_loc (a |-> Frac f va)
   returns x : f32
@@ -369,9 +369,9 @@ fn batchnorm_channel
   (gamma : array1 f32 (l1_forward c) { is_global gamma })
   (beta  : array1 f32 (l1_forward c) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : erased (chest2 f32 (SZ.v c) (n * SZ.v hw)))
-  (#sg : erased (chest1 f32 (SZ.v c)))
-  (#sb : erased (chest1 f32 (SZ.v c)))
+  (#sx : chest2 f32 (SZ.v c) (n * SZ.v hw))
+  (#sg : chest1 f32 (SZ.v c))
+  (#sb : chest1 f32 (SZ.v c))
   preserves cpu
   preserves
     on gpu_loc (gamma |-> Frac fg sg) **
@@ -396,9 +396,9 @@ fn batchnorm_channel
 
   (* [chest1] view of the row (== [chest_slice 0 ci sx]) and its real image,
      shared by both reductions. *)
-  let row_c : erased (chest1 f32 (n * SZ.v hw)) =
+  let row_c : chest1 f32 (n * SZ.v hw) =
     hide (chest2_row (reveal sx) (SZ.v ci));
-  let row_r : erased (chest1 real (n * SZ.v hw)) =
+  let row_r : chest1 real (n * SZ.v hw) =
     hide (to_real_chest (reveal row_c));
   assert pure (reveal row_c %~ reveal row_r);
 
@@ -445,7 +445,7 @@ fn batchnorm_channel
     #_ #(c_bcm_channel_slice n c hw ci) (sliceof x 0 (SZ.v ci));
 
   (* Name the resulting slice chest [eC]. *)
-  let eC : erased (chest1 f32 (n * SZ.v hw)) =
+  let eC : chest1 f32 (n * SZ.v hw) =
     hide (chest_map (affine_step g_c b_c)
             (chest_map (affine_step inv neg_mean_inv) (reveal row_c)));
   assert (on gpu_loc (sliceof x 0 (SZ.v ci) |-> reveal eC));
@@ -479,7 +479,7 @@ fn batchnorm_channel
     };
 
   (* [sx_final] is [sx] with row [ci] replaced by [eC]. *)
-  let sx_final : erased (chest2 f32 (SZ.v c) (n * SZ.v hw)) =
+  let sx_final : chest2 f32 (SZ.v c) (n * SZ.v hw) =
     hide (chest_update_slice 0 (SZ.v ci) (reveal sx) (reveal eC));
   assert (on gpu_loc (x |-> reveal sx_final));
 
@@ -533,9 +533,9 @@ fn batch_norm
   (gamma : array1 f32 (l1_forward c) { is_global gamma })
   (beta  : array1 f32 (l1_forward c) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : erased (chest2 f32 (SZ.v c) (n * SZ.v hw)))
-  (#sg : erased (chest1 f32 (SZ.v c)))
-  (#sb : erased (chest1 f32 (SZ.v c)))
+  (#sx : chest2 f32 (SZ.v c) (n * SZ.v hw))
+  (#sg : chest1 f32 (SZ.v c))
+  (#sb : chest1 f32 (SZ.v c))
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -625,9 +625,9 @@ fn batchnorm_fw
   (gamma : array1 f32 (l1_forward c) { is_global gamma })
   (beta  : array1 f32 (l1_forward c) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : erased (chest2 f32 (SZ.v c) (n * SZ.v hw)))
-  (#sg : erased (chest1 f32 (SZ.v c)))
-  (#sb : erased (chest1 f32 (SZ.v c)))
+  (#sx : chest2 f32 (SZ.v c) (n * SZ.v hw))
+  (#sg : chest1 f32 (SZ.v c))
+  (#sb : chest1 f32 (SZ.v c))
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **

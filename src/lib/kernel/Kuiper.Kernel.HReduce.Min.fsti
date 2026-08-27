@@ -75,7 +75,7 @@ fn reduce_batched_min_f32
      (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
      (x      : array2 f32 lin  { is_global x      })
      (output : array1 f32 lout { is_global output })
-     (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+     (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
      (#sout : chest1 f32 (SZ.v rows))
   preserves cpu
   requires

@@ -67,8 +67,8 @@ fn t_memcpy_d2d'
   (src_off : SZ.t)
   (cnt : SZ.t { SZ.v dst_off + SZ.v cnt <= dst_sz /\ SZ.v src_off + SZ.v cnt <= src_sz })
   (#f : perm)
-  (#v : erased (chest1 a src_sz))
-  (#gv : erased (chest1 a dst_sz))
+  (#v : chest1 a src_sz)
+  (#gv : chest1 a dst_sz)
   preserves cpu ** on gpu_loc (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv)
   ensures exists* (s' : chest1 a dst_sz).
@@ -208,10 +208,10 @@ fn layer_norm_row
   (beta  : array1 f32 (l1_forward n) { is_global beta  })
   (scratch : array1 f32 (l1_forward n) { is_global scratch })
   (#fg #fb : perm)
-  (#sx : erased (chest1 f32 bn))
-  (#sg : erased (chest1 f32 n))
-  (#sbeta : erased (chest1 f32 n))
-  (#ss : erased (chest1 f32 n))
+  (#sx : chest1 f32 bn)
+  (#sg : chest1 f32 n)
+  (#sbeta : chest1 f32 n)
+  (#ss : chest1 f32 n)
   preserves cpu
   preserves
     on gpu_loc (gamma |-> Frac fg sg) **
@@ -245,7 +245,7 @@ fn layer_norm_row
 
   (* Real-valued view of the (preserved) scratch row, shared by both
      reductions.  [reduce] preserves [scratch |-> vs1]. *)
-  let vr : erased (chest1 real n) = hide (to_real_chest (reveal vs1));
+  let vr : chest1 real n = hide (to_real_chest (reveal vs1));
   assert pure (reveal vs1 %~ reveal vr);
 
   (* Pass 1 reduce: plain sum over the row -> sum1. *)
@@ -639,9 +639,9 @@ fn layer_norm
   (gamma : array1 f32 (l1_forward n) { is_global gamma })
   (beta  : array1 f32 (l1_forward n) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : erased (chest1 f32 (b *^ n)))
-  (#sg : erased (chest1 f32 n))
-  (#sbeta : erased (chest1 f32 n))
+  (#sx : chest1 f32 (b *^ n))
+  (#sg : chest1 f32 n)
+  (#sbeta : chest1 f32 n)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -749,9 +749,9 @@ fn layernorm_fw
   (gamma : array1 f32 (l1_forward n) { is_global gamma })
   (beta  : array1 f32 (l1_forward n) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : erased (chest1 f32 (b *^ n)))
-  (#sg : erased (chest1 f32 n))
-  (#sbeta : erased (chest1 f32 n))
+  (#sx : chest1 f32 (b *^ n))
+  (#sg : chest1 f32 n)
+  (#sbeta : chest1 f32 n)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **

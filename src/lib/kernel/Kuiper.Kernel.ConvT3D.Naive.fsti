@@ -128,10 +128,10 @@ fn convt3d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*d_in*h_in*w_in)))
-  (#sw_l : erased (chest1 et (cin*cout*kd*kh*kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*d_out*h_out*w_out)))
+  (#sx : chest1 et (b*cin*d_in*h_in*w_in))
+  (#sw_l : chest1 et (cin*cout*kd*kh*kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*d_out*h_out*w_out))
   (#fx #fw #fb : perm)
   requires
     cpu **

@@ -19,7 +19,7 @@ module P = Kuiper.Kernel.GEMM.Naive3
 ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
+  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -30,7 +30,7 @@ fn bridge_fwd
 ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#l : layout2 rows cols)
-  (a : array2 et l) (#f : perm) (#s : erased (EM.chest2 et rows cols))
+  (a : array2 et l) (#f : perm) (#s : EM.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -66,11 +66,11 @@ fn tril_matmul_f32_impl
   (gA : array2 f32 (l2_row_major (SZ.v n) (SZ.v n)) { is_global gA })
   (gB : array2 f32 (l2_row_major (SZ.v n) (SZ.v n)) { is_global gB })
   (y  : array2 f32 (l2_row_major (SZ.v n) (SZ.v n)) { is_global y  })
-  (#sA : erased (EM.chest2 f32 (SZ.v n) (SZ.v n)))
-  (#sB : erased (EM.chest2 f32 (SZ.v n) (SZ.v n)))
-  (#sy : erased (EM.chest2 f32 (SZ.v n) (SZ.v n)))
-  (#rA : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
-  (#rB : erased (EM.chest2 real (SZ.v n) (SZ.v n)))
+  (#sA : EM.chest2 f32 (SZ.v n) (SZ.v n))
+  (#sB : EM.chest2 f32 (SZ.v n) (SZ.v n))
+  (#sy : EM.chest2 f32 (SZ.v n) (SZ.v n))
+  (#rA : EM.chest2 real (SZ.v n) (SZ.v n))
+  (#rB : EM.chest2 real (SZ.v n) (SZ.v n))
   preserves cpu
   requires
     on gpu_loc (gA |-> sA) **
@@ -90,7 +90,7 @@ fn tril_matmul_f32_impl
 
   (* Real witness for the output buffer's initial content (the operand real
      witnesses [rA]/[rB] come from the caller via [sA %~ rA /\ sB %~ rB]). *)
-  let rC : erased (EM.chest2 real (SZ.v n) (SZ.v n)) =
+  let rC : EM.chest2 real (SZ.v n) (SZ.v n) =
     hide (EM.to_real_matrix (reveal sy));
 
   assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
@@ -119,7 +119,7 @@ fn tril_matmul_f32_impl
   assert pure (reveal sy' == Tril.s_tril (reveal eC'));
 
   (* Discharge per-(i,j) [tril_matmul_post]. *)
-  let rAB : erased (EM.chest2 real (SZ.v n) (SZ.v n)) =
+  let rAB : EM.chest2 real (SZ.v n) (SZ.v n) =
     hide (MS.matmul (reveal rA) (reveal rB));
   Classical.forall_intro_2
     (tril_row_aux (SZ.v n) (reveal eC') (reveal rAB) ());

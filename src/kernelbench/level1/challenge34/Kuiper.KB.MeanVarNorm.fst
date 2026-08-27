@@ -585,8 +585,8 @@ fn t_memcpy_d2d'
   (src_off : SZ.t)
   (cnt : SZ.t { SZ.v dst_off + SZ.v cnt <= dst_sz /\ SZ.v src_off + SZ.v cnt <= src_sz })
   (#f : perm)
-  (#v : erased (chest1 a src_sz))
-  (#gv : erased (chest1 a dst_sz))
+  (#v : chest1 a src_sz)
+  (#gv : chest1 a dst_sz)
   preserves cpu ** on gpu_loc (src |-> Frac f v)
   requires on gpu_loc (dst |-> gv)
   ensures exists* (s' : chest1 a dst_sz).
@@ -635,8 +635,8 @@ fn mean_var_norm_row
   (inv_d : f32)
   (x : array1 f32 (l1_forward bd) { is_global x })
   (scratch : array1 f32 (l1_forward d) { is_global scratch })
-  (#sx : erased (chest1 f32 bd))
-  (#ss : erased (chest1 f32 d))
+  (#sx : chest1 f32 bd)
+  (#ss : chest1 f32 d)
   preserves cpu
   requires on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
   ensures
@@ -664,7 +664,7 @@ fn mean_var_norm_row
 
   (* Real-valued view of the (preserved) row, shared by both reductions.
      [ss1 %~ vr] fires via the [to_real_chest] SMTPat. *)
-  let vr : erased (chest1 real d) = hide (to_real_chest (reveal ss1));
+  let vr : chest1 real d = hide (to_real_chest (reveal ss1));
   assert pure (reveal ss1 %~ reveal vr);
 
   (* Pass 1: sum reduce → sum1 (device tree-reduce, identity pre-map). *)
@@ -758,7 +758,7 @@ fn mean_var_norm
   (eps : f32)
   (inv_d : f32)
   (x : array1 f32 (l1_forward (b *^ d)) { is_global x })
-  (#sx : erased (chest1 f32 (b *^ d)))
+  (#sx : chest1 f32 (b *^ d))
   preserves cpu
   requires on gpu_loc (x |-> sx)
   ensures
@@ -837,7 +837,7 @@ fn mean_var_norm_fw
              b * d <= max_blocks * max_threads })
   (eps : f32)
   (x : array1 f32 (l1_forward (b *^ d)) { is_global x })
-  (#sx : erased (chest1 f32 (b *^ d)))
+  (#sx : chest1 f32 (b *^ d))
   preserves cpu
   requires on gpu_loc (x |-> sx)
   ensures

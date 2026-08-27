@@ -49,7 +49,7 @@ inline_for_extraction noextract
 fn frobenius
   (lena : szp { lena <= max_blocks * max_threads })
   (a : array1 f32 (l1_forward lena) { is_global a })
-  (#va : erased (chest1 f32 lena))
+  (#va : chest1 f32 lena)
   preserves cpu
   requires on gpu_loc (a |-> va)
   ensures
@@ -64,7 +64,7 @@ fn frobenius
   sq_step_approx_forall #f32 ();
 
   (* Real spec of the input, used as the [vr] argument to reduce. *)
-  let vr : erased (chest1 real lena) = hide (to_real_chest (reveal va));
+  let vr : chest1 real lena = hide (to_real_chest (reveal va));
   assert pure (reveal va %~ reveal vr);
 
   (* Sum of squares: pre-map = sq_step, no scratch buffer. *)

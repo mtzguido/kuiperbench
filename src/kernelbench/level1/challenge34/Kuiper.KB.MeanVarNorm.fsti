@@ -40,7 +40,7 @@ type mean_var_norm_fw_ty (t:Type0) {| floating t, real_like t |} =
                 b * d <= max_blocks * max_threads })
      (eps : t)
      (x : array1 t (l1_forward (b *^ d)) { is_global x })
-     (#s : erased (chest1 t (b *^ d)))
+     (#s : chest1 t (b *^ d))
      requires cpu ** on gpu_loc (x |-> s)
      ensures
        cpu **

@@ -56,10 +56,10 @@ type convt2d_general_ty (t:Type0) {| scalar t |} =
      (gy : array1 t (l1_forward (b * cout * h_out * w_out))
            { is_global gy })
      (#fx #fw #fb : perm)
-     (#sx : erased (chest1 t (b * cin * h_in * w_in)))
-     (#sw_l : erased (chest1 t (cin * cout * kh * kw)))
-     (#sbias : erased (chest1 t cout))
-     (#sy0 : erased (chest1 t (b * cout * h_out * w_out)))
+     (#sx : chest1 t (b * cin * h_in * w_in))
+     (#sw_l : chest1 t (cin * cout * kh * kw))
+     (#sbias : chest1 t cout)
+     (#sy0 : chest1 t (b * cout * h_out * w_out))
      requires
        cpu **
        on gpu_loc (gx |-> Frac fx sx) **
@@ -103,9 +103,9 @@ type convt2d_general_alloc_ty =
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
   (#fx #fw #fb : perm)
-  (#sx : erased (chest1 f32 (b * cin * h_in * w_in)))
-  (#sw_l : erased (chest1 f32 (cin * cout * kh * kw)))
-  (#sbias : erased (chest1 f32 cout))
+  (#sx : chest1 f32 (b * cin * h_in * w_in))
+  (#sw_l : chest1 f32 (cin * cout * kh * kw))
+  (#sbias : chest1 f32 cout)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

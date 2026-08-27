@@ -15,8 +15,8 @@ fn inst_gpu
   (m : szp { m <= max_blocks })
   (n : szp { m * n <= max_blocks * max_threads })
   (a : array2 et (l2_row_major m n) { is_global a })
-  (#sa : erased (chest2 et m n))
-  (ra : erased (chest2 real m n))
+  (#sa : chest2 et m n)
+  (ra : chest2 real m n)
   preserves cpu
   requires
     on gpu_loc (a |-> sa) **

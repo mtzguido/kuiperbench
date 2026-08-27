@@ -91,10 +91,10 @@ fn conv1d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   requires
     cpu **

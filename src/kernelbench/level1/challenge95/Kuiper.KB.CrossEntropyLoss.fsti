@@ -46,8 +46,8 @@ type ce_loss_fw_ty =
     (inv_b : f32)
     (predictions : array1 f32 (l1_forward (b *^ c)) { is_global predictions })
     (targets : array1 SZ.t (l1_forward b) { is_global targets })
-    (#sp : erased (chest1 f32 (b *^ c)))
-    (#stv : erased (chest1 SZ.t b))
+    (#sp : chest1 f32 (b *^ c))
+    (#stv : chest1 SZ.t b)
     (#fp #ft : perm)
     preserves cpu **
               on gpu_loc (predictions |-> Frac fp sp) **

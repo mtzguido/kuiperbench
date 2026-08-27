@@ -71,9 +71,9 @@ fn bias_add_gpu
   (gC : array2 t lC)
   (gbias : array1 t lbias)
   (gy : array1 t ly)
-  (#eC : erased (EM.chest2 t (SZ.v m) (SZ.v n)))
-  (#sbias : erased (chest1 t (SZ.v n)))
-  (#sy0 : erased (chest1 t (SZ.v m * SZ.v n)))
+  (#eC : EM.chest2 t (SZ.v m) (SZ.v n))
+  (#sbias : chest1 t (SZ.v n))
+  (#sy0 : chest1 t (SZ.v m * SZ.v n))
   (#fc #fb : perm)
   preserves cpu
   requires
@@ -97,9 +97,9 @@ type bias_add_ty (t:Type0) {| scalar t |} =
      (gC : array2 t (l2_row_major (SZ.v m) (SZ.v n)) { is_global gC })
      (gbias : array1 t (l1_forward (SZ.v n)) { is_global gbias })
      (gy : array1 t (l1_forward (SZ.v m * SZ.v n)) { is_global gy })
-     (#eC : erased (EM.chest2 t (SZ.v m) (SZ.v n)))
-     (#sbias : erased (chest1 t (SZ.v n)))
-     (#sy0 : erased (chest1 t (SZ.v m * SZ.v n)))
+     (#eC : EM.chest2 t (SZ.v m) (SZ.v n))
+     (#sbias : chest1 t (SZ.v n))
+     (#sy0 : chest1 t (SZ.v m * SZ.v n))
      (#fc #fb : perm)
      preserves cpu
      requires

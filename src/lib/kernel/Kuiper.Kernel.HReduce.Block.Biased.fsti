@@ -29,9 +29,9 @@ fn reduce_batched_block_biased
   (output : array1 et lout  { is_global output })
   (#sx    : chest2 et   (SZ.v rows) (SZ.v cols))
   (vr     : chest2 real (SZ.v rows) (SZ.v cols))
-  (#sbias : erased (chest1 et (SZ.v rows)))
-  (vbias  : erased (chest1 real (SZ.v rows)))
-  (#sout  : erased (chest1 et (SZ.v rows)))
+  (#sbias : chest1 et (SZ.v rows))
+  (vbias  : chest1 real (SZ.v rows))
+  (#sout  : chest1 et (SZ.v rows))
   (#fbias : perm)
   preserves
     cpu **

@@ -46,10 +46,10 @@ fn conv2d_dilated_asym_impl
   (gy : array1 et (l1_forward (b * cout * h_out * w_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * h_in * w_in)))
-  (#sw_ : erased (chest1 et (cout * cin * kh * kw)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * h_out * w_out)))
+  (#sx : chest1 et (b * cin * h_in * w_in))
+  (#sw_ : chest1 et (cout * cin * kh * kw))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * h_out * w_out))
   norewrite
   requires
     cpu **

@@ -29,10 +29,10 @@ fn conv2d_square_impl
   (gy : array1 et (l1_forward (b * cout * h_out * h_out))
         { is_global gy })
   (#fx : perm) (#fw : perm) (#fb : perm)
-  (#sx : erased (chest1 et (b * cin * h_in * h_in)))
-  (#sw : erased (chest1 et (cout * cin * k * k)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b * cout * h_out * h_out)))
+  (#sx : chest1 et (b * cin * h_in * h_in))
+  (#sw : chest1 et (cout * cin * k * k))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b * cout * h_out * h_out))
   norewrite
   requires
     cpu **

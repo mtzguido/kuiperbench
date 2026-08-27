@@ -62,9 +62,9 @@ type conv2d_general_alloc_ty =
   (gbias : array1 f32 (l1_forward cout)
         { is_global gbias })
   (#fx #fw #fb : perm)
-  (#sx : erased (chest1 f32 (b * cin * h_in * w_in)))
-  (#sw : erased (chest1 f32 (cout * cin * kh * kw)))
-  (#sbias : erased (chest1 f32 cout))
+  (#sx : chest1 f32 (b * cin * h_in * w_in))
+  (#sw : chest1 f32 (cout * cin * kh * kw))
+  (#sbias : chest1 f32 cout)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

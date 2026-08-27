@@ -28,7 +28,7 @@ fn recast
   (a1 : T.array2 et l1)
   (#_ : squash (r1 * c1 == r2 * c2))
   (#f : perm)
-  (#s1 : Ghost.erased (EM.chest2 et r1 c1))
+  (#s1 : EM.chest2 et r1 c1)
   requires
     (a1 |-> Frac f s1)
   returns a2 : T.array2 et l2
@@ -83,7 +83,7 @@ fn recast_gpu
   (#_ : squash (r1 * c1 == r2 * c2))
   (#loc : loc_id)
   (#f : perm)
-  (#s1 : Ghost.erased (EM.chest2 et r1 c1))
+  (#s1 : EM.chest2 et r1 c1)
   requires
     on loc (a1 |-> Frac f s1) **
     pure (T.is_global a1) **

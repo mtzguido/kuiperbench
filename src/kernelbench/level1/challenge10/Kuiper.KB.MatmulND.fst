@@ -32,7 +32,7 @@ open Kuiper.Bijection
 ghost
 fn bridge_fwd
   (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
-  (a : array2 et lay) (#f : perm) (#s : erased (EMatrix.chest2 et rows cols))
+  (a : array2 et lay) (#f : perm) (#s : EMatrix.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {
@@ -43,7 +43,7 @@ fn bridge_fwd
 ghost
 fn bridge_bwd
   (#et : Type0) (#rows #cols : nat) (#lay : layout2 rows cols)
-  (a : array2 et lay) (#f : perm) (#s : erased (EMatrix.chest2 et rows cols))
+  (a : array2 et lay) (#f : perm) (#s : EMatrix.chest2 et rows cols)
   requires on gpu_loc (a |-> Frac f s)
   ensures  on gpu_loc (a |-> Frac f s)
 {

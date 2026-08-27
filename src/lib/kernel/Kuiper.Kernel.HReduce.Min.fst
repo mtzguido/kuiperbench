@@ -110,7 +110,7 @@ let kpre_batched_min
   (#lout : layout1 (SZ.v rows))
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (sout : chest1 f32 (SZ.v rows))
   (r : natlt (SZ.v rows))
   : slprop
@@ -125,7 +125,7 @@ let kpost_batched_min
   (#lout : layout1 (SZ.v rows))
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (sout : chest1 f32 (SZ.v rows))
   (r : natlt (SZ.v rows))
   : slprop
@@ -143,7 +143,7 @@ fn kf_batched_min
   (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (#sout : chest1 f32 (SZ.v rows))
   (gid : szlt rows)
   ()
@@ -199,7 +199,7 @@ fn setup_batched_min
   (#lout : layout1 (SZ.v rows))
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (#sout : chest1 f32 (SZ.v rows))
   ()
   norewrite
@@ -236,7 +236,7 @@ fn teardown_batched_min
   (#lout : layout1 (SZ.v rows))
   (x      : array2 f32 lin)
   (output : array1 f32 lout)
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (#sout : chest1 f32 (SZ.v rows))
   ()
   norewrite
@@ -258,7 +258,7 @@ fn teardown_batched_min
 
   tensor_gather_n x (SZ.v rows);
 
-  let sout' : erased (chest1 f32 (SZ.v rows)) = hide (seq_to_chest1 (seq_reduce_rows_fmin sx));
+  let sout' : chest1 f32 (SZ.v rows) = hide (seq_to_chest1 (seq_reduce_rows_fmin sx));
   forevery_ext #(natlt (SZ.v rows))
     (fun (r : natlt (SZ.v rows)) -> Cell output ((r, ()) <: abs (SZ.v rows @| INil)) |-> row_fmin sx r)
     (fun (r : natlt (SZ.v rows)) -> Cell output (abs_bij.gg r) |-> acc (reveal sout') (abs_bij.gg r));
@@ -281,7 +281,7 @@ let kdesc_batched_min
   (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 f32 lout { is_global output })
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (#sout : chest1 f32 (SZ.v rows))
   : kernel_desc
       (x |-> sx ** output |-> sout)
@@ -309,7 +309,7 @@ fn reduce_batched_min_f32
   (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
   (x      : array2 f32 lin  { is_global x      })
   (output : array1 f32 lout { is_global output })
-  (#sx   : erased (EM.chest2 f32 (SZ.v rows) (SZ.v cols)))
+  (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
   (#sout : chest1 f32 (SZ.v rows))
   preserves cpu
   requires

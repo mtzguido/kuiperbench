@@ -258,11 +258,11 @@ fn separable_alloc
   (gbias_pw : array1 f32 (l1_forward cout)
         { is_global gbias_pw })
   (#fx : perm) (#fwd : perm) (#fbd : perm) (#fwp : perm) (#fbp : perm)
-  (#sx : erased (chest1 f32 (b * c * h_in * w_in)))
-  (#sw_dw : erased (chest1 f32 (c * 1 * kh * kw)))
-  (#sbias_dw : erased (chest1 f32 c))
-  (#sw_pw : erased (chest1 f32 (cout * c * 1 * 1)))
-  (#sbias_pw : erased (chest1 f32 cout))
+  (#sx : chest1 f32 (b * c * h_in * w_in))
+  (#sw_dw : chest1 f32 (c * 1 * kh * kw))
+  (#sbias_dw : chest1 f32 c)
+  (#sw_pw : chest1 f32 (cout * c * 1 * 1))
+  (#sbias_pw : chest1 f32 cout)
   requires
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **

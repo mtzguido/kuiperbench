@@ -268,7 +268,7 @@ fn kf_block
   (output : array1 et lout)
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   (shmem : c_shmems [SHArray et nth])
   (bid : szlt rows)
   (tid : szlt nth)
@@ -364,7 +364,7 @@ fn kf_block
 
     with ss. assert array1_pts_to_slice sa 0 nth ss;
     unfold array1_pts_to_slice sa;
-    let css : erased (chest1 et nth) = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
+    let css : chest1 et nth = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
     forevery_refine_ext' #nat #(fun (k:nat) -> 0 <= k /\ k < nth) (fun (k:nat) -> k < nth) _;
     forevery_ext
       (fun (k:natlt nth) -> tensor_pts_to_cell sa ((k <: natlt nth), ()) (acc1 ss (k - 0)))
@@ -419,7 +419,7 @@ fn block_setup_block
   (output : array1 et lout)
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   (shmem : c_shmems [SHArray et nth])
   (bid : natlt rows)
   ()
@@ -491,7 +491,7 @@ fn block_teardown_block
   (output : array1 et lout)
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   (shmem : c_shmems [SHArray et nth])
   (bid : natlt rows)
   ()
@@ -551,7 +551,7 @@ fn setup_block_outer
   (output : array1 et lout)
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   ()
   norewrite
   requires
@@ -592,7 +592,7 @@ fn teardown_block_outer
   (output : array1 et lout)
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   ()
   norewrite
   requires
@@ -625,7 +625,7 @@ fn teardown_block_outer
          pure (v %~ rsum (lseq_map pre_map_r (ematrix_row vr bid))));
 
   (* Build a concrete chest carrying the cell values. *)
-  let sout' : erased (chest1 et rows) =
+  let sout' : chest1 et rows =
     hide (mk1 #et #(SZ.v rows) (fun (bid : natlt rows) -> f bid));
 
   (* Extract the per-row pure approximation fact across all bids. *)
@@ -700,7 +700,7 @@ let kpre_block_sendable
   (go : squash (is_global output))
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   (sh : c_shmems [SHArray et nth])
   (pf : squash (c_shmems_inv sh))
   (bid : natlt rows) (tid : natlt nth)
@@ -740,7 +740,7 @@ let kpost_block_sendable
   (go : squash (is_global output))
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   (sh : c_shmems [SHArray et nth])
   (pf : squash (c_shmems_inv sh))
   (bid : natlt rows) (tid : natlt nth)
@@ -764,7 +764,7 @@ let kdesc_block
   (output : array1 et lout { is_global output })
   (sx   : chest2 et   rows cols)
   (vr   : chest2 real rows cols { sx %~ vr })
-  (sout : erased (chest1 et rows))
+  (sout : chest1 et rows)
   : kernel_desc
       (x |-> sx ** output |-> sout)
       (exists* (sout' : chest1 et rows).
@@ -832,7 +832,7 @@ fn reduce_batched_block
   (output : array1 et lout { is_global output })
   (#sx   : chest2 et   rows cols)
   (vr    : chest2 real rows cols)
-  (#sout : erased (chest1 et rows))
+  (#sout : chest1 et rows)
   preserves
     cpu **
     on gpu_loc (x |-> sx)

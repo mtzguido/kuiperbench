@@ -112,7 +112,7 @@ fn read_x_padded
   (b cin l_in : szp)
   (#lx : layout1 (b * cin * l_in)) {| ctlayout lx |}
   (gx : array1 et lx)
-  (#sx : erased (chest1 et (b*cin*l_in)))
+  (#sx : chest1 et (b*cin*l_in))
   (#fx : perm)
   (bi : szlt b)
   (ic : szlt cin)
@@ -159,7 +159,7 @@ fn read_w_tap
   (cout cin kk : szp)
   (#lw : layout1 (cout * cin * kk)) {| ctlayout lw |}
   (gw : array1 et lw)
-  (#sw : erased (chest1 et (cout*cin*kk)))
+  (#sw : chest1 et (cout*cin*kk))
   (#fw : perm)
   (oc : szlt cout) (ic : szlt cin) (k_i : szlt kk)
   (#_ : squash (SZ.fits (cout * cin * kk)))
@@ -247,10 +247,10 @@ fn kf
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   (#_ : squash (b * cout * l_out > 0))
   (#_ : squash (SZ.fits (cin * kk) /\
@@ -349,10 +349,10 @@ fn conv1d_naive_setup
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   (#_ : squash (conv1d_size_req b cin l_in cout kk stride dilation l_out))
   ()
@@ -422,9 +422,9 @@ fn conv1d_naive_teardown
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
   (#fx #fw #fb : perm)
   (#_ : squash (conv1d_size_req b cin l_in cout kk stride dilation l_out))
   ()
@@ -471,7 +471,7 @@ fn conv1d_naive_teardown
   tensor_gather_n gx (b * cout * l_out);
   tensor_gather_n gw (b * cout * l_out);
   tensor_gather_n gbias (b * cout * l_out);
-  let sy : erased (chest1 et (b * cout * l_out)) =
+  let sy : chest1 et (b * cout * l_out) =
     hide (mk1
             (fun (tid : nat{tid < b * cout * l_out}) ->
                conv1d_out_at b cin l_in cout kk stride pad dilation
@@ -508,10 +508,10 @@ let kdesc
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   (#_ : squash (is_global gx /\ is_global gw /\
                 is_global gbias /\ is_global gy /\
@@ -563,10 +563,10 @@ fn conv1d_naive_gpu
   (gw : array1 et lw)
   (gbias : array1 et lbias)
   (gy : array1 et ly)
-  (#sx : erased (chest1 et (b*cin*l_in)))
-  (#sw : erased (chest1 et (cout*cin*kk)))
-  (#sbias : erased (chest1 et cout))
-  (#sy0 : erased (chest1 et (b*cout*l_out)))
+  (#sx : chest1 et (b*cin*l_in))
+  (#sw : chest1 et (cout*cin*kk))
+  (#sbias : chest1 et cout)
+  (#sy0 : chest1 et (b*cout*l_out))
   (#fx #fw #fb : perm)
   norewrite
   requires

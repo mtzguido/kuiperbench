@@ -25,7 +25,7 @@ type kl_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
     (n : szp {n <= max_blocks * max_threads})
     (predictions : array1 t (l1_forward n) { is_global predictions })
     (targets     : array1 t (l1_forward n) { is_global targets })
-    (#sp #st : erased (chest1 t n))
+    (#sp #st : chest1 t n)
     (#fb : perm)
     preserves
       cpu ** on gpu_loc (targets |-> Frac fb st)
