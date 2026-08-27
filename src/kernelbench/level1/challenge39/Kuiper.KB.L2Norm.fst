@@ -511,10 +511,6 @@ fn l2norm_row
   assert pure (SZ.v rv_off + SZ.v d - SZ.v rv_off == SZ.v d);
   assert pure (Seq.length (Seq.slice (chest1_to_seq sx)
     rv_off (SZ.v rv_off + SZ.v d)) == SZ.v d);
-  assert pure (
-    reveal row_g ==
-      (Seq.slice (chest1_to_seq sx)
-        rv_off (SZ.v rv_off + SZ.v d) <: Seq.lseq f32 d));
   ()
 }
 
