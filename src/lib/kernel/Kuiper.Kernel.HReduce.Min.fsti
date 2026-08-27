@@ -71,12 +71,12 @@ inline_for_extraction noextract
 fn reduce_batched_min_f32
      (rows : szp { SZ.v rows <= max_blocks * max_threads })
      (cols : szp)
-     (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-     (#lout : layout1 (SZ.v rows))             {| ctlayout lout |}
+     (#lin  : layout2 rows cols) {| ctlayout lin  |}
+     (#lout : layout1 rows)             {| ctlayout lout |}
      (x      : array2 f32 lin  { is_global x      })
      (output : array1 f32 lout { is_global output })
-     (#sx   : EM.chest2 f32 (SZ.v rows) (SZ.v cols))
-     (#sout : chest1 f32 (SZ.v rows))
+     (#sx   : EM.chest2 f32 rows cols)
+     (#sout : chest1 f32 rows)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **

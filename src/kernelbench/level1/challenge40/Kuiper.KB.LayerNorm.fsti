@@ -62,7 +62,7 @@ type layernorm_fw_ty (t:Type0) {| floating t, real_like t |} =
        on gpu_loc (beta  |-> Frac fb sb) **
        (exists* (sx' : chest1 t (b * n)).
           on gpu_loc (x |-> sx') **
-          pure (layernorm_post (SZ.v b) (SZ.v n) eps (ln_inv_n n)
+          pure (layernorm_post b n eps (ln_inv_n n)
                   (chest1_to_seq sg) (chest1_to_seq sb)
                   (chest1_to_seq sx) (chest1_to_seq sx')))
 

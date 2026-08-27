@@ -47,7 +47,7 @@ instance c_l2_bcm_pages
   (#_ : squash (SZ.fits (b * SZ.v hw)))
   (#_ : squash (SZ.fits (SZ.v hw * SZ.v c)))
   (#_ : squash (SZ.fits (b * (SZ.v hw * SZ.v c))))
-  : T.ctlayout (l2_bcm_pages b (SZ.v hw) (SZ.v c))
+  : T.ctlayout (l2_bcm_pages b hw c)
   = {
       ulen_fits = ();
       all_fit   = ();
@@ -58,7 +58,7 @@ instance c_l2_bcm_pages
         let qch = q *^ ch in
         let cih = ci *^ hw in
         let s1  = qch +^ cih in
-        bcm_offset_bound b (SZ.v hw) (SZ.v c) (SZ.v q) (SZ.v ci) (SZ.v rem);
+        bcm_offset_bound b hw c q ci rem;
         SZ.fits_ok (SZ.v s1 + SZ.v rem);
         s1 +^ rem
     }

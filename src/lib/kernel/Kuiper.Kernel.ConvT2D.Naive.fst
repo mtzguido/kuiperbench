@@ -5,7 +5,7 @@ module Kuiper.Kernel.ConvT2D.Naive
    inner accumulation over the [(ic, kh_i, kw_i)] taps is a single
    while-loop matched up to [Kuiper.Spec.ConvTranspose2D.__convT2d_single]
    via the [conv1d_partial_at] proof pattern (loop invariant tracks
-   [acc == convT2d_partial_at ... (SZ.v k)]; step lemma extends by one
+   [acc == convT2d_partial_at ... k]; step lemma extends by one
    tap).  Setup, teardown, and kpre/kpost sendability are all
    discharged at the [kdesc] level. *)
 
@@ -334,7 +334,7 @@ fn kf
       exists* (vk : sz{SZ.v vk <= cin * kh * kw}).
         k |-> vk **
         acc |-> convT2d_partial_at b cin h_in w_in cout kh kw sh sw ph pw dh dw
-                  h_out w_out sx sw_l sbias bi oc oh ow (SZ.v vk)
+                  h_out w_out sx sw_l sbias bi oc oh ow vk
     invariant pure (SZ.fits (cin * kh * kw))
     invariant gx |-> Frac (fx /. (b * cout * h_out * w_out)) sx
     invariant gw |-> Frac (fw /. (b * cout * h_out * w_out)) sw_l
@@ -358,9 +358,9 @@ fn kf
     (* Establish the step equation: prod equals the lemma's per-tap product. *)
     Math.paren_mul_right cin kh kw;
     assert pure (SZ.v n_taps == cin * kh * kw);
-    assert pure (SZ.v ic == unrank_ic cin kh kw (SZ.v kk));
-    assert pure (SZ.v kh_i == unrank_kh cin kh kw (SZ.v kk));
-    assert pure (SZ.v kw_i == unrank_kw cin kh kw (SZ.v kk));
+    assert pure (SZ.v ic == unrank_ic cin kh kw kk);
+    assert pure (SZ.v kh_i == unrank_kh cin kh kw kk);
+    assert pure (SZ.v kw_i == unrank_kw cin kh kw kk);
     assert pure (xv == read_strided_padded_2d
                          (lseq_to_t4 b cin h_in w_in sx) bi ic sh sw
                          (oh + ph - SZ.v kh_i * dh)

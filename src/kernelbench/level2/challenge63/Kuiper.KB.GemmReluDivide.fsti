@@ -56,13 +56,13 @@ type gemm_relu_divide_ty (t:Type0) {| floating t |} =
         SZ.fits (SZ.v input * SZ.v out) /\
         SZ.fits (SZ.v batch * SZ.v out) })
      (divisor : t)
-     (x    : array2 t (l2_row_major (SZ.v batch) (SZ.v input)) { is_global x    })
-     (wt   : array2 t (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
-     (bias : array1 t (l1_forward (SZ.v out))                  { is_global bias })
+     (x    : array2 t (l2_row_major batch input) { is_global x    })
+     (wt   : array2 t (l2_row_major input out)   { is_global wt   })
+     (bias : array1 t (l1_forward out)                  { is_global bias })
      (y    : array1 t (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-     (#sx   : EM.chest2 t (SZ.v batch) (SZ.v input))
-     (#swt  : EM.chest2 t (SZ.v input) (SZ.v out))
-     (#sbias: chest1 t (SZ.v out))
+     (#sx   : EM.chest2 t batch input)
+     (#swt  : EM.chest2 t input out)
+     (#sbias: chest1 t out)
      (#sy   : chest1 t (SZ.v batch * SZ.v out))
      requires
        cpu **

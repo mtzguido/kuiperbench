@@ -30,7 +30,7 @@ type triplet_fw_ty =
               on gpu_loc (negative |-> Frac fneg sn)
     returns res : f32
     ensures
-      pure (triplet_post (SZ.v b) (SZ.v d) margin inv_b
+      pure (triplet_post b d margin inv_b
               (chest1_to_seq (reveal sa) <: Seq.lseq f32 (SZ.v b * SZ.v d))
               (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v d))
               (chest1_to_seq (reveal sn) <: Seq.lseq f32 (SZ.v b * SZ.v d))

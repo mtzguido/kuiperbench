@@ -90,8 +90,8 @@ fn rmsnorm_fw_f32_impl
   (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
   (eps : f32)
   (inv_c : f32)
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)) { is_global x })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c))
+  (x : array2 f32 (l2_bcm_pages b hw c) { is_global x })
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) c)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -100,9 +100,9 @@ fn rmsnorm_fw_f32_impl
       SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
     )
   ensures
-    exists* (sx' : EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c)).
+    exists* (sx' : EM.chest2 f32 (SZ.v b * SZ.v hw) c).
       on gpu_loc (x |-> sx') **
-      pure (rmsnorm_post (SZ.v b * SZ.v hw) (SZ.v c) eps inv_c sx sx')
+      pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps inv_c sx sx')
 {
   (* bhw = B * HW; strictly positive since b > 0 and hw > 0 *)
   let bhw : szp = b *^ hw;
@@ -127,7 +127,7 @@ fn rmsnorm_fw_f32_impl
   free sum_sq;
 
   (* Discharge the per-row functional postcondition. *)
-  rmsnorm_post_aux (SZ.v bhw) (SZ.v c) eps inv_c sx;
+  rmsnorm_post_aux bhw c eps inv_c sx;
   ()
 }
 #pop-options
@@ -141,8 +141,8 @@ fn rmsnorm_fw
   (hw : SZ.t { 0 < SZ.v hw /\ SZ.fits (SZ.v b * SZ.v hw) })
   (c : SZ.t { 0 < SZ.v c /\ SZ.fits (SZ.v hw * SZ.v c) /\ SZ.fits (SZ.v b * (SZ.v hw * SZ.v c)) })
   (eps : f32)
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v hw) (SZ.v c)) { is_global x })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c))
+  (x : array2 f32 (l2_bcm_pages b hw c) { is_global x })
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v hw) c)
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
@@ -151,9 +151,9 @@ fn rmsnorm_fw
       SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
     )
   ensures
-    exists* (sx' : EM.chest2 f32 (SZ.v b * SZ.v hw) (SZ.v c)).
+    exists* (sx' : EM.chest2 f32 (SZ.v b * SZ.v hw) c).
       on gpu_loc (x |-> sx') **
-      pure (rmsnorm_post (SZ.v b * SZ.v hw) (SZ.v c) eps (rms_inv_c c) sx sx')
+      pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx')
 {
   let inv_c : f32 = rms_inv_c c;
   rmsnorm_fw_f32_impl b hw c eps inv_c x;

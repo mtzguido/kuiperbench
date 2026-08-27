@@ -74,7 +74,7 @@ fn t_memcpy_d2d'
   ensures exists* (s' : chest1 a dst_sz).
       on gpu_loc (dst |-> s') **
       pure (chest1_to_seq s' ==
-            KS.seq_blit (chest1_to_seq gv) (SZ.v dst_off) (chest1_to_seq v) (SZ.v src_off) (SZ.v cnt))
+            KS.seq_blit (chest1_to_seq gv) dst_off (chest1_to_seq v) src_off cnt)
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward dst_sz) gv)
     fn _ { tensor_concr dst; };
@@ -221,15 +221,15 @@ fn layer_norm_row
   ensures
     (exists* (sx' : chest1 f32 (b * n)) (ss' : chest1 f32 n).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
-       pure (row_layer_normalized #_ #_ #_ #_ #_ #(SZ.v n)
+       pure (row_layer_normalized #_ #_ #_ #_ #_ #n
                (chest1_to_seq sx) (chest1_to_seq sx')
-               (chest1_to_seq sg) (chest1_to_seq sbeta) (SZ.v rv_off) eps inv_n /\
+               (chest1_to_seq sg) (chest1_to_seq sbeta) rv_off eps inv_n /\
              (exists (inv neg_mean_inv : f32).
-                chest1_to_seq sx' == KS.seq_blit (chest1_to_seq sx) (SZ.v rv_off)
-                         (ln_row_result #_ #_ #(SZ.v n) inv neg_mean_inv
+                chest1_to_seq sx' == KS.seq_blit (chest1_to_seq sx) rv_off
+                         (ln_row_result #_ #_ #n inv neg_mean_inv
                             (chest1_to_seq sg) (chest1_to_seq sbeta)
-                            (Seq.slice (chest1_to_seq sx) (SZ.v rv_off) (SZ.v rv_off + SZ.v n)))
-                         0 (SZ.v n))))
+                            (Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v n)))
+                         0 n)))
 {
   (* Pass 1: copy row x[rv_off .. rv_off+n) into scratch[0 .. n). *)
   t_memcpy_d2d' scratch 0sz x rv_off n;
@@ -237,9 +237,9 @@ fn layer_norm_row
   (* [seq_blit ss 0 sx rv_off n] fully overwrites the length-n scratch,
      so it equals [slice sx rv_off (rv_off+n)] -- the row. *)
   let row_g : erased (lseq f32 n) =
-    hide (Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v rv_off + SZ.v n));
+    hide (Seq.slice (chest1_to_seq (reveal sx)) rv_off (SZ.v rv_off + SZ.v n));
   Seq.lemma_eq_intro
-    (KS.seq_blit (chest1_to_seq (reveal ss)) 0 (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v n))
+    (KS.seq_blit (chest1_to_seq (reveal ss)) 0 (chest1_to_seq (reveal sx)) rv_off n)
     (reveal row_g);
   assert pure (chest1_to_seq (reveal vs1) == reveal row_g);
 
@@ -287,10 +287,10 @@ fn layer_norm_row
   chest1_map2_to_seq add
     (Map.chest1_map2 mul (chest_map (affine_step inv neg_mean_inv) (reveal vs1)) (reveal sg))
     (reveal sbeta);
-  ln_row_result_via_affine_lemma (SZ.v n) inv neg_mean_inv
+  ln_row_result_via_affine_lemma n inv neg_mean_inv
     (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta)) (reveal row_g);
   assert pure (chest1_to_seq (reveal sfin) ==
-               ln_row_result #_ #_ #(SZ.v n) inv neg_mean_inv
+               ln_row_result #_ #_ #n inv neg_mean_inv
                  (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta)) (reveal row_g));
 
   (* Pass 6: copy scratch back into x[rv_off .. rv_off+n). *)
@@ -300,10 +300,10 @@ fn layer_norm_row
   (* Prove the concrete value of vfinal at the seq level. *)
   Seq.lemma_eq_intro
     (chest1_to_seq (reveal vfinal))
-    (KS.seq_blit (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-       (ln_row_result #_ #_ #(SZ.v n) inv neg_mean_inv
+    (KS.seq_blit (chest1_to_seq (reveal sx)) rv_off
+       (ln_row_result #_ #_ #n inv neg_mean_inv
           (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta)) (reveal row_g))
-       0 (SZ.v n));
+       0 n);
 
   (* Prove the slice equality needed for row_layer_normalized_intro.
      [vfinal] equals the self-blit of [ln_row_result] into [sx] at
@@ -312,12 +312,12 @@ fn layer_norm_row
      [blit_self_slice] lemma so this holds robustly. *)
   assert pure (Seq.length (chest1_to_seq (reveal vfinal)) == b * n);
   assert pure (rv_off + n <= b * n);
-  blit_self_slice (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-    (ln_row_result #_ #_ #(SZ.v n) inv neg_mean_inv
+  blit_self_slice (chest1_to_seq (reveal sx)) rv_off
+    (ln_row_result #_ #_ #n inv neg_mean_inv
        (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta)) (reveal row_g));
   Seq.lemma_eq_intro
-    (Seq.slice (chest1_to_seq (reveal vfinal)) (SZ.v rv_off) (SZ.v rv_off + SZ.v n))
-    (ln_row_result #_ #_ #(SZ.v n) inv neg_mean_inv
+    (Seq.slice (chest1_to_seq (reveal vfinal)) rv_off (SZ.v rv_off + SZ.v n))
+    (ln_row_result #_ #_ #n inv neg_mean_inv
        (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta)) (reveal row_g));
 
   (* Introduce row_layer_normalized. *)
@@ -325,23 +325,23 @@ fn layer_norm_row
      the [%~] facts and the slice equality line up with the lemma conjuncts. *)
   assert pure (rv_off + n <= b * n);
   assert pure (reveal row_g ==
-               Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v rv_off + SZ.v n));
+               Seq.slice (chest1_to_seq (reveal sx)) rv_off (SZ.v rv_off + SZ.v n));
   assert pure (sum1 %~ rsum (to_real_seq (reveal row_g)));
   assert pure (sum2 %~ frobenius_sumsq_r (to_real_seq (reveal row_g)));
   row_layer_normalized_intro #(b * n) n
     (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
     (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal vfinal))
-    (SZ.v rv_off) eps inv_n
+    rv_off eps inv_n
     sum1 sum2 mean m2 var var_eps inv neg_mean_inv;
 
   (* Witness the blit existential. *)
   assert pure (exists (i nmi : f32).
                  chest1_to_seq (reveal vfinal) ==
-                   KS.seq_blit (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-                     (ln_row_result #_ #_ #(SZ.v n) i nmi
+                   KS.seq_blit (chest1_to_seq (reveal sx)) rv_off
+                     (ln_row_result #_ #_ #n i nmi
                         (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
-                        (Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v rv_off + SZ.v n)))
-                     0 (SZ.v n));
+                        (Seq.slice (chest1_to_seq (reveal sx)) rv_off (SZ.v rv_off + SZ.v n)))
+                     0 n);
   ()
 }
 #pop-options
@@ -652,7 +652,7 @@ fn layer_norm
     on gpu_loc (beta  |-> Frac fb sbeta) **
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
-       pure (layernorm_post (SZ.v b) (SZ.v n) eps inv_n
+       pure (layernorm_post b n eps inv_n
                (chest1_to_seq sg) (chest1_to_seq sbeta)
                (chest1_to_seq sx) (chest1_to_seq sx')))
 {
@@ -661,7 +661,7 @@ fn layer_norm
   (* Establish forall r < b. r*n+n <= b*n in a clean context BEFORE
      the loop, so the fact is available both inside the loop body and
      after the loop for layernorm_post. *)
-  row_lt_b_bound_forall_lemma (SZ.v n) (SZ.v b);
+  row_lt_b_bound_forall_lemma n b;
   while (let i = !idx; SZ.(i <^ b))
     invariant
       exists* (vi : sz) (sx' : chest1 f32 (b * n)) (ss' : chest1 f32 n).
@@ -671,7 +671,7 @@ fn layer_norm
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               (forall (r : nat). r < SZ.v vi ==>
-                 row_layer_normalized #_ #_ #_ #_ #_ #(SZ.v n)
+                 row_layer_normalized #_ #_ #_ #_ #_ #n
                    (chest1_to_seq sx) (chest1_to_seq sx')
                    (chest1_to_seq sg) (chest1_to_seq sbeta) (r * SZ.v n) eps inv_n) /\
               Seq.slice (chest1_to_seq sx') (SZ.v vi * SZ.v n) (SZ.v b * SZ.v n) ==
@@ -688,28 +688,28 @@ fn layer_norm
        grows the proof context Z3 can no longer re-derive it, so we
        persist it here (it feeds transfer_rln_forall's 3rd precondition). *)
     assert pure (forall (r : nat). r < SZ.v i ==>
-      row_layer_normalized #_ #_ #_ #_ #_ #(SZ.v n)
+      row_layer_normalized #_ #_ #_ #_ #_ #n
         (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre))
         (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
         (r * SZ.v n) eps inv_n);
     (* Re-establish the bound fact inside the loop body. *)
-    row_lt_b_bound_forall_lemma (SZ.v n) (SZ.v b);
+    row_lt_b_bound_forall_lemma n b;
     layer_norm_row b n off eps inv_n x gamma beta scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
     (* From the row postcondition: row is normalized w.r.t. sx_pre,
        and sx_post is the blit.  Use ln_loop_step_lemma to get
        suffix slice preservation and prefix slice preservation. *)
-    ln_loop_step_lemma (SZ.v b) (SZ.v n) (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
-      (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) (SZ.v i);
+    ln_loop_step_lemma b n (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
+      (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) i;
     (* Lift the just-completed row's predicate from sx_pre to sx. *)
-    rln_lift_input_via_suffix (SZ.v n) (SZ.v i) (SZ.v b * SZ.v n)
+    rln_lift_input_via_suffix n i (SZ.v b * SZ.v n)
       eps inv_n (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
       (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post));
-    assert pure (row_layer_normalized #_ #_ #_ #_ #_ #(SZ.v n)
+    assert pure (row_layer_normalized #_ #_ #_ #_ #_ #n
                    (chest1_to_seq sx) (chest1_to_seq (reveal sx_post))
                    (chest1_to_seq sg) (chest1_to_seq sbeta) (SZ.v i * SZ.v n) eps inv_n);
     (* Establish r*n+n <= vi*n for all r < vi. *)
-    ln_prefix_le_forall_lemma (SZ.v n) (SZ.v i);
+    ln_prefix_le_forall_lemma n i;
     (* Stage transfer_rln_forall's 4th precondition (per-row slice
        preservation) in a clean sub-query.  Its 3rd precondition (the
        per-row normalisation forall) was already captured pre-row-call
@@ -762,7 +762,7 @@ fn layernorm_fw
     on gpu_loc (beta  |-> Frac fb sbeta) **
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
-       pure (layernorm_post (SZ.v b) (SZ.v n) eps (ln_inv_n n)
+       pure (layernorm_post b n eps (ln_inv_n n)
                (chest1_to_seq sg) (chest1_to_seq sbeta)
                (chest1_to_seq sx) (chest1_to_seq sx')))
 {

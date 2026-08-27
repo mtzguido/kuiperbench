@@ -79,13 +79,13 @@ fn matmul_sub_mul_relu_f32_impl
      SZ.fits (SZ.v batch * SZ.v out) })
   (sub_v : f32)
   (mul_v : f32)
-  (x    : array2 f32 (l2_row_major (SZ.v batch) (SZ.v input)) { is_global x    })
-  (wt   : array2 f32 (l2_row_major (SZ.v input) (SZ.v out))   { is_global wt   })
-  (bias : array1 f32 (l1_forward (SZ.v out))                  { is_global bias })
+  (x    : array2 f32 (l2_row_major batch input) { is_global x    })
+  (wt   : array2 f32 (l2_row_major input out)   { is_global wt   })
+  (bias : array1 f32 (l1_forward out)                  { is_global bias })
   (y    : array1 f32 (l1_forward (SZ.v batch * SZ.v out))     { is_global y    })
-  (#sx   : EM.chest2 f32 (SZ.v batch) (SZ.v input))
-  (#swt  : EM.chest2 f32 (SZ.v input) (SZ.v out))
-  (#sbias: chest1 f32 (SZ.v out))
+  (#sx   : EM.chest2 f32 batch input)
+  (#swt  : EM.chest2 f32 input out)
+  (#sbias: chest1 f32 out)
   (#sy   : chest1 f32 (SZ.v batch * SZ.v out))
   preserves cpu
   requires
@@ -104,7 +104,7 @@ fn matmul_sub_mul_relu_f32_impl
   (* Expose Seq.length / SZ.fits facts for the concrete layouts. *)
 
   (* Scratch GEMM output: gC = x @ wt  (batch × out). *)
-  let gC = alloc0 #f32 (batch *^ out) (l2_row_major (SZ.v batch) (SZ.v out));
+  let gC = alloc0 #f32 (batch *^ out) (l2_row_major batch out);
   with sc0. assert on gpu_loc (gC |-> sc0);
   bridge_fwd x;
   bridge_fwd wt;
@@ -121,7 +121,7 @@ fn matmul_sub_mul_relu_f32_impl
   bridge_bwd gC;
   assert pure (reveal eC' == MS.matmul (reveal sx) (reveal swt));
 
-  let mm : EM.chest2 f32 (SZ.v batch) (SZ.v out) =
+  let mm : EM.chest2 f32 batch out =
     hide (MS.matmul (reveal sx) (reveal swt));
   assert pure (eC' == mm);
 
@@ -129,7 +129,7 @@ fn matmul_sub_mul_relu_f32_impl
   BA.bias_add_gpu batch out gC bias y;
   with sy_b. assert on gpu_loc (y |-> sy_b);
   assert pure (forall (tid:nat). tid < SZ.v batch * SZ.v out ==>
-                 acc1 sy_b tid == BA.bias_add_at (SZ.v batch) (SZ.v out) (reveal mm) sbias tid);
+                 acc1 sy_b tid == BA.bias_add_at batch out (reveal mm) sbias tid);
 
   (* Launch 3: single fused pointwise map: relu((y - sub_v) * mul_v). *)
   Map.map_gpu (smr sub_v mul_v) (batch *^ out) #_ #(c_l1_forward _) y;
@@ -137,7 +137,7 @@ fn matmul_sub_mul_relu_f32_impl
 
   (* Discharge per-(i,j) [matmul_sub_mul_relu_post]. *)
   Classical.forall_intro_2
-    (msmr_row_aux (SZ.v batch) (SZ.v out) sub_v mul_v (reveal mm) sbias sy_b ());
+    (msmr_row_aux batch out sub_v mul_v (reveal mm) sbias sy_b ());
 
   free gC;
   ()

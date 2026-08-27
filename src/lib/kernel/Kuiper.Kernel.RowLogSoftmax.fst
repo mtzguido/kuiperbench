@@ -151,6 +151,6 @@ fn row_log_softmax_gpu
 
   free sums;
 
-  s_row_broadcast_approx_log_softmax #et #_ #_ #_ #(SZ.v m) #(SZ.v n) sums_v sa ra;
+  s_row_broadcast_approx_log_softmax #et #_ #_ #_ #m #n sums_v sa ra;
   ()
 }

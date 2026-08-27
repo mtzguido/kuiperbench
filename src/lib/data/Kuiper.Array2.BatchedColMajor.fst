@@ -160,18 +160,18 @@ let flat_bcm_cimap
   (sq_rows  : squash (SZ.fits (bc * SZ.v wq)))
   (sq_plane : squash (SZ.fits (SZ.v inner * SZ.v wq)))
   (sq_tot   : squash (SZ.fits ((bc * SZ.v wq) * SZ.v inner)))
-  (idx : conc ((bc * SZ.v wq) @| (SZ.v inner) @| INil))
-  : (y : SZ.t { SZ.v y == (flat_bcm bc (SZ.v wq) (SZ.v inner)).imap.f (up idx) })
+  (idx : conc ((bc * SZ.v wq) @| inner @| INil))
+  : (y : SZ.t { SZ.v y == (flat_bcm bc wq inner).imap.f (up idx) })
   = let (rr, (j, ())) = idx in
     let b = SZ.v rr / SZ.v wq in
     let n = SZ.v inner * SZ.v wq in
-    cancel_lt b bc (SZ.v wq);                 (* b < bc *)
+    cancel_lt b bc wq;                 (* b < bc *)
     ML.lemma_mult_le_right n b (bc - 1);      (* b*n <= (bc-1)*n *)
     ML.distributivity_sub_left bc 1 n;        (* (bc-1)*n == bc*n - n *)
     ML.swap_mul bc n;                         (* bc*n == n*bc == (bc*wq)*inner via... *)
-    ML.paren_mul_right bc (SZ.v inner) (SZ.v wq);
-    ML.swap_mul (SZ.v inner) (SZ.v wq);
-    flat_bcm_bound bc (SZ.v wq) (SZ.v inner) (SZ.v rr) (SZ.v j);
+    ML.paren_mul_right bc inner wq;
+    ML.swap_mul inner wq;
+    flat_bcm_bound bc wq inner rr j;
     (rr /^ wq) *^ (inner *^ wq) +^ j *^ wq +^ (rr %^ wq)
 
 inline_for_extraction noextract
@@ -181,7 +181,7 @@ instance c_flat_bcm
   (#_ : squash (SZ.fits (bc * SZ.v wq)))
   (#_ : squash (SZ.fits (SZ.v inner * SZ.v wq)))
   (#_ : squash (SZ.fits ((bc * SZ.v wq) * SZ.v inner)))
-  : ctlayout (flat_bcm bc (SZ.v wq) (SZ.v inner))
+  : ctlayout (flat_bcm bc wq inner)
   = {
       ulen_fits = ();
       all_fit = ();

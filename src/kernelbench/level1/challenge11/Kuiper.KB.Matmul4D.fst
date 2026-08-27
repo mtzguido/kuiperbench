@@ -485,7 +485,7 @@ fn matmul4d
   let bound : sz = max_blocks *^ max_threads;
   assert pure (SZ.v bound == max_blocks * max_threads);
   dguard (bijk <=^ bound);
-  assert pure (K.size_req (SZ.v bi * SZ.v j) (SZ.v k) (SZ.v l));
+  assert pure (K.size_req (SZ.v bi * SZ.v j) k l);
 
   let pbi : erased nat = SZ.v bi;
 
@@ -501,8 +501,8 @@ fn matmul4d
   (* Bridge: MatmulND wants [flat3to2 eA3 %~ rA_flat].  [flat4to2_eq] gives
      [flat3to2 eA3 == flat4to2 eA]; [flat_of_approx4] transfers the new 4-D
      hypothesis [eA %~ rA] to [flat4to2 eA %~ flat4to2 rA == rA_flat]. *)
-  flat4to2_eq #t (SZ.v b) (SZ.v i) (SZ.v j) (SZ.v l) pbi () eA;
-  flat_of_approx4 #t #_ #_ #(SZ.v b) #(SZ.v i) #(SZ.v j) #(SZ.v l) eA rA;
+  flat4to2_eq #t b i j l pbi () eA;
+  flat_of_approx4 #t #_ #_ #b #i #j #l eA rA;
 
   (* 3. Run the verified ND matmul on the flattened (b*i,j,l) @ (l,k) operands. *)
   matmul_nd #t bi j l k
@@ -523,15 +523,15 @@ fn matmul4d
   let eC4 : chest4 t b i j k =
     from_seq (l4_row_major b i j k)
       (to_seq (l3_batched_row_major pbi j k) eC3);
-  flat4to2_out #t (SZ.v b) (SZ.v i) (SZ.v j) (SZ.v k) pbi () eC3;
+  flat4to2_out #t b i j k pbi () eC3;
   (* [flat4to2 eC4 == flat3to2 eC3 %~ MS.matmul rA_flat rB]. *)
   assert pure (flat4to2 eC4 %~ MS.matmul rA_flat rB);
   (* DIRECT product commutes with the flatten:
      [flat4to2 (ematmul4 rA rB) == MS.matmul (flat4to2 rA) rB == MS.matmul rA_flat rB],
      so [flat4to2 eC4 %~ flat4to2 (ematmul4 rA rB)]; then [approx4_of_flat] lifts
      that to the DIRECT 4-D postcondition [eC4 %~ ematmul4 rA rB]. *)
-  ematmul4_flat_lemma #(SZ.v b) #(SZ.v i) #(SZ.v j) #(SZ.v l) #(SZ.v k) rA rB;
-  approx4_of_flat #t #_ #_ #(SZ.v b) #(SZ.v i) #(SZ.v j) #(SZ.v k) eC4 (ematmul4 rA rB);
+  ematmul4_flat_lemma #b #i #j #l #k rA rB;
+  approx4_of_flat #t #_ #_ #b #i #j #k eC4 (ematmul4 rA rB);
   assert pure (eC4 %~ ematmul4 rA rB);
   (* [eC3 == from_seq (l3 pbi) (to_seq (l4) eC4)] discharges the reshape3to4_eq
      obligation: to_seq (l4) eC4 == to_seq (l3 pbi) eC3 (A4.to_from), then

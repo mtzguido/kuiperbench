@@ -101,7 +101,7 @@ fn t_memcpy_d2d'
   ensures exists* (s' : chest1 a dst_sz).
       on gpu_loc (dst |-> s') **
       pure (chest1_to_seq s' ==
-            KS.seq_blit (chest1_to_seq gv) (SZ.v dst_off) (chest1_to_seq v) (SZ.v src_off) (SZ.v cnt))
+            KS.seq_blit (chest1_to_seq gv) dst_off (chest1_to_seq v) src_off cnt)
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward dst_sz) gv)
     fn _ { tensor_concr dst; };
@@ -402,29 +402,29 @@ fn dist_sq_row
     (exists* (va : chest1 f32 d) (vb : chest1 f32 d).
        on gpu_loc (scratch_a |-> va) **
        on gpu_loc (scratch_b |-> vb)) **
-    pure (sumsq %~ real_sq_dist (SZ.v d)
-                    (trow (chest1_to_seq (reveal sx)) (SZ.v d) (reveal ri))
-                    (trow (chest1_to_seq (reveal sy)) (SZ.v d) (reveal ri)))
+    pure (sumsq %~ real_sq_dist d
+                    (trow (chest1_to_seq (reveal sx)) d (reveal ri))
+                    (trow (chest1_to_seq (reveal sy)) d (reveal ri)))
 {
   t_memcpy_d2d' scratch_a 0sz x off d;
   with sca. assert (on gpu_loc (scratch_a |-> reveal sca));
   assert pure (chest1_to_seq (reveal sca) ==
                KS.seq_blit (chest1_to_seq (reveal va0)) 0
-                 (chest1_to_seq (reveal sx)) (SZ.v off) (SZ.v d));
-  memcpy_row_eq #len (SZ.v d) (chest1_to_seq (reveal va0))
-    (chest1_to_seq (reveal sx)) (reveal ri) (SZ.v off);
+                 (chest1_to_seq (reveal sx)) off d);
+  memcpy_row_eq #len d (chest1_to_seq (reveal va0))
+    (chest1_to_seq (reveal sx)) (reveal ri) off;
   assert pure (chest1_to_seq (reveal sca) ==
-               trow (chest1_to_seq (reveal sx)) (SZ.v d) (reveal ri));
+               trow (chest1_to_seq (reveal sx)) d (reveal ri));
 
   t_memcpy_d2d' scratch_b 0sz y off d;
   with scb. assert (on gpu_loc (scratch_b |-> reveal scb));
   assert pure (chest1_to_seq (reveal scb) ==
                KS.seq_blit (chest1_to_seq (reveal vb0)) 0
-                 (chest1_to_seq (reveal sy)) (SZ.v off) (SZ.v d));
-  memcpy_row_eq #len (SZ.v d) (chest1_to_seq (reveal vb0))
-    (chest1_to_seq (reveal sy)) (reveal ri) (SZ.v off);
+                 (chest1_to_seq (reveal sy)) off d);
+  memcpy_row_eq #len d (chest1_to_seq (reveal vb0))
+    (chest1_to_seq (reveal sy)) (reveal ri) off;
   assert pure (chest1_to_seq (reveal scb) ==
-               trow (chest1_to_seq (reveal sy)) (SZ.v d) (reveal ri));
+               trow (chest1_to_seq (reveal sy)) d (reveal ri));
 
   Map.map_gpu2 #f32 sq_diff_step_f32 d scratch_a scratch_b;
   with v. assert (on gpu_loc (scratch_a |-> reveal v));
@@ -433,24 +433,24 @@ fn dist_sq_row
   Kuiper.Chest.ext (reveal v)
     (Map.chest1_map2 sq_diff_step_f32 (reveal sca) (reveal scb));
   let vr : chest1 real d =
-    hide (seq_to_chest1 (sqdiff_row_real (SZ.v d) (reveal sca) (reveal scb)));
-  sqdiff_map_approx (SZ.v d) (reveal sca) (reveal scb);
+    hide (seq_to_chest1 (sqdiff_row_real d (reveal sca) (reveal scb)));
+  sqdiff_map_approx d (reveal sca) (reveal scb);
   assert pure (reveal v %~ reveal vr);
   let sumsq = HRed.reduce #f32 id id 1024sz d scratch_a #v vr;
   assert pure (equal (chest_map id (reveal vr)) (reveal vr));
-  chest1_seq_roundtrip (sqdiff_row_real (SZ.v d) (reveal sca) (reveal scb));
+  chest1_seq_roundtrip (sqdiff_row_real d (reveal sca) (reveal scb));
   assert pure (Seq.equal (chest1_to_seq (reveal vr))
-                         (sqdiff_row_real (SZ.v d) (reveal sca) (reveal scb)));
-  assert pure (sumsq %~ rsum (sqdiff_row_real (SZ.v d) (reveal sca) (reveal scb)));
-  sqdiff_row_real_eq (SZ.v d) (reveal sca) (reveal scb)
-    (trow (chest1_to_seq (reveal sx)) (SZ.v d) (reveal ri))
-    (trow (chest1_to_seq (reveal sy)) (SZ.v d) (reveal ri));
-  real_sq_dist_unfold (SZ.v d)
-    (trow (chest1_to_seq (reveal sx)) (SZ.v d) (reveal ri))
-    (trow (chest1_to_seq (reveal sy)) (SZ.v d) (reveal ri));
-  assert pure (sumsq %~ real_sq_dist (SZ.v d)
-                  (trow (chest1_to_seq (reveal sx)) (SZ.v d) (reveal ri))
-                  (trow (chest1_to_seq (reveal sy)) (SZ.v d) (reveal ri)));
+                         (sqdiff_row_real d (reveal sca) (reveal scb)));
+  assert pure (sumsq %~ rsum (sqdiff_row_real d (reveal sca) (reveal scb)));
+  sqdiff_row_real_eq d (reveal sca) (reveal scb)
+    (trow (chest1_to_seq (reveal sx)) d (reveal ri))
+    (trow (chest1_to_seq (reveal sy)) d (reveal ri));
+  real_sq_dist_unfold d
+    (trow (chest1_to_seq (reveal sx)) d (reveal ri))
+    (trow (chest1_to_seq (reveal sy)) d (reveal ri));
+  assert pure (sumsq %~ real_sq_dist d
+                  (trow (chest1_to_seq (reveal sx)) d (reveal ri))
+                  (trow (chest1_to_seq (reveal sy)) d (reveal ri)));
   sumsq;
 }
 #pop-options
@@ -479,7 +479,7 @@ fn triplet_loss_impl
             on gpu_loc (negative |-> Frac fneg sn)
   returns res : f32
   ensures
-    pure (triplet_post (SZ.v b) (SZ.v d) margin inv_b
+    pure (triplet_post b d margin inv_b
             (chest1_to_seq (reveal sa) <: Seq.lseq f32 (SZ.v b * SZ.v d))
             (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v d))
             (chest1_to_seq (reveal sn) <: Seq.lseq f32 (SZ.v b * SZ.v d))
@@ -499,9 +499,9 @@ fn triplet_loss_impl
   let t_dev     = alloc0 #f32 b (l1_forward b);
   let t_host    = Vec.alloc #f32 (zero #f32) b;
 
-  triplet_inv_init (SZ.v b) (SZ.v d) margin
+  triplet_inv_init b d margin
     (reveal sa_c) (reveal sp_c) (reveal sn_c)
-    (Seq.create (SZ.v b) (zero #f32));
+    (Seq.create b (zero #f32));
   let mut idx : SZ.t = 0sz;
   while (let i = !idx; SZ.(i <^ b))
     invariant
@@ -518,35 +518,35 @@ fn triplet_loss_impl
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               Seq.length vt == SZ.v b /\
-              (exists (w : tup4 (SZ.v b)).
-                 carried_pred (SZ.v b) (SZ.v d) margin
+              (exists (w : tup4 b).
+                 carried_pred b d margin
                    (reveal sa_c) (reveal sp_c) (reveal sn_c)
-                   vt (SZ.v vi) w))
+                   vt vi w))
     decreases (SZ.v b - SZ.v !idx)
   {
     let i = !idx;
     let off : SZ.t = SZ.(i *^ d);
     assert pure (SZ.v off == SZ.v i * SZ.v d);
-    FStar.Math.Lemmas.lemma_mult_le_right (SZ.v d) (SZ.v i + 1) (SZ.v b);
+    FStar.Math.Lemmas.lemma_mult_le_right d (SZ.v i + 1) b;
     assert pure (SZ.v i * SZ.v d + SZ.v d <= SZ.v b * SZ.v d);
 
     (* ── per-row squared distances via the factored helper ──────── *)
     assert pure (i * d + d <= b * d);
 
     let sumsq_p = dist_sq_row d anchor positive scratch_a scratch_b off (hide (SZ.v i));
-    assert pure (trow (chest1_to_seq (reveal sa)) (SZ.v d) (SZ.v i) == trow (reveal sa_c) (SZ.v d) (SZ.v i));
-    assert pure (trow (chest1_to_seq (reveal sp)) (SZ.v d) (SZ.v i) == trow (reveal sp_c) (SZ.v d) (SZ.v i));
-    assert pure (sumsq_p %~ real_sq_dist (SZ.v d)
-                   (trow (reveal sa_c) (SZ.v d) (SZ.v i))
-                   (trow (reveal sp_c) (SZ.v d) (SZ.v i)));
+    assert pure (trow (chest1_to_seq (reveal sa)) d i == trow (reveal sa_c) d i);
+    assert pure (trow (chest1_to_seq (reveal sp)) d i == trow (reveal sp_c) d i);
+    assert pure (sumsq_p %~ real_sq_dist d
+                   (trow (reveal sa_c) d i)
+                   (trow (reveal sp_c) d i));
     let d_ap_r = sqrt sumsq_p;
 
     let sumsq_n = dist_sq_row d anchor negative scratch_a scratch_b off (hide (SZ.v i));
-    assert pure (trow (chest1_to_seq (reveal sa)) (SZ.v d) (SZ.v i) == trow (reveal sa_c) (SZ.v d) (SZ.v i));
-    assert pure (trow (chest1_to_seq (reveal sn)) (SZ.v d) (SZ.v i) == trow (reveal sn_c) (SZ.v d) (SZ.v i));
-    assert pure (sumsq_n %~ real_sq_dist (SZ.v d)
-                   (trow (reveal sa_c) (SZ.v d) (SZ.v i))
-                   (trow (reveal sn_c) (SZ.v d) (SZ.v i)));
+    assert pure (trow (chest1_to_seq (reveal sa)) d i == trow (reveal sa_c) d i);
+    assert pure (trow (chest1_to_seq (reveal sn)) d i == trow (reveal sn_c) d i);
+    assert pure (sumsq_n %~ real_sq_dist d
+                   (trow (reveal sa_c) d i)
+                   (trow (reveal sn_c) d i));
     let d_an_r = sqrt sumsq_n;
 
     (* ── margin step + store ────────────────────────────────────── *)
@@ -557,11 +557,11 @@ fn triplet_loss_impl
     Vec.(t_host.(i) <- step);
 
     with vt_old. assert (Vec.pts_to t_host (reveal vt_old));
-    triplet_prefix_extend (SZ.v b) (SZ.v d) margin
+    triplet_prefix_extend b d margin
       (reveal sa_c) (reveal sp_c) (reveal sn_c)
       (reveal vt_old)
-      (Seq.upd (reveal vt_old) (SZ.v i) (triplet_step margin d_ap_r d_an_r))
-      (SZ.v i) sumsq_p sumsq_n d_ap_r d_an_r;
+      (Seq.upd (reveal vt_old) i (triplet_step margin d_ap_r d_an_r))
+      i sumsq_p sumsq_n d_ap_r d_an_r;
 
     idx := SZ.(!idx +^ 1sz);
   };
@@ -572,7 +572,7 @@ fn triplet_loss_impl
   with vt_dev_final. assert (on gpu_loc (t_dev |-> reveal vt_dev_final));
   assert pure (chest1_to_seq (reveal vt_dev_final) == reveal vt_loop);
 
-  let vt_r : chest1 real (SZ.v b) = hide (to_real_chest (reveal vt_dev_final));
+  let vt_r : chest1 real b = hide (to_real_chest (reveal vt_dev_final));
   lemma_to_real_chest_approximates (reveal vt_dev_final);
   let s = HRed.reduce #f32 id id 1024sz b t_dev vt_r;
   assert pure (equal (chest_map id (reveal vt_r)) (reveal vt_r));
@@ -581,9 +581,9 @@ fn triplet_loss_impl
 
   let m : f32 = mul s inv_b;
 
-  triplet_final_lemma (SZ.v b) (SZ.v d) margin inv_b
+  triplet_final_lemma b d margin inv_b
     (reveal sa_c) (reveal sp_c) (reveal sn_c)
-    (reveal vt_loop <: Seq.lseq f32 (SZ.v b))
+    (reveal vt_loop <: Seq.lseq f32 b)
     s
     m;
 

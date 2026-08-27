@@ -402,7 +402,7 @@ fn t_memcpy_d2d'
   ensures exists* (s' : chest1 a dst_sz).
       on gpu_loc (dst |-> s') **
       pure (chest1_to_seq s' ==
-            KS.seq_blit (chest1_to_seq gv) (SZ.v dst_off) (chest1_to_seq v) (SZ.v src_off) (SZ.v cnt))
+            KS.seq_blit (chest1_to_seq gv) dst_off (chest1_to_seq v) src_off cnt)
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward dst_sz) gv)
     fn _ { tensor_concr dst; };
@@ -444,13 +444,13 @@ fn l2norm_row
     (exists* (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
        pure (exists (inv : f32) (sumsq : f32).
-         (let row : Seq.lseq f32 (SZ.v d) =
-            Seq.slice (chest1_to_seq sx) (SZ.v rv_off) (SZ.v rv_off + SZ.v d) in
+         (let row : Seq.lseq f32 d =
+            Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d) in
           sumsq %~ frobenius_sumsq_r (to_real_seq row) /\
           inv == rsqrt sumsq /\
           chest1_to_seq sx' ==
-            KS.seq_blit (chest1_to_seq sx) (SZ.v rv_off)
-              (frobenius_result #f32 inv #(SZ.v d) row) 0 (SZ.v d))))
+            KS.seq_blit (chest1_to_seq sx) rv_off
+              (frobenius_result #f32 inv #d row) 0 d)))
 {
   (* Copy the row x[rv_off .. rv_off+d) into scratch[0 .. d). *)
   t_memcpy_d2d' scratch 0sz x rv_off d;
@@ -458,9 +458,9 @@ fn l2norm_row
   (* [seq_blit ss 0 sx rv_off d] fully overwrites the length-d scratch,
      so it equals [slice sx rv_off (rv_off+d)] -- the row. *)
   let row_g : erased (lseq f32 d) =
-    hide (Seq.slice (chest1_to_seq sx) (SZ.v rv_off) (SZ.v rv_off + SZ.v d));
+    hide (Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d));
   Seq.lemma_eq_intro
-    (KS.seq_blit (chest1_to_seq ss) 0 (chest1_to_seq sx) (SZ.v rv_off) (SZ.v d))
+    (KS.seq_blit (chest1_to_seq ss) 0 (chest1_to_seq sx) rv_off d)
     (reveal row_g);
   assert pure (chest1_to_seq (reveal ss1) == reveal row_g);
 
@@ -489,32 +489,32 @@ fn l2norm_row
   assert pure (sumsq %~ frobenius_sumsq_r (to_real_seq (reveal row_g)));
   assert pure (
     chest1_to_seq (chest_map (smul_step inv) (reveal ss1)) ==
-    frobenius_result #f32 inv #(SZ.v d) (reveal row_g));
+    frobenius_result #f32 inv #d (reveal row_g));
   FStar.Classical.exists_intro
     (fun (sumsq' : f32) ->
       sumsq' %~ frobenius_sumsq_r (to_real_seq (reveal row_g)) /\
       inv == rsqrt sumsq' /\
       chest1_to_seq (reveal sx') ==
-        KS.seq_blit (chest1_to_seq sx) (SZ.v rv_off)
-          (frobenius_result #f32 inv #(SZ.v d) (reveal row_g)) 0 (SZ.v d))
+        KS.seq_blit (chest1_to_seq sx) rv_off
+          (frobenius_result #f32 inv #d (reveal row_g)) 0 d)
     sumsq;
   FStar.Classical.exists_intro
     (fun (inv' : f32) -> exists (sumsq' : f32).
       sumsq' %~ frobenius_sumsq_r (to_real_seq (reveal row_g)) /\
       inv' == rsqrt sumsq' /\
       chest1_to_seq (reveal sx') ==
-        KS.seq_blit (chest1_to_seq sx) (SZ.v rv_off)
-          (frobenius_result #f32 inv' #(SZ.v d) (reveal row_g)) 0 (SZ.v d))
+        KS.seq_blit (chest1_to_seq sx) rv_off
+          (frobenius_result #f32 inv' #d (reveal row_g)) 0 d)
     inv;
   FStar.Seq.lemma_len_slice (chest1_to_seq sx)
-    (SZ.v rv_off) (SZ.v rv_off + SZ.v d);
+    rv_off (SZ.v rv_off + SZ.v d);
   assert pure (SZ.v rv_off + SZ.v d - SZ.v rv_off == SZ.v d);
   assert pure (Seq.length (Seq.slice (chest1_to_seq sx)
-    (SZ.v rv_off) (SZ.v rv_off + SZ.v d)) == SZ.v d);
+    rv_off (SZ.v rv_off + SZ.v d)) == SZ.v d);
   assert pure (
     reveal row_g ==
       (Seq.slice (chest1_to_seq sx)
-        (SZ.v rv_off) (SZ.v rv_off + SZ.v d) <: Seq.lseq f32 (SZ.v d)));
+        rv_off (SZ.v rv_off + SZ.v d) <: Seq.lseq f32 d));
   ()
 }
 
@@ -532,7 +532,7 @@ fn l2norm
   ensures
     (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
-       pure (l2norm_post (SZ.v b) (SZ.v d) (chest1_to_seq sx) (chest1_to_seq sx')))
+       pure (l2norm_post b d (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let scratch = alloc0 #f32 d (l1_forward d);
   let mut idx = 0sz;
@@ -545,7 +545,7 @@ fn l2norm
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               (forall (r : nat). r < SZ.v vi ==>
-                 row_l2_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) (SZ.v d)) /\
+                 row_l2_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) d) /\
               Seq.slice (chest1_to_seq sx') (SZ.v vi * SZ.v d) (SZ.v b * SZ.v d) ==
                 Seq.slice (chest1_to_seq sx) (SZ.v vi * SZ.v d) (SZ.v b * SZ.v d))
     decreases (SZ.v b - SZ.v !idx)
@@ -555,8 +555,8 @@ fn l2norm
     with sx_pre. assert (on gpu_loc (x |-> reveal sx_pre));
     l2norm_row b d off x scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
-    l2_loop_invariant_step (SZ.v b) (SZ.v d) (chest1_to_seq (reveal sx))
-      (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) (SZ.v i);
+    l2_loop_invariant_step b d (chest1_to_seq (reveal sx))
+      (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) i;
     idx := SZ.(!idx +^ 1sz);
   };
   free scratch;

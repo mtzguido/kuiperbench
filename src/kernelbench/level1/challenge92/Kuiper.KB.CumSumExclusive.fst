@@ -79,12 +79,12 @@ inline_for_extraction noextract
 fn cumsum_exclusive_fw_f32_impl
   (b : szp { b <= max_blocks })
   (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-  (input  : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
+  (input  : array2 f32 (l2_row_major b d)
             { is_global input  })
-  (output : array2 f32 (l2_row_major (SZ.v b) (SZ.v d))
+  (output : array2 f32 (l2_row_major b d)
             { is_global output })
-  (#sx  : EM.chest2 f32 (SZ.v b) (SZ.v d))
-  (#sy0 : EM.chest2 f32 (SZ.v b) (SZ.v d))
+  (#sx  : EM.chest2 f32 b d)
+  (#sy0 : EM.chest2 f32 b d)
   requires
     cpu **
     on gpu_loc (input  |-> sx) **
@@ -92,17 +92,17 @@ fn cumsum_exclusive_fw_f32_impl
   ensures
     cpu **
     on gpu_loc (input |-> sx) **
-    (exists* (sy : EM.chest2 f32 (SZ.v b) (SZ.v d)).
+    (exists* (sy : EM.chest2 f32 b d).
        on gpu_loc (output |-> sy) **
-       pure (cumsum_exclusive_post (SZ.v b) (SZ.v d) sx sy))
+       pure (cumsum_exclusive_post b d sx sy))
 {
   scan1d_exclusive_rowblock #f32 cmonoid_fadd_f32 b d
-    #(l2_row_major (SZ.v b) (SZ.v d)) #_
-    #(l2_row_major (SZ.v b) (SZ.v d)) #_
+    #(l2_row_major b d) #_
+    #(l2_row_major b d) #_
     input output;
   Classical.forall_intro_2
     (Classical.move_requires_2
-       (cell_post_eq #(SZ.v b) #(SZ.v d) (reveal sx)));
+       (cell_post_eq #b #d (reveal sx)));
   ()
 }
 #pop-options

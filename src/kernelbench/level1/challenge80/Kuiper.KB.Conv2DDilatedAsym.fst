@@ -20,7 +20,7 @@ let conv2dd_out_dim_sz
       (requires SZ.fits (SZ.v d * (SZ.v k - 1) + 1) /\
                 SZ.fits (SZ.v l + 2 * SZ.v p))
       (ensures fun r ->
-         SZ.v r == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d))
+         SZ.v r == pool_out_len_1d l k s p d)
   =
   let kspan  : sz = SZ.((d *^ (k -^ 1sz)) +^ 1sz) in
   let padded : sz = SZ.(l +^ (2sz *^ p)) in

@@ -271,7 +271,7 @@ fn kf
           gx gw gbias gy sx sw sbias fx fw fb tid
 {
   (* The per-thread body proves [result == conv1d_out_at ...] via a loop
-     invariant tracking [acc == conv1d_partial_at ... (SZ.v k)] and the
+     invariant tracking [acc == conv1d_partial_at ... k] and the
      step lemma [conv1d_partial_at_step] (which wraps the spec-level
      [__conv1d_single_lemma]).  Setup, teardown, and sendability are
      all discharged at the [kdesc] level (see below). *)
@@ -292,7 +292,7 @@ fn kf
       exists* (vk : sz{SZ.v vk <= cin * kk}).
         k |-> vk **
         acc |-> conv1d_partial_at b cin l_in cout kk stride pad dilation
-                  l_out sx sw bi oc ol (SZ.v vk)
+                  l_out sx sw bi oc ol vk
     invariant gx |-> Frac (fx /. (b * cout * l_out)) sx
     invariant gw |-> Frac (fw /. (b * cout * l_out)) sw
     invariant gbias |-> Frac (fb /. (b * cout * l_out)) sbias
@@ -313,8 +313,8 @@ fn kf
       read_padded1 (lseq_to_t3 b cin l_in sx) bi ic
         (ol * stride + k_i * dilation - pad));
     assert pure (wv == t3acc (lseq_to_t3 cout cin kk sw) oc ic k_i);
-    assert pure (SZ.v ic == unrank1_ic cin kk (SZ.v kk_v));
-    assert pure (SZ.v k_i == unrank1_k cin kk (SZ.v kk_v));
+    assert pure (SZ.v ic == unrank1_ic cin kk kk_v);
+    assert pure (SZ.v k_i == unrank1_k cin kk kk_v);
     conv1d_partial_at_step b cin l_in cout kk stride pad dilation
       l_out sx sw bi oc ol (SZ.v kk_v + 1);
     acc := add acc0 prod;

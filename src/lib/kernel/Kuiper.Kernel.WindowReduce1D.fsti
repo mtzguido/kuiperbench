@@ -106,13 +106,13 @@ type windowreduce_ty =
      (d : szp)
      (rows : szp { SZ.v rows <= max_blocks * max_threads })
      (l    : szp)
-     (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) })
-     (#lin  : layout2 (SZ.v rows) (SZ.v l))     {| ctlayout lin  |}
-     (#lout : layout2 (SZ.v rows) (SZ.v l_out)) {| ctlayout lout |}
+     (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
+     (#lin  : layout2 rows l)     {| ctlayout lin  |}
+     (#lout : layout2 rows l_out) {| ctlayout lout |}
      (input  : array2 et lin  { is_global input  })
      (output : array2 et lout { is_global output })
-     (#sx   : EM.chest2 et (SZ.v rows) (SZ.v l))
-     (#sout : EM.chest2 et (SZ.v rows) (SZ.v l_out))
+     (#sx   : EM.chest2 et rows l)
+     (#sout : EM.chest2 et rows l_out)
      (#fIn  : perm)
      preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
      requires
@@ -121,7 +121,7 @@ type windowreduce_ty =
        pure (SZ.v rows * SZ.v l_out <= max_blocks * max_threads)
      ensures
        on gpu_loc (output |->
-         windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out))
+         windowreduce_result m sx k s p d l_out)
 
 inline_for_extraction noextract
 val windowreduce : windowreduce_ty

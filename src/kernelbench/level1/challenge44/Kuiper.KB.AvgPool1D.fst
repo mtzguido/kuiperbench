@@ -23,7 +23,7 @@ let pool_out_len_1d_sz
       (requires SZ.fits (SZ.v d * (SZ.v k - 1) + 1) /\
                 SZ.fits (SZ.v l + 2 * SZ.v p))
       (ensures fun r ->
-         SZ.v r == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d))
+         SZ.v r == pool_out_len_1d l k s p d)
   =
   let kspan  : sz = SZ.((d *^ (k -^ 1sz)) +^ 1sz) in
   let padded : sz = SZ.(l +^ (2sz *^ p)) in
@@ -44,14 +44,14 @@ fn avgpool1d_fw
   (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp)
-  (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) })
-  (#lin  : layout2 (SZ.v bc) (SZ.v l))     {| ctlayout lin  |}
-  (#lout : layout2 (SZ.v bc) (SZ.v l_out)) {| ctlayout lout |}
+  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
+  (#lin  : layout2 bc l)     {| ctlayout lin  |}
+  (#lout : layout2 bc l_out) {| ctlayout lout |}
   (input  : array2 t lin  { is_global input  })
   (output : array2 t lout { is_global output })
   (#fIn  : perm)
-  (#sx   : EM.chest2 t (SZ.v bc) (SZ.v l))
-  (#sout : EM.chest2 t (SZ.v bc) (SZ.v l_out))
+  (#sx   : EM.chest2 t bc l)
+  (#sout : EM.chest2 t bc l_out)
   requires
     cpu **
     on gpu_loc (input  |-> Frac fIn sx) **
@@ -63,7 +63,7 @@ fn avgpool1d_fw
     on gpu_loc (input  |-> Frac fIn sx) **
     on gpu_loc (output |->
       windowreduce_result m_inst sx
-        (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out))
+        k s p d l_out)
 {
   windowreduce m_inst k s p d bc l l_out input output
 }
@@ -235,7 +235,7 @@ fn avgpool1d_alloc
   (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
   (input : array2 f32 (l2_row_major bc l) { is_global input })
   (#fIn : perm)
-  (#sx  : EM.chest2 f32 (SZ.v bc) (SZ.v l))
+  (#sx  : EM.chest2 f32 bc l)
   requires
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **
@@ -245,23 +245,23 @@ fn avgpool1d_alloc
     pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
     pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) }
+  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
                & array2 f32 (l2_row_major bc lo))
   ensures
     cpu **
     on gpu_loc (input |-> Frac fIn sx) **
     on gpu_loc ((dsnd r) |->
-      mk2 (fun (i:natlt (SZ.v bc)) (j:natlt (SZ.v (dfst r))) ->
+      mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
         mul (avgpool_recip_f32 k)
             (acc2 (windowreduce_result cmonoid_fadd_f32 sx
-                       (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v (dfst r))) i j))) **
+                       k s p d (dfst r)) i j))) **
     pure (SZ.v (dfst r) ==
-            pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d))
+            pool_out_len_1d l k s p d)
 {
   let l_out = pool_out_len_1d_sz l k s p d;
-  pool_out_len_1d_ub (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d);
-  ML.lemma_mult_le_left (SZ.v bc) (SZ.v l_out) (SZ.v l + 2 * SZ.v p);
-  ML.lemma_mult_le_right (SZ.v s) (SZ.v l_out) (SZ.v l + 2 * SZ.v p);
+  pool_out_len_1d_ub l k s p d;
+  ML.lemma_mult_le_left bc l_out (SZ.v l + 2 * SZ.v p);
+  ML.lemma_mult_le_right s l_out (SZ.v l + 2 * SZ.v p);
   let output = alloc0 #f32 (bc *^ l_out) (l2_row_major bc l_out);
   avgpool1d_fw_rm_f32 k s p d bc l l_out input output;
   (* output |-> wr, where wr is the per-window SUM. *)
@@ -269,39 +269,39 @@ fn avgpool1d_alloc
   let n : szp = bc *^ l_out;
   assert pure (SZ.v n == SZ.v bc * SZ.v l_out);
   let pp : erased nat = SZ.v n;
-  let wr : EM.chest2 f32 (SZ.v bc) (SZ.v l_out) =
+  let wr : EM.chest2 f32 bc l_out =
     hide (windowreduce_result cmonoid_fadd_f32 sx
-            (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out));
+            k s p d l_out);
   (* View the row-major output buffer as a flat array1 over the same store. *)
   map_loc gpu_loc (fun () -> reshape2to1 pp output);
   (* Verified in-place /K scale on the flat view. *)
   SM.smul_fw_f32 inv_k n (from_array (l1_forward pp) (core output));
   (* Reflect the flat scale back to the matrix view. *)
-  smul_reshape_eq2 inv_k #(SZ.v bc) #(SZ.v l_out) pp () (reveal wr);
+  smul_reshape_eq2 inv_k #bc #l_out pp () (reveal wr);
   map_loc gpu_loc (fun () ->
     reshape1to2_eq pp output
-      #(mk2 (fun (i:natlt (SZ.v bc)) (j:natlt (SZ.v l_out)) ->
+      #(mk2 (fun (i:natlt bc) (j:natlt l_out) ->
           mul inv_k (acc2 (reveal wr) i j)))
       #_
       #(chest_map (mul inv_k)
           (from_seq (l1_forward pp)
              (to_seq (l2_row_major bc l_out) (reveal wr)))));
-  scale_matrix_cong #(SZ.v bc) #(SZ.v l_out)
+  scale_matrix_cong #bc #l_out
     inv_k (avgpool_recip_f32 k)
     (reveal wr)
     (windowreduce_result cmonoid_fadd_f32 sx
-       (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out));
+       k s p d l_out);
   rewrite
     (on gpu_loc (output |->
-       mk2 (fun (i:natlt (SZ.v bc)) (j:natlt (SZ.v l_out)) ->
+       mk2 (fun (i:natlt bc) (j:natlt l_out) ->
          mul inv_k (acc2 (reveal wr) i j))))
   as
     (on gpu_loc (output |->
-       mk2 (fun (i:natlt (SZ.v bc)) (j:natlt (SZ.v l_out)) ->
+       mk2 (fun (i:natlt bc) (j:natlt l_out) ->
          mul (avgpool_recip_f32 k)
              (acc2 (windowreduce_result cmonoid_fadd_f32 sx
-                        (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out)) i j))));
-  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) })), output |)
+                        k s p d l_out) i j))));
+  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
 }
 
 let avgpool1d_alloc_f32 : avgpool1d_alloc_ty =

@@ -34,9 +34,9 @@ type reduce_sum_fw_ty (t:Type0) {| scalar t, real_like t |} =
                 SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) /\
                 SZ.v b * SZ.v m <= max_blocks /\
                 SZ.fits (SZ.v d + max_threads) })
-     (x : array2 t (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+     (x : array2 t (l2_bcm_pages b m d) { is_global x })
      (y : array1 t (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-     (#sx : EM.chest2 t (SZ.v b * SZ.v m) (SZ.v d))
+     (#sx : EM.chest2 t (SZ.v b * SZ.v m) d)
      (#sy : chest1 t (SZ.v b * SZ.v m))
      requires
        cpu **
@@ -47,6 +47,6 @@ type reduce_sum_fw_ty (t:Type0) {| scalar t, real_like t |} =
        on gpu_loc (x |-> sx) **
        (exists* (sy' : chest1 t (SZ.v b * SZ.v m)).
           on gpu_loc (y |-> sy') **
-          pure (sumreduce_post (SZ.v b * SZ.v m) (SZ.v d) sx (chest1_to_seq sy')))
+          pure (sumreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy')))
 
 val reduce_sum_fw_f32 : reduce_sum_fw_ty f32

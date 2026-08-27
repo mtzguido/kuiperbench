@@ -276,7 +276,7 @@ fn kf
           gx gw gbias gy sx sw sbias fx fw fb tid
 {
   (* The per-thread body proves [result == dwconv2d_out_at ...] via a
-     loop invariant tracking [acc == dwconv2d_partial_at ... (SZ.v k)]
+     loop invariant tracking [acc == dwconv2d_partial_at ... k]
      and the step lemma [dwconv2d_partial_at_step] (which wraps the
      spec-level [__dwconv2d_single_lemma]).  Setup, teardown, and
      sendability are discharged at the [kdesc] level (see below). *)
@@ -302,7 +302,7 @@ fn kf
       exists* (vk : sz{SZ.v vk <= kh * kw}).
         k |-> vk **
         acc |-> dwconv2d_partial_at b c h_in w_in kh kw stride pad
-                  h_out w_out sx sw bi ci oh ow (SZ.v vk)
+                  h_out w_out sx sw bi ci oh ow vk
     invariant gx |-> Frac (fx /. (b * c * h_out * w_out)) sx
     invariant gw |-> Frac (fw /. (b * c * h_out * w_out)) sw
     invariant gbias |-> Frac (fb /. (b * c * h_out * w_out)) sbias
@@ -324,8 +324,8 @@ fn kf
       read_padded (lseq_to_t4 b c h_in w_in sx) bi ci
         (oh * stride + kh_i - pad) (ow * stride + kw_i - pad));
     assert pure (wv == tacc (lseq_to_t4 c 1 kh kw sw) ci 0 kh_i kw_i);
-    assert pure (SZ.v kh_i == unrank_dw_kh kh kw (SZ.v kk_v));
-    assert pure (SZ.v kw_i == unrank_dw_kw kh kw (SZ.v kk_v));
+    assert pure (SZ.v kh_i == unrank_dw_kh kh kw kk_v);
+    assert pure (SZ.v kw_i == unrank_dw_kw kh kw kk_v);
     dwconv2d_partial_at_step b c h_in w_in kh kw stride pad
       h_out w_out sx sw bi ci oh ow (SZ.v kk_v + 1);
     acc := add acc0 prod;

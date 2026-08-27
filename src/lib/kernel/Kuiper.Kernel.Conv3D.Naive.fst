@@ -350,7 +350,7 @@ let conv3d_partial_at_step
 (* Per-thread conv body: decode tid, run the inner accumulator loop,
    add bias, write to output cell.  The body proves
    [result == conv3d_out_at ...] via a loop invariant tracking
-   [acc == conv3d_partial_at ... (SZ.v k)] and the step lemma
+   [acc == conv3d_partial_at ... k] and the step lemma
    [conv3d_partial_at_step] (which wraps the spec-level
    [__conv3d_single_lemma]).  Setup, teardown, and sendability are
    discharged at the [kdesc] level (see below). *)
@@ -404,9 +404,9 @@ fn kf
   named_mul_value d_out how dhw;
   let cdhw : sz = cout *^ dhw;
   named_mul_value cout dhw cdhw;
-  output_decode_facts (SZ.v b) (SZ.v cout) (SZ.v d_out) (SZ.v h_out)
-    (SZ.v w_out) (SZ.v tid) (SZ.v how) (SZ.v dhw) (SZ.v cdhw);
-  div_lt_product (SZ.v tid) (SZ.v b) (SZ.v cdhw);
+  output_decode_facts b cout d_out h_out
+    w_out tid how dhw cdhw;
+  div_lt_product tid b cdhw;
   let bi : szlt b = tid /^ cdhw;
   let r1 : szlt cdhw = tid %^ cdhw;
   let oc : szlt cout = r1 /^ dhw;
@@ -420,10 +420,10 @@ fn kf
   named_mul_value kh kw kh_kw;
   let kd_kh_kw : sz = kd *^ kh_kw;
   named_mul_value kd kh_kw kd_kh_kw;
-  flattened_taps_fit cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw);
+  flattened_taps_fit cin kd kh kw kh_kw kd_kh_kw;
   let n_taps : sz = cin *^ kd_kh_kw;
   named_mul_value cin kd_kh_kw n_taps;
-  flatten_taps cin kd kh kw (SZ.v kh_kw) (SZ.v kd_kh_kw) (SZ.v n_taps);
+  flatten_taps cin kd kh kw kh_kw kd_kh_kw n_taps;
 
   let od_s : sz = od *^ stride;
   let oh_s : sz = oh *^ stride;
@@ -437,8 +437,8 @@ fn kf
       exists* (vk : sz{SZ.v vk <= cin * kd * kh * kw}).
         k |-> vk **
         acc |-> conv3d_partial_at b cin d_in h_in w_in cout kd kh kw
-                                   stride (SZ.v pad) d_out h_out w_out
-                                   sx sw bi oc od oh ow (SZ.v vk)
+                                   stride pad d_out h_out w_out
+                                   sx sw bi oc od oh ow vk
     invariant pure (SZ.fits (cin * kd * kh * kw))
     invariant gx |-> Frac (fx /. (b * cout * d_out * h_out * w_out)) sx
     invariant gw |-> Frac (fw /. (b * cout * d_out * h_out * w_out)) sw
@@ -448,15 +448,15 @@ fn kf
   {
     let kk = !k;
     assert pure (SZ.v kk < cin * SZ.v kd_kh_kw);
-    div_lt_product (SZ.v kk) cin (SZ.v kd_kh_kw);
+    div_lt_product kk cin kd_kh_kw;
     let ic : szlt cin = kk /^ kd_kh_kw;
     let r  : szlt kd_kh_kw = kk %^ kd_kh_kw;
     assert pure (SZ.v r < kd * SZ.v kh_kw);
-    div_lt_product (SZ.v r) kd (SZ.v kh_kw);
+    div_lt_product r kd kh_kw;
     let kd_i : szlt kd = r /^ kh_kw;
     let r2  : szlt kh_kw = r %^ kh_kw;
     assert pure (SZ.v r2 < kh * kw);
-    div_lt_product (SZ.v r2) kh kw;
+    div_lt_product r2 kh kw;
     let kh_i : szlt kh = r2 /^ kw;
     let kw_i : szlt kw = r2 %^ kw;
 
@@ -467,9 +467,9 @@ fn kf
     assert pure (SZ.v r2 == SZ.v r % SZ.v kh_kw);
     assert pure (SZ.v kh_i == SZ.v r2 / kw);
     assert pure (SZ.v kw_i == SZ.v r2 % kw);
-    unrank3_from_steps cin kd kh kw (SZ.v kk) (SZ.v kh_kw)
-      (SZ.v kd_kh_kw) (SZ.v n_taps) (SZ.v ic) (SZ.v r) (SZ.v kd_i)
-      (SZ.v r2) (SZ.v kh_i) (SZ.v kw_i);
+    unrank3_from_steps cin kd kh kw kk kh_kw
+      kd_kh_kw n_taps ic r kd_i
+      r2 kh_i kw_i;
 
     let d_signed = od_s +^ kd_i;
     let h_signed = oh_s +^ kh_i;
@@ -488,17 +488,17 @@ fn kf
         (SZ.v ow * SZ.v stride + SZ.v kw_i * 1 - SZ.v pad));
     assert pure (wv == t5acc (lseq_to_t5 cout cin kd kh kw sw)
                               oc ic kd_i kh_i kw_i);
-    assert pure (SZ.v ic   == unrank3_ic cin kd kh kw (SZ.v kk));
-    assert pure (SZ.v kd_i == unrank3_kd cin kd kh kw (SZ.v kk));
-    assert pure (SZ.v kh_i == unrank3_kh cin kd kh kw (SZ.v kk));
-    assert pure (SZ.v kw_i == unrank3_kw cin kd kh kw (SZ.v kk));
+    assert pure (SZ.v ic   == unrank3_ic cin kd kh kw kk);
+    assert pure (SZ.v kd_i == unrank3_kd cin kd kh kw kk);
+    assert pure (SZ.v kh_i == unrank3_kh cin kd kh kw kk);
+    assert pure (SZ.v kw_i == unrank3_kw cin kd kh kw kk);
     conv3d_partial_at_step b cin d_in h_in w_in cout kd kh kw
-                            stride (SZ.v pad) d_out h_out w_out
+                            stride pad d_out h_out w_out
                             sx sw bi oc od oh ow (SZ.v kk + 1);
 
     acc := add acc0 prod;
     assert pure (SZ.v kk < cin * kd * kh * kw);
-    decreases_after_increment (cin * kd * kh * kw) (SZ.v kk);
+    decreases_after_increment (cin * kd * kh * kw) kk;
     let knew : sz = !k +^ 1sz;
     assert pure (SZ.v knew == SZ.v kk + 1);
     assert pure (SZ.v knew <= cin * kd * kh * kw);

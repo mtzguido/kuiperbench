@@ -58,12 +58,12 @@ instance c_l2_bcm_channels
   (#_ : squash (SZ.fits (n * SZ.v hw)))
   (#_ : squash (SZ.fits (SZ.v hw * SZ.v c)))
   (#_ : squash (SZ.fits (n * (SZ.v hw * SZ.v c))))
-  : T.ctlayout (l2_bcm_channels n (SZ.v c) (SZ.v hw))
+  : T.ctlayout (l2_bcm_channels n c hw)
   = {
       ulen_fits = ();
       all_fit   = ();
       cimap = fun ((ci, (k, ())) : Kuiper.Shape.conc (SZ.v c @| (n * SZ.v hw) @| INil)) ->
-        cimap_fits n (SZ.v c) (SZ.v hw) (SZ.v ci) (SZ.v k);
+        cimap_fits n c hw ci k;
         let q   = k /^ hw in
         let rem = k %^ hw in
         let ch  = c *^ hw in

@@ -24,7 +24,7 @@ fn inst_gpu
   ensures
     exists* (sa' : chest2 et m n).
       on gpu_loc (a |-> sa') **
-      pure (sa' %~ K.row_log_softmax_real #(SZ.v m) #(SZ.v n) ra)
+      pure (sa' %~ K.row_log_softmax_real #m #n ra)
 {
   K.row_log_softmax_gpu #et m n a #sa ra;
 }

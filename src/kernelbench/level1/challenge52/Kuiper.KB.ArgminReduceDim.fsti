@@ -53,13 +53,13 @@ fn argminreduce_dim_fw_f32
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) /\
              SZ.v b * SZ.v m <= max_blocks * max_threads /\
              SZ.v d < pow2 63 })
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+  (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 I64.t (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 I64.t (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires on gpu_loc (y |-> sy)
   ensures
     exists* (sy' : chest1 I64.t (SZ.v b * SZ.v m)).
       on gpu_loc (y |-> sy') **
-      pure (argminreduce_post (SZ.v b * SZ.v m) (SZ.v d) sx (chest1_to_seq sy'))
+      pure (argminreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy'))

@@ -134,7 +134,7 @@ fn convt2d_general_alloc
   (* All partial products of [b*cout*h_out*w_out] are bounded by the full
      product (every factor is [>= 1]), which fits per [convT2d_size_req]. *)
   ML.lemma_mult_le_left (SZ.v b * SZ.v cout) 1 (SZ.v h_out * SZ.v w_out);
-  ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v h_out) 1 (SZ.v w_out);
+  ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v h_out) 1 w_out;
   let len_y : szp = SZ.(b *^ cout *^ h_out *^ w_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   with em. assert (on gpu_loc (gy |-> em));

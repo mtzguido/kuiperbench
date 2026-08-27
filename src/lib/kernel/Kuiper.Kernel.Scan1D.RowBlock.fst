@@ -115,14 +115,14 @@ let kpre
   (m : cmonoid t)
   (rows : szp)
   (cols : nat)
-  (#lin  : layout2 (SZ.v rows) cols)
-  (#lout : layout2 (SZ.v rows) cols)
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 t lin)
   (output : array2 t lout)
-  (sx   : chest2 t (SZ.v rows) cols)
-  (sout : chest2 t (SZ.v rows) cols)
+  (sx   : chest2 t rows cols)
+  (sout : chest2 t rows cols)
   (fIn : perm)
-  (bid : natlt (SZ.v rows))
+  (bid : natlt rows)
   : slprop
   = input |-> Frac (fIn /. SZ.v rows) sx **
     (forall+ (c : natlt cols).
@@ -134,13 +134,13 @@ let kpost
   (m : cmonoid t)
   (rows : szp)
   (cols : nat)
-  (#lin  : layout2 (SZ.v rows) cols)
-  (#lout : layout2 (SZ.v rows) cols)
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 t lin)
   (output : array2 t lout)
-  (sx   : chest2 t (SZ.v rows) cols)
+  (sx   : chest2 t rows cols)
   (fIn : perm)
-  (bid : natlt (SZ.v rows))
+  (bid : natlt rows)
   : slprop
   = input |-> Frac (fIn /. SZ.v rows) sx **
     (forall+ (c : natlt cols).
@@ -178,36 +178,36 @@ fn kf
   (m : cmonoid et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn : perm)
   (bid : szlt rows)
   ()
   requires
     gpu **
-    kpre m rows (SZ.v cols) input output sx sout fIn (SZ.v bid) **
+    kpre m rows cols input output sx sout fIn bid **
     block_id rows bid
   ensures
     gpu **
-    kpost m rows (SZ.v cols) input output sx fIn (SZ.v bid) **
+    kpost m rows cols input output sx fIn bid **
     block_id rows bid
 {
-  unfold kpre m rows (SZ.v cols) input output sx sout fIn (SZ.v bid);
+  unfold kpre m rows cols input output sx sout fIn bid;
 
-  let row_view : erased (Seq.lseq et (SZ.v cols)) = ematrix_row sx (SZ.v bid);
+  let row_view : erased (Seq.lseq et cols) = ematrix_row sx bid;
 
   scan_partial_zero m (reveal row_view);
 
   (* Fold the cell predicate into the [cell_at_iter] form so the
    * loop invariant can refer to it uniformly. *)
   Kuiper.ForEvery.forevery_ext _
-    (fun (c : natlt (SZ.v cols)) ->
-       cell_at_iter m output sx sout (SZ.v bid) 0 c);
+    (fun (c : natlt cols) ->
+       cell_at_iter m output sx sout bid 0 c);
 
   let mut acc : et = m.rid;
   let mut di_ref : SZ.t = 0sz;
@@ -217,45 +217,45 @@ fn kf
       di_ref |-> di_v **
       acc |-> acc_v **
       input |-> Frac (fIn /. SZ.v rows) sx **
-      (forall+ (c : natlt (SZ.v cols)).
-         cell_at_iter m output sx sout (SZ.v bid) (SZ.v di_v) c) **
+      (forall+ (c : natlt cols).
+         cell_at_iter m output sx sout bid di_v c) **
       pure (SZ.v di_v <= SZ.v cols /\
-            acc_v == scan_partial m (reveal row_view) (SZ.v di_v))
+            acc_v == scan_partial m (reveal row_view) di_v)
     decreases (SZ.v cols - SZ.v !di_ref)
   {
     let di_old : SZ.t = !di_ref;
     let di_old_sz : szlt cols = di_old;
 
     (* Read input cell [(bid, di_old)]. *)
-    let v : et = tensor_read input (cidx2 (bid <: szlt (SZ.v rows)) (di_old_sz <: szlt (SZ.v cols)));
-    assert pure (v == acc2 sx (SZ.v bid) (SZ.v di_old_sz));
-    assert pure (Seq.index (reveal row_view) (SZ.v di_old_sz)
-                 == acc2 sx (SZ.v bid) (SZ.v di_old_sz));
+    let v : et = tensor_read input (cidx2 (bid <: szlt rows) (di_old_sz <: szlt cols));
+    assert pure (v == acc2 sx bid di_old_sz);
+    assert pure (Seq.index (reveal row_view) di_old_sz
+                 == acc2 sx bid di_old_sz);
 
     (* Extract the cell at [di_old] from the [forall+], obtaining
      * the cell predicate plus a trade to restore the forall+ with
      * a (possibly different) per-cell slprop. *)
-    Kuiper.ForEvery.forevery_extract' #(natlt (SZ.v cols)) (SZ.v di_old_sz)
-      (cell_at_iter m output sx sout (SZ.v bid) (SZ.v di_old));
+    Kuiper.ForEvery.forevery_extract' #(natlt cols) di_old_sz
+      (cell_at_iter m output sx sout bid di_old);
 
     (* At [c = di_old] the [if c < di_v] branch is false, so we
      * own the cell at value [acc2 sout bid di_old]. *)
-    rewrite (cell_at_iter m output sx sout (SZ.v bid) (SZ.v di_old) (SZ.v di_old_sz))
-         as (tensor_pts_to_cell output (idx2 (SZ.v bid <: natlt (SZ.v rows))
-                                        (SZ.v di_old_sz <: natlt (SZ.v cols)))
-              (acc2 sout (SZ.v bid) (SZ.v di_old_sz)));
+    rewrite (cell_at_iter m output sx sout bid di_old di_old_sz)
+         as (tensor_pts_to_cell output (idx2 (SZ.v bid <: natlt rows)
+                                        (SZ.v di_old_sz <: natlt cols))
+              (acc2 sout bid di_old_sz));
 
     (* Update the running accumulator. *)
-    scan_partial_step m (reveal row_view) (SZ.v di_old_sz);
+    scan_partial_step m (reveal row_view) di_old_sz;
     let acc_old : et = !acc;
     acc := m.rop acc_old v;
     let acc_new : et = !acc;
     assert pure (acc_new == scan_partial m (reveal row_view) (SZ.v di_old_sz + 1));
-    scan_partial_eq_inclusive_at m (reveal row_view) (SZ.v di_old_sz);
-    assert pure (acc_new == scan_inclusive_at m (reveal row_view) (SZ.v di_old_sz));
+    scan_partial_eq_inclusive_at m (reveal row_view) di_old_sz;
+    assert pure (acc_new == scan_inclusive_at m (reveal row_view) di_old_sz);
 
     (* Write the new value into the output cell. *)
-    tensor_write_cell output (cidx2 (bid <: szlt (SZ.v rows)) (di_old_sz <: szlt (SZ.v cols))) acc_new;
+    tensor_write_cell output (cidx2 (bid <: szlt rows) (di_old_sz <: szlt cols)) acc_new;
 
     let di_new : SZ.t = di_old +^ 1sz;
 
@@ -263,18 +263,18 @@ fn kf
      * [di_v = di_new = di_old + 1].  At [c = di_old] the branch is now
      * [if c < di_new] = true, so the body is
      * [scan_inclusive_at m row_view di_old], matching [acc_new]. *)
-    rewrite (tensor_pts_to_cell output (idx2 (SZ.v bid <: natlt (SZ.v rows))
-                                        (SZ.v di_old_sz <: natlt (SZ.v cols)))
+    rewrite (tensor_pts_to_cell output (idx2 (SZ.v bid <: natlt rows)
+                                        (SZ.v di_old_sz <: natlt cols))
                acc_new)
-         as (cell_at_iter m output sx sout (SZ.v bid) (SZ.v di_new)
-              (SZ.v di_old_sz));
+         as (cell_at_iter m output sx sout bid di_new
+              di_old_sz);
 
     (* Instantiate the trade's [forall*] slprop with the new
      * iteration's cell predicate.  Pointwise equality at
      * [c =!= di_old] holds because [c < di_old] ↔ [c < di_new]
      * whenever [c =!= di_old]. *)
     Pulse.Lib.Forall.elim_forall
-      (cell_at_iter m output sx sout (SZ.v bid) (SZ.v di_new));
+      (cell_at_iter m output sx sout bid di_new);
     Pulse.Lib.Trade.elim_trade _ _;
 
     (* Canonical increment form — must be the last statement in the
@@ -293,21 +293,21 @@ fn kf
     (di_ref |-> di_v ** acc |-> _acc_v **
      pure (SZ.v di_v == SZ.v cols));
 
-  let bid_n : Ghost.erased (natlt (SZ.v rows)) = SZ.v bid;
+  let bid_n : Ghost.erased (natlt rows) = SZ.v bid;
   rewrite each (SZ.v bid) as (Ghost.reveal bid_n);
 
   FStar.Classical.forall_intro
     (scan_postloop_eq m (reveal sx) (reveal sout) (reveal row_view)
-       (Ghost.reveal bid_n) (SZ.v di_v));
+       (Ghost.reveal bid_n) di_v);
 
   Kuiper.ForEvery.forevery_ext _
-    (fun (c : natlt (SZ.v cols)) ->
+    (fun (c : natlt cols) ->
        tensor_pts_to_cell output (idx2 (Ghost.reveal bid_n) c)
          (scan_inclusive_at m (ematrix_row sx (Ghost.reveal bid_n)) c));
 
   rewrite each (Ghost.reveal bid_n) as (SZ.v bid);
 
-  fold (kpost m rows (SZ.v cols) input output sx fIn (SZ.v bid));
+  fold (kpost m rows cols input output sx fIn bid);
   ()
 }
 #pop-options
@@ -328,39 +328,39 @@ fn setup_rowblock
   (m : cmonoid et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   ()
   norewrite
   requires
     input |-> Frac fIn sx ** output |-> sout
   ensures
-    (forall+ (bid : natlt (SZ.v rows)).
-       kpre m rows (SZ.v cols) input output sx sout fIn bid) **
+    (forall+ (bid : natlt rows).
+       kpre m rows cols input output sx sout fIn bid) **
     pure (SZ.fits (tlayout_ulen lout))
 {
-  tensor_share_n input (SZ.v rows);
+  tensor_share_n input rows;
   tensor_ilower2 output;
 
   (* Now: forall+ (_ : natlt rows). input |-> Frac (fIn /. rows) sx
    *      forall+ (r : natlt rows) (c : natlt cols). pts_to_cell output (r, c) (acc2 sout r c)
    * The latter, in Pulse's [forall+ x y. ...] syntax, is curried, so
    * it is exactly [forall+ r. (forall+ c. pts_to_cell output (r, c) (acc2 sout r c))]. *)
-  Kuiper.ForEvery.forevery_zip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) ->
+  Kuiper.ForEvery.forevery_zip #(natlt rows)
+    (fun (_ : natlt rows) ->
        input |-> Frac (fIn /. SZ.v rows) sx)
-    (fun (bid : natlt (SZ.v rows)) ->
-       forall+ (c : natlt (SZ.v cols)).
+    (fun (bid : natlt rows) ->
+       forall+ (c : natlt cols).
          tensor_pts_to_cell output (idx2 bid c) (acc2 sout bid c));
 
   Kuiper.ForEvery.forevery_ext _
-    (fun (bid : natlt (SZ.v rows)) ->
-       kpre m rows (SZ.v cols) input output sx sout fIn bid);
+    (fun (bid : natlt rows) ->
+       kpre m rows cols input output sx sout fIn bid);
   ()
 }
 #pop-options
@@ -372,48 +372,48 @@ fn teardown_rowblock
   (m : cmonoid et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
   (#fIn  : perm)
   ()
   norewrite
   requires
-    (forall+ (bid : natlt (SZ.v rows)).
-       kpost m rows (SZ.v cols) input output sx fIn bid) **
+    (forall+ (bid : natlt rows).
+       kpost m rows cols input output sx fIn bid) **
     pure (SZ.fits (tlayout_ulen lout))
   ensures
     input |-> Frac fIn sx **
     output |-> scan2d_inclusive_result m sx
 {
   Kuiper.ForEvery.forevery_ext _
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (bid : natlt rows) ->
        (input |-> Frac (fIn /. SZ.v rows) sx) **
-       (forall+ (c : natlt (SZ.v cols)).
+       (forall+ (c : natlt cols).
           tensor_pts_to_cell output (idx2 bid c)
             (scan_inclusive_at m (ematrix_row sx bid) c)));
 
-  Kuiper.ForEvery.forevery_unzip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) ->
+  Kuiper.ForEvery.forevery_unzip #(natlt rows)
+    (fun (_ : natlt rows) ->
        input |-> Frac (fIn /. SZ.v rows) sx)
-    (fun (bid : natlt (SZ.v rows)) ->
-       forall+ (c : natlt (SZ.v cols)).
+    (fun (bid : natlt rows) ->
+       forall+ (c : natlt cols).
          tensor_pts_to_cell output (idx2 bid c)
            (scan_inclusive_at m (ematrix_row sx bid) c));
 
-  tensor_gather_n input (SZ.v rows);
+  tensor_gather_n input rows;
 
   (* Rewrite per-cell value from [scan_inclusive_at] to [acc2
    * (scan2d_inclusive_result m sx)] (definitionally equal). *)
   Classical.forall_intro_2
-    (macc_scan2d_inclusive_result #et m #(SZ.v rows) #(SZ.v cols) sx);
+    (macc_scan2d_inclusive_result #et m #rows #cols sx);
   Kuiper.ForEvery.forevery_ext_2
-    (fun (bid : natlt (SZ.v rows)) (c : natlt (SZ.v cols)) ->
+    (fun (bid : natlt rows) (c : natlt cols) ->
        tensor_pts_to_cell output (idx2 bid c)
          (scan_inclusive_at m (ematrix_row sx bid) c))
-    (fun (bid : natlt (SZ.v rows)) (c : natlt (SZ.v cols)) ->
+    (fun (bid : natlt rows) (c : natlt cols) ->
        tensor_pts_to_cell output (idx2 bid c)
          (acc2 (scan2d_inclusive_result m sx) bid c));
 
@@ -432,13 +432,13 @@ let kdesc
   (m : cmonoid et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   : kernel_desc
       (requires
@@ -454,10 +454,10 @@ let kdesc
     frame = pure (SZ.fits (tlayout_ulen lout));
     setup    = setup_rowblock    m rows cols input output #sx #sout #fIn;
     teardown = teardown_rowblock m rows cols input output #sx #fIn;
-    kpre  = (fun (bid : natlt (SZ.v rows)) ->
-              kpre m rows (SZ.v cols) input output sx sout fIn bid);
-    kpost = (fun (bid : natlt (SZ.v rows)) ->
-              kpost m rows (SZ.v cols) input output sx fIn bid);
+    kpre  = (fun (bid : natlt rows) ->
+              kpre m rows cols input output sx sout fIn bid);
+    kpost = (fun (bid : natlt rows) ->
+              kpost m rows cols input output sx fIn bid);
     kpre_sendable  = solve;
     kpost_sendable = solve;
   } <: kernel_desc_m_1 _ _
@@ -472,12 +472,12 @@ fn scan1d_inclusive_rowblock
   (m : cmonoid et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout2 rows cols) {| ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   norewrite
   preserves cpu ** on gpu_loc (input |-> Frac fIn sx)

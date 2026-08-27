@@ -47,11 +47,11 @@ type scan1d_inclusive_rowblock_ty =
      (m : cmonoid et)
      (rows : szp { rows <= max_blocks })
      (cols : szp)
-     (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-     (#lout : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lout |}
+     (#lin  : layout2 rows cols) {| ctlayout lin  |}
+     (#lout : layout2 rows cols) {| ctlayout lout |}
      (input  : array2 et lin  { is_global input  })
      (output : array2 et lout { is_global output })
-     (#sx #sout : EM.chest2 et (SZ.v rows) (SZ.v cols))
+     (#sx #sout : EM.chest2 et rows cols)
      (#fIn  : perm)
      preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
      requires

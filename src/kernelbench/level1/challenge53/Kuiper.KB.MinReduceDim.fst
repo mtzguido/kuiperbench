@@ -39,9 +39,9 @@ fn minreduce_dim_fw_f32_impl
   (d : szp { SZ.fits (SZ.v m * SZ.v d) /\
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) /\
              SZ.v b * SZ.v m <= max_blocks * max_threads })
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+  (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu
   requires
@@ -51,7 +51,7 @@ fn minreduce_dim_fw_f32_impl
     on gpu_loc (x |-> sx) **
     (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
        on gpu_loc (y |-> sy') **
-       pure (minreduce_post (SZ.v b * SZ.v m) (SZ.v d) sx (chest1_to_seq sy')))
+       pure (minreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy')))
 {
   let bm : szp = b *^ m;
   assert pure (SZ.v bm == SZ.v b * SZ.v m);
@@ -61,7 +61,7 @@ fn minreduce_dim_fw_f32_impl
     #_ #(c_l1_forward _)
     x y;
 
-  bridge_post #(SZ.v bm) #(SZ.v d)
+  bridge_post #bm #d
     (reveal sx) (seq_to_chest1 (HRMin.seq_reduce_rows_fmin (reveal sx)));
   ()
 }
@@ -73,16 +73,16 @@ fn minreduce_dim_fw_f32
   (d : szp { SZ.fits (SZ.v m * SZ.v d) /\
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) /\
              SZ.v b * SZ.v m <= max_blocks * max_threads })
-  (x : array2 f32 (l2_bcm_pages (SZ.v b) (SZ.v m) (SZ.v d)) { is_global x })
+  (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
-  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) (SZ.v d))
+  (#sx : EM.chest2 f32 (SZ.v b * SZ.v m) d)
   (#sy : chest1 f32 (SZ.v b * SZ.v m))
   preserves cpu ** on gpu_loc (x |-> sx)
   requires on gpu_loc (y |-> sy)
   ensures
     exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
       on gpu_loc (y |-> sy') **
-      pure (minreduce_post (SZ.v b * SZ.v m) (SZ.v d) sx (chest1_to_seq sy'))
+      pure (minreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy'))
 {
   minreduce_dim_fw_f32_impl b m d x y #sx #sy
 }

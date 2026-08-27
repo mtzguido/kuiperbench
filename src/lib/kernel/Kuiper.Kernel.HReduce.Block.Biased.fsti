@@ -21,17 +21,17 @@ fn reduce_batched_block_biased
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth  : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin   |}
-  (#lbias : layout1 (SZ.v rows))             {| ctlayout lbias |}
-  (#lout  : layout1 (SZ.v rows))             {| ctlayout lout  |}
+  (#lin   : layout2 rows cols) {| ctlayout lin   |}
+  (#lbias : layout1 rows)             {| ctlayout lbias |}
+  (#lout  : layout1 rows)             {| ctlayout lout  |}
   (x      : array2 et lin   { is_global x      })
   (bias   : array1 et lbias { is_global bias   })
   (output : array1 et lout  { is_global output })
-  (#sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr     : chest2 real (SZ.v rows) (SZ.v cols))
-  (#sbias : chest1 et (SZ.v rows))
-  (vbias  : chest1 real (SZ.v rows))
-  (#sout  : chest1 et (SZ.v rows))
+  (#sx    : chest2 et   rows cols)
+  (vr     : chest2 real rows cols)
+  (#sbias : chest1 et rows)
+  (vbias  : chest1 real rows)
+  (#sout  : chest1 et rows)
   (#fbias : perm)
   preserves
     cpu **
@@ -42,7 +42,7 @@ fn reduce_batched_block_biased
     pure (sx %~ vr) **
     pure (sbias %~ vbias)
   ensures
-    exists* (sout' : chest1 et (SZ.v rows)).
+    exists* (sout' : chest1 et rows).
       on gpu_loc (output |-> sout') **
       pure (forall (r : nat). r < SZ.v rows ==>
             (acc1 sout' r) %~ rsum (Kuiper.Seq.Common.lseq_map (fun c -> pre_map_r c (acc1 vbias r))

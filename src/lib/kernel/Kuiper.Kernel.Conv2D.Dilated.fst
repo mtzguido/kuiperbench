@@ -160,8 +160,8 @@ fn read_x_padded_axis
     let hi = h_signed -^ ph;
     let wi = w_signed -^ pw;
     if (hi <^ h_in && wi <^ w_in) {
-      flatten4_index_bound b cin h_in w_in (SZ.v bi) (SZ.v ic)
-        (SZ.v hi) (SZ.v wi);
+      flatten4_index_bound b cin h_in w_in bi ic
+        hi wi;
       let bcin = bi *^ cin;
       let bcin_ic = bcin +^ ic;
       let bcin_ic_h = bcin_ic *^ h_in;
@@ -317,7 +317,7 @@ fn kf
           gx gw gbias gy sx sw_ sbias fx fw fb tid
 {
   (* The per-thread body proves [result == conv2dd_out_at ...] via a loop
-     invariant tracking [acc == conv2dd_partial_at ... (SZ.v k)] and the
+     invariant tracking [acc == conv2dd_partial_at ... k] and the
      step lemma [conv2dd_partial_at_step] (which wraps the spec-level
      [__conv2dd_single_lemma]).  Setup, teardown, and sendability are
      discharged at the [kdesc] level (see below). *)
@@ -334,7 +334,7 @@ fn kf
   let n_taps : sz = cin *^ kh_kw;
   named_mul_value kh kw kh_kw;
   named_mul_value cin kh_kw n_taps;
-  flatten_taps cin kh kw (SZ.v kh_kw) (SZ.v n_taps);
+  flatten_taps cin kh kw kh_kw n_taps;
 
   let oh_s : sz = oh *^ sh;
   let ow_s : sz = ow *^ sw;
@@ -347,7 +347,7 @@ fn kf
       exists* (vk : sz{SZ.v vk <= cin * kh * kw}).
         k |-> vk **
         acc |-> conv2dd_partial_at b cin h_in w_in cout kh kw sh sw ph pw
-                  dh dw h_out w_out sx sw_ bi oc oh ow (SZ.v vk)
+                  dh dw h_out w_out sx sw_ bi oc oh ow vk
     invariant gx |-> Frac (fx /. (b * cout * h_out * w_out)) sx
     invariant gw |-> Frac (fw /. (b * cout * h_out * w_out)) sw_
     invariant gbias |-> Frac (fb /. (b * cout * h_out * w_out)) sbias
@@ -374,13 +374,13 @@ fn kf
       read_padded (lseq_to_t4 b cin h_in w_in sx) bi ic
         (oh * sh + kh_i * dh - ph) (ow * sw + kw_i * dw - pw));
     assert pure (wv == tacc (lseq_to_t4 cout cin kh kw sw_) oc ic kh_i kw_i);
-    assert pure (SZ.v ic == unrank_ic cin kh kw (SZ.v kk_v));
-    assert pure (SZ.v kh_i == unrank_kh cin kh kw (SZ.v kk_v));
-    assert pure (SZ.v kw_i == unrank_kw cin kh kw (SZ.v kk_v));
+    assert pure (SZ.v ic == unrank_ic cin kh kw kk_v);
+    assert pure (SZ.v kh_i == unrank_kh cin kh kw kk_v);
+    assert pure (SZ.v kw_i == unrank_kw cin kh kw kk_v);
     conv2dd_partial_at_step b cin h_in w_in cout kh kw sh sw ph pw dh dw
       h_out w_out sx sw_ bi oc oh ow (SZ.v kk_v + 1);
     acc := add acc0 prod;
-    decreases_after_increment (cin * kh * kw) (SZ.v kk_v);
+    decreases_after_increment (cin * kh * kw) kk_v;
     let next_k = !k +^ 1sz;
     assert pure (SZ.v next_k == SZ.v kk_v + 1);
     k := next_k;

@@ -43,6 +43,6 @@ type l2norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
   ensures
     exists* (s' : chest1 t (b * d)).
       on gpu_loc (x |-> s') **
-      pure (l2norm_post (SZ.v b) (SZ.v d) (chest1_to_seq s) (chest1_to_seq s'))
+      pure (l2norm_post b d (chest1_to_seq s) (chest1_to_seq s'))
 
 val l2norm_fw_f32 : l2norm_fw_ty f32

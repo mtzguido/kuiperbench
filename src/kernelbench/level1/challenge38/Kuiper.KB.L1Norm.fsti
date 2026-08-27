@@ -51,8 +51,8 @@ inline_for_extraction noextract
 type l1norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
   fn (b : szp)
      (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
-     (x : array2 t (l2_row_major (SZ.v b) (SZ.v d)) { is_global x })
-     (#sx : EM.chest2 t (SZ.v b) (SZ.v d))
+     (x : array2 t (l2_row_major b d) { is_global x })
+     (#sx : EM.chest2 t b d)
      requires
        cpu **
        on gpu_loc (x |-> sx) **
@@ -62,8 +62,8 @@ type l1norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
        )
      ensures
        cpu **
-       (exists* (sx' : EM.chest2 t (SZ.v b) (SZ.v d)).
+       (exists* (sx' : EM.chest2 t b d).
           on gpu_loc (x |-> sx') **
-          pure (l1norm_post (SZ.v b) (SZ.v d) (l1_dim_f d) sx sx'))
+          pure (l1norm_post b d (l1_dim_f d) sx sx'))
 
 val l1norm_fw_f32 : l1norm_fw_ty f32

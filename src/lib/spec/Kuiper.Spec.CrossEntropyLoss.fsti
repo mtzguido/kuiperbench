@@ -68,6 +68,6 @@ let cross_entropy_post
   : prop =
   exists (per_batch : Seq.lseq f32 batches) (s : f32).
     (forall (r : nat). r < batches ==>
-       (per_batch @! r) %~ ce_term_r num_classes sp r (SZ.v (st @! r))) /\
+       (per_batch @! r) %~ ce_term_r num_classes sp r (st @! r)) /\
     s %~ rsum (to_real_seq per_batch) /\
     res == mul s inv_b

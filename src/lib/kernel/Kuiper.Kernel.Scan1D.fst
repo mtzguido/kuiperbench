@@ -148,30 +148,30 @@ fn kf
   (#et : Type0) {| scalar et |}
   (m : cmonoid et)
   (#rows : SZ.t) (#cols : SZ.t)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn : perm)
   (gid : szlt (rows * cols))
   ()
   requires
     gpu **
-    kpre m input output sx sout fIn (SZ.v gid)
+    kpre m input output sx sout fIn gid
   ensures
     gpu **
-    kpost m input output sx fIn (SZ.v gid)
+    kpost m input output sx fIn gid
 {
   let r_sz : szlt rows = gid /^ cols;
   let j_sz : szlt cols = gid %^ cols;
   assert (pure (SZ.v r_sz == SZ.v gid / SZ.v cols /\ SZ.v j_sz == SZ.v gid % SZ.v cols));
-  rewrite each (SZ.v gid / SZ.v cols) as (SZ.v r_sz);
-  rewrite each (SZ.v gid % SZ.v cols) as (SZ.v j_sz);
+  rewrite each (SZ.v gid / SZ.v cols) as r_sz;
+  rewrite each (SZ.v gid % SZ.v cols) as j_sz;
 
-  let row_view : erased (Seq.lseq et (SZ.v cols)) = ematrix_row sx (SZ.v r_sz);
+  let row_view : erased (Seq.lseq et cols) = ematrix_row sx r_sz;
 
   scan_partial_zero m (reveal row_view);
 
@@ -185,29 +185,29 @@ fn kf
       di_ref |-> di_v **
       acc |-> acc_v **
       input |-> Frac (fIn /. (rows * cols)) sx **
-      tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt (SZ.v rows)) (SZ.v j_sz <: natlt (SZ.v cols)))
-        (acc2 sout (SZ.v r_sz) (SZ.v j_sz)) **
+      tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt rows) (SZ.v j_sz <: natlt cols))
+        (acc2 sout r_sz j_sz) **
       pure (SZ.v di_v <= SZ.v bound /\
-            acc_v == scan_partial m (reveal row_view) (SZ.v di_v))
+            acc_v == scan_partial m (reveal row_view) di_v)
     decreases (SZ.v bound - SZ.v !di_ref)
   {
     let di_v_raw : SZ.t = !di_ref;
     let di_v : szlt cols = di_v_raw;
-    let v : et = tensor_read input (cidx2 (r_sz <: szlt (SZ.v rows)) (di_v <: szlt (SZ.v cols)));
+    let v : et = tensor_read input (cidx2 (r_sz <: szlt rows) (di_v <: szlt cols));
 
-    assert (pure (v == acc2 sx (SZ.v r_sz) (SZ.v di_v)));
-    assert (pure (Seq.index (reveal row_view) (SZ.v di_v) == acc2 sx (SZ.v r_sz) (SZ.v di_v)));
+    assert (pure (v == acc2 sx r_sz di_v));
+    assert (pure (Seq.index (reveal row_view) di_v == acc2 sx r_sz di_v));
 
-    scan_partial_step m (reveal row_view) (SZ.v di_v);
+    scan_partial_step m (reveal row_view) di_v;
     acc := m.rop !acc v;
     di_ref := !di_ref +^ 1sz
   };
 
-  scan_partial_eq_inclusive_at m (reveal row_view) (SZ.v j_sz);
+  scan_partial_eq_inclusive_at m (reveal row_view) j_sz;
   let acc_final : et = !acc;
-  assert pure (acc_final == scan_inclusive_at m (reveal row_view) (SZ.v j_sz));
-  assert pure (reveal row_view == ematrix_row sx (SZ.v r_sz));
-  tensor_write_cell output (cidx2 (r_sz <: szlt (SZ.v rows)) (j_sz <: szlt (SZ.v cols))) acc_final;
+  assert pure (acc_final == scan_inclusive_at m (reveal row_view) j_sz);
+  assert pure (reveal row_view == ematrix_row sx r_sz);
+  tensor_write_cell output (cidx2 (r_sz <: szlt rows) (j_sz <: szlt cols)) acc_final;
   rewrite each (SZ.v r_sz) as (SZ.v gid / SZ.v cols);
   rewrite each (SZ.v j_sz) as (SZ.v gid % SZ.v cols);
   ()
@@ -363,12 +363,12 @@ fn setup_scan
   (m : cmonoid et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v rows * SZ.v cols <= max_blocks * max_threads })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   ()
   norewrite
@@ -381,7 +381,7 @@ fn setup_scan
   tensor_share_n input (SZ.v rows * SZ.v cols);
   tensor_ilower2 output;
   setup_fold_kpre_step #et #_ m
-    #(SZ.v rows) #(SZ.v cols)
+    #rows #cols
     input output ();
   ()
 }
@@ -392,11 +392,11 @@ fn teardown_scan
   (m : cmonoid et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v rows * SZ.v cols <= max_blocks * max_threads })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
   (#fIn  : perm)
   ()
   norewrite
@@ -408,7 +408,7 @@ fn teardown_scan
     output |-> scan2d_inclusive_result m sx
 {
   teardown_unfold_kpost_step #et #_ m
-    #(SZ.v rows) #(SZ.v cols)
+    #rows #cols
     input output #sx #fIn #() ();
   tensor_gather_n input (SZ.v rows * SZ.v cols);
   tensor_iraise2 output;
@@ -423,12 +423,12 @@ fn kdesc_setup
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v rows * SZ.v cols <= max_blocks * max_threads })
   (nthr : szp { SZ.v nthr == rows * cols })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   ()
   norewrite
@@ -450,11 +450,11 @@ fn kdesc_teardown
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (cols : szp { SZ.v rows * SZ.v cols <= max_blocks * max_threads })
   (nthr : szp { SZ.v nthr == rows * cols })
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
   (#fIn  : perm)
   ()
   norewrite
@@ -476,13 +476,13 @@ let kdesc
   (m : cmonoid et)
   (rows : szp)
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols))
-  (#lout : layout2 (SZ.v rows) (SZ.v cols))
+  (#lin  : layout2 rows cols)
+  (#lout : layout2 rows cols)
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   (#_ : squash (SZ.v rows * SZ.v cols <= max_blocks * max_threads))
   (#_ : squash (SZ.fits (SZ.v rows * SZ.v cols)))
@@ -518,12 +518,12 @@ fn scan1d_inclusive
   (m : cmonoid et)
   (rows : szp)
   (cols : szp)
-  (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-  (#lout : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lout |}
+  (#lin  : layout2 rows cols) {| ctlayout lin  |}
+  (#lout : layout2 rows cols) {| ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : chest2 et (SZ.v rows) (SZ.v cols))
-  (#sout : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx   : chest2 et rows cols)
+  (#sout : chest2 et rows cols)
   (#fIn  : perm)
   norewrite
   preserves cpu ** on gpu_loc (input |-> Frac fIn sx)

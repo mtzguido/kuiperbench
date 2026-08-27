@@ -584,7 +584,7 @@ fn t_memcpy_d2d'
   ensures exists* (s' : chest1 a dst_sz).
       on gpu_loc (dst |-> s') **
       pure (chest1_to_seq s' ==
-            KS.seq_blit (chest1_to_seq gv) (SZ.v dst_off) (chest1_to_seq v) (SZ.v src_off) (SZ.v cnt))
+            KS.seq_blit (chest1_to_seq gv) dst_off (chest1_to_seq v) src_off cnt)
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward dst_sz) gv)
     fn _ { tensor_concr dst; };
@@ -635,12 +635,12 @@ fn mean_var_norm_row
     (exists* (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
        pure (row_mean_var_normalized (chest1_to_seq sx) (chest1_to_seq sx')
-         (SZ.v rv_off) (SZ.v d) eps inv_d) **
+         rv_off d eps inv_d) **
        pure (exists (inv' neg_mean_inv' : f32).
-         chest1_to_seq sx' == KS.seq_blit (chest1_to_seq sx) (SZ.v rv_off)
-           (affine_result #f32 inv' neg_mean_inv' #(SZ.v d)
-             (Seq.slice (chest1_to_seq sx) (SZ.v rv_off) (SZ.v rv_off + SZ.v d)))
-           0 (SZ.v d)))
+         chest1_to_seq sx' == KS.seq_blit (chest1_to_seq sx) rv_off
+           (affine_result #f32 inv' neg_mean_inv' #d
+             (Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d)))
+           0 d))
 {
   (* Copy the row x[rv_off .. rv_off+d) into scratch[0 .. d). *)
   t_memcpy_d2d' scratch 0sz x rv_off d;
@@ -648,9 +648,9 @@ fn mean_var_norm_row
   (* [seq_blit ss 0 sx rv_off d] fully overwrites the length-d scratch,
      so it equals [slice sx rv_off (rv_off+d)] -- the row. *)
   let row_g : erased (lseq f32 d) =
-    hide (Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v rv_off + SZ.v d));
+    hide (Seq.slice (chest1_to_seq (reveal sx)) rv_off (SZ.v rv_off + SZ.v d));
   Seq.lemma_eq_intro
-    (KS.seq_blit (chest1_to_seq (reveal ss)) 0 (chest1_to_seq (reveal sx)) (SZ.v rv_off) (SZ.v d))
+    (KS.seq_blit (chest1_to_seq (reveal ss)) 0 (chest1_to_seq (reveal sx)) rv_off d)
     (reveal row_g);
   assert pure (chest1_to_seq (reveal ss1) == reveal row_g);
 
@@ -690,9 +690,9 @@ fn mean_var_norm_row
   (* Bridge the scaled scratch (chest_map (affine_step ..) ss1) back to the
      seq-level [affine_result inv neg_mean_inv row_g]. *)
   chest_map_to_seq (affine_step inv neg_mean_inv) (reveal ss1);
-  assert pure (chest1_to_seq (reveal vfinal) == KS.seq_blit (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-    (affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g))
-    0 (SZ.v d));
+  assert pure (chest1_to_seq (reveal vfinal) == KS.seq_blit (chest1_to_seq (reveal sx)) rv_off
+    (affine_result #f32 inv neg_mean_inv #d (reveal row_g))
+    0 d);
   assert pure (sum1 %~ rsum (to_real_seq (reveal row_g)));
   assert pure (sum2 %~ frobenius_sumsq_r (to_real_seq (reveal row_g)));
   assert pure (mean == mul sum1 inv_d);
@@ -708,25 +708,25 @@ fn mean_var_norm_row
      unfolds [seq_blit] for SMT (the pointwise [lemma_eq_intro] requires that
      unfolding, which no longer happens automatically after the merge). *)
   blit_slice_inside (chest1_to_seq (reveal sx))
-    (affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g))
-    (SZ.v rv_off) 0 (SZ.v d);
+    (affine_result #f32 inv neg_mean_inv #d (reveal row_g))
+    rv_off 0 d;
   Seq.lemma_eq_intro
-    (Seq.slice (affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g))
-               0 (SZ.v d))
-    (affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g));
-  assert pure (Seq.slice (chest1_to_seq (reveal vfinal)) (SZ.v rv_off) (SZ.v rv_off + SZ.v d) ==
-               affine_result #f32 inv neg_mean_inv #(SZ.v d) (reveal row_g));
+    (Seq.slice (affine_result #f32 inv neg_mean_inv #d (reveal row_g))
+               0 d)
+    (affine_result #f32 inv neg_mean_inv #d (reveal row_g));
+  assert pure (Seq.slice (chest1_to_seq (reveal vfinal)) rv_off (SZ.v rv_off + SZ.v d) ==
+               affine_result #f32 inv neg_mean_inv #d (reveal row_g));
   row_mean_var_normalized_intro #(b * d) d
     (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal vfinal))
-    (SZ.v rv_off) eps inv_d sum1 sum2 mean m2 var var_eps inv neg_mean_inv;
+    rv_off eps inv_d sum1 sum2 mean m2 var var_eps inv neg_mean_inv;
   assert pure (row_mean_var_normalized (chest1_to_seq (reveal sx))
-    (chest1_to_seq (reveal vfinal)) (SZ.v rv_off) (SZ.v d) eps inv_d);
+    (chest1_to_seq (reveal vfinal)) rv_off d eps inv_d);
   assert pure (exists (inv_w neg_mean_inv_w : f32).
-    chest1_to_seq (reveal vfinal) == KS.seq_blit (chest1_to_seq (reveal sx)) (SZ.v rv_off)
-      (affine_result #f32 inv_w neg_mean_inv_w #(SZ.v d)
-        (Seq.slice (chest1_to_seq (reveal sx)) (SZ.v rv_off)
+    chest1_to_seq (reveal vfinal) == KS.seq_blit (chest1_to_seq (reveal sx)) rv_off
+      (affine_result #f32 inv_w neg_mean_inv_w #d
+        (Seq.slice (chest1_to_seq (reveal sx)) rv_off
           (SZ.v rv_off + SZ.v d)))
-      0 (SZ.v d));
+      0 d);
   ()
 }
 #pop-options
@@ -753,7 +753,7 @@ fn mean_var_norm
   ensures
     (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
-       pure (mean_var_post (SZ.v b) (SZ.v d) eps inv_d (chest1_to_seq sx) (chest1_to_seq sx')))
+       pure (mean_var_post b d eps inv_d (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let scratch = alloc0 #f32 d (l1_forward d);
   let mut idx = 0sz;
@@ -762,7 +762,7 @@ fn mean_var_norm
      subtype checks) and the post-loop context (for mean_var_post).
      Proved once in a clean F* context via lemma_mult_le_right;
      thereafter Z3 needs only forall instantiation + SZ.mul axiom. *)
-  row_lt_b_bound_forall_lemma (SZ.v d) (SZ.v b);
+  row_lt_b_bound_forall_lemma d b;
   while (let i = !idx; SZ.(i <^ b))
     invariant
       exists* (vi : sz) (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
@@ -772,7 +772,7 @@ fn mean_var_norm
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               (forall (r : nat). r < SZ.v vi ==>
-                 row_mean_var_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) (SZ.v d) eps inv_d) /\
+                 row_mean_var_normalized (chest1_to_seq sx) (chest1_to_seq sx') (r * SZ.v d) d eps inv_d) /\
               Seq.slice (chest1_to_seq sx') (vi * d) (b * d) ==
                 Seq.slice (chest1_to_seq sx) (vi * d) (b * d))
     decreases (SZ.v b - SZ.v !idx)
@@ -789,7 +789,7 @@ fn mean_var_norm
        sx sx_pre (r*d) d] applications each carry the [(r*d)+d <= bd] subtype
        refinement) are well-typed without Z3 re-deriving the nonlinear bound
        under the quantifier in this large loop-body context. *)
-    row_lt_b_bound_forall_lemma (SZ.v d) (SZ.v b);
+    row_lt_b_bound_forall_lemma d b;
     (* One pure lemma re-establishes the whole loop invariant in a clean SMT
        context (exactly as the green L2Norm.l2norm loop calls
        l2_loop_invariant_step).  Its requires map onto the loop invariant
@@ -799,7 +799,7 @@ fn mean_var_norm
        the mathematical product [b * d], exactly the type index of the
        [chest1_to_seq _] arguments. *)
     mv_loop_invariant_step (b * d) b d (chest1_to_seq (reveal sx))
-      (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) (SZ.v i) eps inv_d;
+      (chest1_to_seq (reveal sx_pre)) (chest1_to_seq (reveal sx_post)) i eps inv_d;
     idx := SZ.(!idx +^ 1sz);
   };
   free scratch;
@@ -824,7 +824,7 @@ fn mean_var_norm_fw
   ensures
     (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
-       pure (mean_var_post (SZ.v b) (SZ.v d) eps (mvn_inv_d d) (chest1_to_seq sx) (chest1_to_seq sx')))
+       pure (mean_var_post b d eps (mvn_inv_d d) (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let inv_d : f32 = mvn_inv_d d;
   mean_var_norm b d eps inv_d x;

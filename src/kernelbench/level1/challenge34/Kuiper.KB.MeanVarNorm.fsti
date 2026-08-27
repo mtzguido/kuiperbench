@@ -46,7 +46,7 @@ type mean_var_norm_fw_ty (t:Type0) {| floating t, real_like t |} =
        cpu **
        (exists* (s' : chest1 t (b * d)).
           on gpu_loc (x |-> s') **
-          pure (mean_var_post (SZ.v b) (SZ.v d) eps (mvn_inv_d d)
+          pure (mean_var_post b d eps (mvn_inv_d d)
                   (chest1_to_seq s) (chest1_to_seq s')))
 
 val mean_var_norm_fw_f32 : mean_var_norm_fw_ty f32

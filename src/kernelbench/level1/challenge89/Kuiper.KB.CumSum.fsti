@@ -47,11 +47,11 @@ inline_for_extraction noextract
 type cumsum_fw_ty (t:Type0) {| scalar t, real_like t |} =
   fn (b : szp { b <= max_blocks })
      (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-     (input  : array2 t (l2_row_major (SZ.v b) (SZ.v d))
+     (input  : array2 t (l2_row_major b d)
                { is_global input  })
-     (output : array2 t (l2_row_major (SZ.v b) (SZ.v d))
+     (output : array2 t (l2_row_major b d)
                { is_global output })
-     (#sx #sy0 : EM.chest2 t (SZ.v b) (SZ.v d))
+     (#sx #sy0 : EM.chest2 t b d)
      requires
        cpu **
        on gpu_loc (input  |-> sx) **
@@ -59,9 +59,9 @@ type cumsum_fw_ty (t:Type0) {| scalar t, real_like t |} =
      ensures
        cpu **
        on gpu_loc (input |-> sx) **
-       (exists* (sy : EM.chest2 t (SZ.v b) (SZ.v d)).
+       (exists* (sy : EM.chest2 t b d).
           on gpu_loc (output |-> sy) **
-          pure (cumsum_post (SZ.v b) (SZ.v d) sx sy))
+          pure (cumsum_post b d sx sy))
 
 val cumsum_fw_f32 : cumsum_fw_ty f32
 

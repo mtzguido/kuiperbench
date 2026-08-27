@@ -63,14 +63,14 @@ fn tril_matmul_f32_impl
   (n : szp {
      SZ.v n * SZ.v n <= max_blocks * max_threads /\
      SZ.fits (SZ.v n * SZ.v n) })
-  (gA : array2 f32 (l2_row_major (SZ.v n) (SZ.v n)) { is_global gA })
-  (gB : array2 f32 (l2_row_major (SZ.v n) (SZ.v n)) { is_global gB })
-  (y  : array2 f32 (l2_row_major (SZ.v n) (SZ.v n)) { is_global y  })
-  (#sA : EM.chest2 f32 (SZ.v n) (SZ.v n))
-  (#sB : EM.chest2 f32 (SZ.v n) (SZ.v n))
-  (#sy : EM.chest2 f32 (SZ.v n) (SZ.v n))
-  (#rA : EM.chest2 real (SZ.v n) (SZ.v n))
-  (#rB : EM.chest2 real (SZ.v n) (SZ.v n))
+  (gA : array2 f32 (l2_row_major n n) { is_global gA })
+  (gB : array2 f32 (l2_row_major n n) { is_global gB })
+  (y  : array2 f32 (l2_row_major n n) { is_global y  })
+  (#sA : EM.chest2 f32 n n)
+  (#sB : EM.chest2 f32 n n)
+  (#sy : EM.chest2 f32 n n)
+  (#rA : EM.chest2 real n n)
+  (#rB : EM.chest2 real n n)
   preserves cpu
   requires
     on gpu_loc (gA |-> sA) **
@@ -80,9 +80,9 @@ fn tril_matmul_f32_impl
   ensures
     on gpu_loc (gA |-> sA) **
     on gpu_loc (gB |-> sB) **
-    (exists* (sy' : EM.chest2 f32 (SZ.v n) (SZ.v n)).
+    (exists* (sy' : EM.chest2 f32 n n).
        on gpu_loc (y |-> sy') **
-       pure (tril_matmul_post (SZ.v n) (reveal rA) (reveal rB) sy'))
+       pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))
 {
   (* Expose Seq.length / SZ.fits facts for the concrete layouts. *)
   map_loc gpu_loc (fun () -> tensor_pts_to_ref gA);
@@ -90,7 +90,7 @@ fn tril_matmul_f32_impl
 
   (* Real witness for the output buffer's initial content (the operand real
      witnesses [rA]/[rB] come from the caller via [sA %~ rA /\ sB %~ rB]). *)
-  let rC : EM.chest2 real (SZ.v n) (SZ.v n) =
+  let rC : EM.chest2 real n n =
     hide (EM.to_real_matrix (reveal sy));
 
   assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
@@ -119,10 +119,10 @@ fn tril_matmul_f32_impl
   assert pure (reveal sy' == Tril.s_tril (reveal eC'));
 
   (* Discharge per-(i,j) [tril_matmul_post]. *)
-  let rAB : EM.chest2 real (SZ.v n) (SZ.v n) =
+  let rAB : EM.chest2 real n n =
     hide (MS.matmul (reveal rA) (reveal rB));
   Classical.forall_intro_2
-    (tril_row_aux (SZ.v n) (reveal eC') (reveal rAB) ());
+    (tril_row_aux n (reveal eC') (reveal rAB) ());
   ()
 }
 #pop-options

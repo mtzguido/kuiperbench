@@ -108,12 +108,12 @@ type reduce_batched_ty (et : Type0) {| scalar et |} =
   fn (pre_map : et -> et)
      (rows : szp { SZ.v rows <= max_blocks * max_threads })
      (cols : szp)
-     (#lin  : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin  |}
-     (#lout : layout1 (SZ.v rows))              {| ctlayout lout |}
+     (#lin  : layout2 rows cols) {| ctlayout lin  |}
+     (#lout : layout1 rows)              {| ctlayout lout |}
      (x      : array2 et lin  { is_global x      })
      (output : array1 et lout { is_global output })
-     (#sx   : EM.chest2 et (SZ.v rows) (SZ.v cols))
-     (#sout : chest1 et (SZ.v rows))
+     (#sx   : EM.chest2 et rows cols)
+     (#sout : chest1 et rows)
      preserves cpu
      requires
        on gpu_loc (x |-> sx) **

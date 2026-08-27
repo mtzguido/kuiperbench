@@ -54,18 +54,18 @@ fn read_at
   (#et:Type0) {| scalar et |}
   (rows : szp)
   (cols : szp)
-  (#lin : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin |}
+  (#lin : layout2 rows cols) {| ctlayout lin |}
   (x : array2 et lin)
   (row : szlt rows)
   (col : szlt cols)
-  (#sx : chest2 et (SZ.v rows) (SZ.v cols))
+  (#sx : chest2 et rows cols)
   (#f : perm)
   preserves
     x |-> Frac f sx
   returns
     res : et
   ensures
-    pure (res == acc2 sx (SZ.v row) (SZ.v col))
+    pure (res == acc2 sx row col)
 {
   tensor_read x (cidx2 row col)
 }
@@ -107,17 +107,17 @@ fn sum_stride_map_2d_biased
   (pre_map_1_r : real -> real { pre_map_1 %~ pre_map_1_r })
   (rows : szp)
   (cols : szp)
-  (#lin : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin |}
+  (#lin : layout2 rows cols) {| ctlayout lin |}
   (x : array2 et lin)
   (row : szlt rows)
   (stride : szp)
   (off : szlt stride)
-  (#sx : chest2 et (SZ.v rows) (SZ.v cols))
-  (vr_row : erased (lseq real (SZ.v cols)))
+  (#sx : chest2 et rows cols)
+  (vr_row : erased (lseq real cols))
   (#f : perm)
   preserves
     gpu ** x |-> Frac f sx **
-    pure (forall (j:nat). j < SZ.v cols ==> acc2 sx (SZ.v row) j %~ (vr_row @! j)) **
+    pure (forall (j:nat). j < SZ.v cols ==> acc2 sx row j %~ (vr_row @! j)) **
     pure (SZ.fits (SZ.v cols + stride))
   returns
     res : et
@@ -145,7 +145,7 @@ fn sum_stride_map_2d_biased
     let idx_v : szlt cols = idx_raw;
     let v = read_at rows cols x row idx_v;
     let v' = pre_map_1 v;
-    (**)assert (pure (v == acc2 sx (SZ.v row) (SZ.v idx_v)));
+    (**)assert (pure (v == acc2 sx row idx_v));
     (**)assert (pure (v %~ (vr_row @! SZ.v idx_v)));
     (**)assert (pure (v' %~ (lseq_map pre_map_1_r vr_row @! SZ.v idx_v)));
 
@@ -163,7 +163,7 @@ fn sum_stride_map_2d_biased
     ()
   };
 
-  stride_length_exact (gread gidx) (Seq.length (lseq_map pre_map_1_r vr_row)) (SZ.v stride) (SZ.v off);
+  stride_length_exact (gread gidx) (Seq.length (lseq_map pre_map_1_r vr_row)) stride off;
   assert pure (gread gidx == seq_stride_length (lseq_map pre_map_1_r vr_row) stride off);
   assert pure (seq_take (seq_stride_length (lseq_map pre_map_1_r vr_row) stride off)
                        (seq_stride (lseq_map pre_map_1_r vr_row) stride off)
@@ -193,20 +193,20 @@ let kpre_block
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols))
-  (#lbias : layout1 (SZ.v rows))
-  (#lout  : layout1 (SZ.v rows))
+  (#lin   : layout2 rows cols)
+  (#lbias : layout1 rows)
+  (#lout  : layout1 rows)
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols))
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows))
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols)
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows)
+  (sout  : chest1 et rows)
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
-  (bid : natlt (SZ.v rows))
+  (bid : natlt rows)
   (tid : natlt nth)
   : slprop
   = x |-> Frac ((1.0R /. SZ.v rows) /. nth) sx **
@@ -222,20 +222,20 @@ let kpost_block
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols))
-  (#lbias : layout1 (SZ.v rows))
-  (#lout  : layout1 (SZ.v rows))
+  (#lin   : layout2 rows cols)
+  (#lbias : layout1 rows)
+  (#lout  : layout1 rows)
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols))
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows))
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols)
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows)
+  (sout  : chest1 et rows)
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
-  (bid : natlt (SZ.v rows))
+  (bid : natlt rows)
   (tid : natlt nth)
   : slprop
   = x |-> Frac ((1.0R /. SZ.v rows) /. nth) sx **
@@ -290,17 +290,17 @@ fn kf_block
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin   |}
-  (#lbias : layout1 (SZ.v rows))             {| ctlayout lbias |}
-  (#lout  : layout1 (SZ.v rows))             {| ctlayout lout  |}
+  (#lin   : layout2 rows cols) {| ctlayout lin   |}
+  (#lbias : layout1 rows)             {| ctlayout lbias |}
+  (#lout  : layout1 rows)             {| ctlayout lout  |}
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols { sx %~ vr })
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows { sbias %~ vbias })
+  (sout  : chest1 et rows)
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
   (bid : szlt rows)
@@ -309,42 +309,42 @@ fn kf_block
   requires
     gpu **
     pure (c_shmems_inv shmem) **
-    kpre_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem (SZ.v bid) (SZ.v tid) **
+    kpre_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem bid tid **
     thread_id nth tid **
     block_id rows bid **
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1)
-                       (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth)) **
+                       (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth)) **
     B.barrier_state 0
   ensures
     gpu **
-    kpost_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem (SZ.v bid) (SZ.v tid) **
+    kpost_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem bid tid **
     thread_id nth tid **
     block_id rows bid **
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1)
-                       (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth)) **
+                       (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth)) **
     B.barrier_state (hreduce_barrier_count nth)
 {
-  unfold kpre_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem (SZ.v bid) (SZ.v tid);
+  unfold kpre_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem bid tid;
 
   let (gsa, _) = shmem;
   let sa = from_array (l1_forward nth) gsa;
   rewrite each from_array (l1_forward nth) gsa as sa;
 
   (* Row of vr at bid *)
-  let vr_row : erased (lseq real (SZ.v cols)) = hide (ematrix_row (reveal vr) (SZ.v bid));
-  let pre_map_bid_r : (real -> real) = prer pre_map_r vbias (SZ.v bid);
+  let vr_row : erased (lseq real cols) = hide (ematrix_row (reveal vr) bid);
+  let pre_map_bid_r : (real -> real) = prer pre_map_r vbias bid;
 
   (* Bridge from (sx %~ vr) to row-level approximation. *)
   assert pure (forall (j:nat). j < SZ.v cols ==>
-                 (vr_row @! j) == acc2 (reveal vr) (SZ.v bid) j);
+                 (vr_row @! j) == acc2 (reveal vr) bid j);
   assert pure (forall (j:nat). j < SZ.v cols ==>
-                 acc2 sx (SZ.v bid) j %~ (vr_row @! j));
+                 acc2 sx bid j %~ (vr_row @! j));
 
   (* Read bias value and partially apply pre_map *)
   let bias_bid : et = tensor_read bias (cidx1 bid);
-  assert pure (bias_bid == acc1 sbias (SZ.v bid));
-  echest_approx_index sbias vbias (SZ.v bid);
-  assert pure (bias_bid %~ (acc1 vbias (SZ.v bid)));
+  assert pure (bias_bid == acc1 sbias bid);
+  echest_approx_index sbias vbias bid;
+  assert pure (bias_bid %~ (acc1 vbias bid));
   let pre_map_bid : (et -> et) = (fun (xx:et) -> pre_map xx bias_bid);
 
   (* Compute partial sum over stride and write to shmem. *)
@@ -355,26 +355,26 @@ fn kf_block
   let mut n : szlt 32 = 0sz;
 
   let psum_chest : chest1 et 1 = mk1 #et #1 (fun _ -> psum);
-  slice_singleton sa (SZ.v tid) psum psum_chest;
+  slice_singleton sa tid psum psum_chest;
 
-  (**)fold (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth));
+  (**)fold (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth));
   assert pure (pow2 (SZ.v !n) == 1);
   assert pure (SZ.v tid + 1 <= SZ.v nth);
-  min_succ (SZ.v tid) (SZ.v nth);
-  rewrite (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth))
-       as (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth));
-  (**)if_intro_true' (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth));
+  min_succ tid nth;
+  rewrite (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth))
+       as (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth));
+  (**)if_intro_true' (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth));
 
   open FStar.SizeT;
   while (spow2 !n <^ nth)
     invariant
       live n **
       B.barrier_state !n **
-      if_ (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth)) **
+      if_ (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth)) **
       pure (v !n > 0 ==> pow2 (v !n - 1) < v nth)
     decreases (2 * nth - spow2 !n)
   {
-    iteration nth sa (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth) tid !n;
+    iteration nth sa (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth) tid !n;
     FStar.Math.Lemmas.pow2_double_mult (SZ.v !n);
     n := !n +^ 1sz;
   };
@@ -383,17 +383,17 @@ fn kf_block
 
   FStar.Math.Lemmas.modulo_lemma tid (pow2 it);
   rewrite
-    (if_ (div_pow2 it tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 it) nth) (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth)))
+    (if_ (div_pow2 it tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 it) nth) (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth)))
   as
-    (if_ (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth)));
+    (if_ (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth)));
 
   log2_hreduce (v nth) it;
   rewrite (B.barrier_state it) as (B.barrier_state (hreduce_barrier_count nth));
 
   if (tid = 0sz) {
-    if_elim_true' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth));
-    if_elim_true' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt (SZ.v rows)), ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout (SZ.v bid)));
-    unfold array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth);
+    if_elim_true' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth));
+    if_elim_true' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt rows), ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
+    unfold array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth);
     (**)strided_sum_is_sum pre_map_bid_r vr_row nth;
 
     let res = array1_read_from_slice sa 0sz;
@@ -413,21 +413,21 @@ fn kf_block
     if_intro_true' (op_Equals #nat tid 0) (
       live (from_array (l1_forward nth) shmem._1) **
       exists* (v : et).
-        Cell output (((SZ.v bid <: natlt (SZ.v rows)), ()) <: abs (SZ.v rows @| INil)) |-> v **
-        pure (v %~ rsum (lseq_map (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid))))
+        Cell output (((SZ.v bid <: natlt rows), ()) <: abs (SZ.v rows @| INil)) |-> v **
+        pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid)))
     );
-    fold kpost_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem (SZ.v bid) (SZ.v tid);
+    fold kpost_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem bid tid;
   } else {
-    if_elim_false' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid)) nth));
-    if_elim_false' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt (SZ.v rows)), ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout (SZ.v bid)));
+    if_elim_false' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial (prer pre_map_r vbias bid) (ematrix_row vr bid) nth));
+    if_elim_false' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt rows), ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
     if_intro_false' (op_Equals #nat tid 0) (
       live (from_array (l1_forward nth) shmem._1) **
       exists* (v : et).
-        Cell output (((SZ.v bid <: natlt (SZ.v rows)), ()) <: abs (SZ.v rows @| INil)) |-> v **
-        pure (v %~ rsum (lseq_map (prer pre_map_r vbias (SZ.v bid)) (ematrix_row vr (SZ.v bid))))
+        Cell output (((SZ.v bid <: natlt rows), ()) <: abs (SZ.v rows @| INil)) |-> v **
+        pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid)))
     );
     rewrite each sa as from_array (l1_forward nth) shmem._1;
-    fold kpost_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem (SZ.v bid) (SZ.v tid);
+    fold kpost_block pre_map pre_map_r rows cols nth x bias output sx vr sbias vbias sout fbias shmem bid tid;
     ()
   };
 }
@@ -443,20 +443,20 @@ fn block_setup_block
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols))
-  (#lbias : layout1 (SZ.v rows))
-  (#lout  : layout1 (SZ.v rows))
+  (#lin   : layout2 rows cols)
+  (#lbias : layout1 rows)
+  (#lout  : layout1 rows)
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols { sx %~ vr })
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows { sbias %~ vbias })
+  (sout  : chest1 et rows)
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
-  (bid : natlt (SZ.v rows))
+  (bid : natlt rows)
   ()
   norewrite
   requires
@@ -534,20 +534,20 @@ fn block_teardown_block
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols))
-  (#lbias : layout1 (SZ.v rows))
-  (#lout  : layout1 (SZ.v rows))
+  (#lin   : layout2 rows cols)
+  (#lbias : layout1 rows)
+  (#lout  : layout1 rows)
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols { sx %~ vr })
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows { sbias %~ vbias })
+  (sout  : chest1 et rows)
   (fbias : perm)
   (shmem : c_shmems [SHArray et nth])
-  (bid : natlt (SZ.v rows))
+  (bid : natlt rows)
   ()
   norewrite
   requires
@@ -608,45 +608,45 @@ fn setup_block_outer
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin   |}
-  (#lbias : layout1 (SZ.v rows))             {| ctlayout lbias |}
-  (#lout  : layout1 (SZ.v rows))             {| ctlayout lout  |}
+  (#lin   : layout2 rows cols) {| ctlayout lin   |}
+  (#lbias : layout1 rows)             {| ctlayout lbias |}
+  (#lout  : layout1 rows)             {| ctlayout lout  |}
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols { sx %~ vr })
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows { sbias %~ vbias })
+  (sout  : chest1 et rows)
   (fbias : perm)
   ()
   norewrite
   requires
     x |-> sx ** bias |-> Frac fbias sbias ** output |-> sout
   ensures
-    (forall+ (bid : natlt (SZ.v rows)).
+    (forall+ (bid : natlt rows).
        x |-> Frac (1.0R /. SZ.v rows) sx **
        bias |-> Frac (fbias /. SZ.v rows) sbias **
        Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid)) **
     pure (SZ.fits (tlayout_ulen lout))
 {
   tensor_pts_to_ref output;
-  tensor_share_n x (SZ.v rows);
-  tensor_share_n bias (SZ.v rows);
+  tensor_share_n x rows;
+  tensor_share_n bias rows;
   tensor_explode output;
   forevery_iso abs_bij _;
 
   forevery_ext
-    (fun (bid : natlt (SZ.v rows)) -> Cell output (abs_bij.gg (bid <: natlt (SZ.v rows))) |-> acc sout (abs_bij.gg (bid <: natlt (SZ.v rows))))
-    (fun (bid : natlt (SZ.v rows)) -> Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
+    (fun (bid : natlt rows) -> Cell output (abs_bij.gg (bid <: natlt rows)) |-> acc sout (abs_bij.gg (bid <: natlt rows)))
+    (fun (bid : natlt rows) -> Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
 
-  forevery_zip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) -> bias |-> Frac (fbias /. SZ.v rows) sbias)
-    (fun (bid : natlt (SZ.v rows)) -> Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
-  forevery_zip #(natlt (SZ.v rows))
-    (fun (_ : natlt (SZ.v rows)) -> x |-> Frac (1.0R /. SZ.v rows) sx)
-    (fun (bid : natlt (SZ.v rows)) ->
+  forevery_zip #(natlt rows)
+    (fun (_ : natlt rows) -> bias |-> Frac (fbias /. SZ.v rows) sbias)
+    (fun (bid : natlt rows) -> Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
+  forevery_zip #(natlt rows)
+    (fun (_ : natlt rows) -> x |-> Frac (1.0R /. SZ.v rows) sx)
+    (fun (bid : natlt rows) ->
        bias |-> Frac (fbias /. SZ.v rows) sbias **
        Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid));
   ()
@@ -661,22 +661,22 @@ fn teardown_block_outer
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin   |}
-  (#lbias : layout1 (SZ.v rows))             {| ctlayout lbias |}
-  (#lout  : layout1 (SZ.v rows))             {| ctlayout lout  |}
+  (#lin   : layout2 rows cols) {| ctlayout lin   |}
+  (#lbias : layout1 rows)             {| ctlayout lbias |}
+  (#lout  : layout1 rows)             {| ctlayout lout  |}
   (x      : array2 et lin)
   (bias   : array1 et lbias)
   (output : array1 et lout)
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols { sx %~ vr })
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows { sbias %~ vbias })
+  (sout  : chest1 et rows)
   (fbias : perm)
   ()
   norewrite
   requires
-    (forall+ (bid : natlt (SZ.v rows)).
+    (forall+ (bid : natlt rows).
        x |-> Frac (1.0R /. SZ.v rows) sx **
        bias |-> Frac (fbias /. SZ.v rows) sbias **
        exists* (v : et).
@@ -684,59 +684,59 @@ fn teardown_block_outer
          pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid)))) **
     pure (SZ.fits (tlayout_ulen lout))
   ensures
-    exists* (sout' : chest1 et (SZ.v rows)).
+    exists* (sout' : chest1 et rows).
       x |-> sx ** bias |-> Frac fbias sbias ** output |-> sout' **
       pure (forall (r : nat). r < SZ.v rows ==>
             (acc1 sout' r) %~ rsum (lseq_map (prer pre_map_r vbias r) (ematrix_row vr r)))
 {
   forevery_unzip
-    (fun (_ : natlt (SZ.v rows)) -> x |-> Frac (1.0R /. SZ.v rows) sx)
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (_ : natlt rows) -> x |-> Frac (1.0R /. SZ.v rows) sx)
+    (fun (bid : natlt rows) ->
        bias |-> Frac (fbias /. SZ.v rows) sbias **
        (exists* (v : et).
           Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> v **
           pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid)))));
 
   forevery_unzip
-    (fun (_ : natlt (SZ.v rows)) -> bias |-> Frac (fbias /. SZ.v rows) sbias)
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (_ : natlt rows) -> bias |-> Frac (fbias /. SZ.v rows) sbias)
+    (fun (bid : natlt rows) ->
        exists* (v : et).
          Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> v **
          pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid))));
 
-  tensor_gather_n x (SZ.v rows);
-  tensor_gather_n bias (SZ.v rows);
+  tensor_gather_n x rows;
+  tensor_gather_n bias rows;
 
   (* Skolemize the existential *)
   let f =
     forevery_exists
-      (fun (bid : natlt (SZ.v rows)) (v : et) ->
+      (fun (bid : natlt rows) (v : et) ->
          Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> v **
          pure (v %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid))));
 
-  let sout' : chest1 et (SZ.v rows) =
-    hide (mk1 #et #(SZ.v rows) (fun (bid : natlt (SZ.v rows)) -> f bid));
+  let sout' : chest1 et rows =
+    hide (mk1 #et #rows (fun (bid : natlt rows) -> f bid));
 
   forevery_extract_pure
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (bid : natlt rows) ->
        Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> f bid **
        pure (f bid %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid))))
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (bid : natlt rows) ->
        (acc1 (reveal sout') bid) %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid)))
     fn _ {};
 
   forevery_drop_pure
-    (fun (bid : natlt (SZ.v rows)) -> Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> f bid)
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (bid : natlt rows) -> Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> f bid)
+    (fun (bid : natlt rows) ->
        f bid %~ rsum (lseq_map (prer pre_map_r vbias bid) (ematrix_row vr bid)));
 
   forevery_ext
-    (fun (bid : natlt (SZ.v rows)) ->
+    (fun (bid : natlt rows) ->
        Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> f bid)
-    (fun (bid : natlt (SZ.v rows)) ->
-       Cell output (abs_bij.gg (bid <: natlt (SZ.v rows))) |-> acc (reveal sout') (abs_bij.gg (bid <: natlt (SZ.v rows))));
+    (fun (bid : natlt rows) ->
+       Cell output (abs_bij.gg (bid <: natlt rows)) |-> acc (reveal sout') (abs_bij.gg (bid <: natlt rows)));
 
-  forevery_iso_back (abs_bij #(SZ.v rows))
+  forevery_iso_back (abs_bij #rows)
     (fun (i : abs (SZ.v rows @| INil)) -> Cell output i |-> acc (reveal sout') i);
 
   tensor_implode output;
@@ -754,21 +754,21 @@ let kdesc_block
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin   |}
-  (#lbias : layout1 (SZ.v rows))             {| ctlayout lbias |}
-  (#lout  : layout1 (SZ.v rows))             {| ctlayout lout  |}
+  (#lin   : layout2 rows cols) {| ctlayout lin   |}
+  (#lbias : layout1 rows)             {| ctlayout lbias |}
+  (#lout  : layout1 rows)             {| ctlayout lout  |}
   (x      : array2 et lin   { is_global x      })
   (bias   : array1 et lbias { is_global bias   })
   (output : array1 et lout  { is_global output })
-  (sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr    : chest2 real (SZ.v rows) (SZ.v cols) { sx %~ vr })
-  (sbias : chest1 et (SZ.v rows))
-  (vbias : chest1 real (SZ.v rows) { sbias %~ vbias })
-  (sout  : chest1 et (SZ.v rows))
+  (sx    : chest2 et   rows cols)
+  (vr    : chest2 real rows cols { sx %~ vr })
+  (sbias : chest1 et rows)
+  (vbias : chest1 real rows { sbias %~ vbias })
+  (sout  : chest1 et rows)
   (fbias : perm)
   : kernel_desc
       (x |-> sx ** bias |-> Frac fbias sbias ** output |-> sout)
-      (exists* (sout' : chest1 et (SZ.v rows)).
+      (exists* (sout' : chest1 et rows).
          x |-> sx ** bias |-> Frac fbias sbias ** output |-> sout' **
          pure (forall (r : nat). r < SZ.v rows ==>
                (acc1 sout' r) %~ rsum (lseq_map (prer pre_map_r vbias r) (ematrix_row vr r))))
@@ -827,17 +827,17 @@ fn reduce_batched_block_biased
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (nth : szp { nth <= max_threads /\ SZ.fits (cols + nth) })
-  (#lin   : layout2 (SZ.v rows) (SZ.v cols)) {| ctlayout lin   |}
-  (#lbias : layout1 (SZ.v rows))             {| ctlayout lbias |}
-  (#lout  : layout1 (SZ.v rows))             {| ctlayout lout  |}
+  (#lin   : layout2 rows cols) {| ctlayout lin   |}
+  (#lbias : layout1 rows)             {| ctlayout lbias |}
+  (#lout  : layout1 rows)             {| ctlayout lout  |}
   (x      : array2 et lin   { is_global x      })
   (bias   : array1 et lbias { is_global bias   })
   (output : array1 et lout  { is_global output })
-  (#sx    : chest2 et   (SZ.v rows) (SZ.v cols))
-  (vr     : chest2 real (SZ.v rows) (SZ.v cols))
-  (#sbias : chest1 et (SZ.v rows))
-  (vbias  : chest1 real (SZ.v rows))
-  (#sout  : chest1 et (SZ.v rows))
+  (#sx    : chest2 et   rows cols)
+  (vr     : chest2 real rows cols)
+  (#sbias : chest1 et rows)
+  (vbias  : chest1 real rows)
+  (#sout  : chest1 et rows)
   (#fbias : perm)
   preserves
     cpu **
@@ -848,7 +848,7 @@ fn reduce_batched_block_biased
     pure (sx %~ vr) **
     pure (sbias %~ vbias)
   ensures
-    exists* (sout' : chest1 et (SZ.v rows)).
+    exists* (sout' : chest1 et rows).
       on gpu_loc (output |-> sout') **
       pure (forall (r : nat). r < SZ.v rows ==>
             (acc1 sout' r) %~ rsum (Kuiper.Seq.Common.lseq_map (prer pre_map_r vbias r)

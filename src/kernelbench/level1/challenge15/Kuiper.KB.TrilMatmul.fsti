@@ -48,11 +48,11 @@ type tril_matmul_ty (t:Type0) {| floating t, real_like t, floating_real_like t |
   fn (n : szp {
         SZ.v n * SZ.v n <= max_blocks * max_threads /\
         SZ.fits (SZ.v n * SZ.v n) })
-     (gA : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global gA })
-     (gB : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global gB })
-     (y  : array2 t (l2_row_major (SZ.v n) (SZ.v n)) { is_global y  })
-     (#sA #sB #sy : EM.chest2 t (SZ.v n) (SZ.v n))
-     (#rA #rB : EM.chest2 real (SZ.v n) (SZ.v n))
+     (gA : array2 t (l2_row_major n n) { is_global gA })
+     (gB : array2 t (l2_row_major n n) { is_global gB })
+     (y  : array2 t (l2_row_major n n) { is_global y  })
+     (#sA #sB #sy : EM.chest2 t n n)
+     (#rA #rB : EM.chest2 real n n)
      requires
        cpu **
        on gpu_loc (gA |-> sA) **
@@ -63,8 +63,8 @@ type tril_matmul_ty (t:Type0) {| floating t, real_like t, floating_real_like t |
        cpu **
        on gpu_loc (gA |-> sA) **
        on gpu_loc (gB |-> sB) **
-       (exists* (sy' : EM.chest2 t (SZ.v n) (SZ.v n)).
+       (exists* (sy' : EM.chest2 t n n).
           on gpu_loc (y |-> sy') **
-          pure (tril_matmul_post (SZ.v n) (reveal rA) (reveal rB) sy'))
+          pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))
 
 val tril_matmul_f32 : tril_matmul_ty f32

@@ -73,7 +73,7 @@ fn t_memcpy_d2d'
   ensures exists* (s' : chest1 a dst_sz).
       on gpu_loc (dst |-> s') **
       pure (chest1_to_seq s' ==
-            KS.seq_blit (chest1_to_seq gv) (SZ.v dst_off) (chest1_to_seq v) (SZ.v src_off) (SZ.v cnt))
+            KS.seq_blit (chest1_to_seq gv) dst_off (chest1_to_seq v) src_off cnt)
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward dst_sz) gv)
     fn _ { tensor_concr dst; };
@@ -143,7 +143,7 @@ fn t_read_1
   (#va : chest1 a sz)
   preserves cpu ** on gpu_loc (arr |-> Frac f va)
   returns x : a
-  ensures pure (x == acc1 va (SZ.v i))
+  ensures pure (x == acc1 va i)
 {
   let tmp = Vec.alloc dummy 1sz;
   Vec.pts_to_len tmp;
@@ -162,8 +162,8 @@ fn t_read_1
   let x = Vec.(tmp.(0sz));
   Vec.free tmp;
   lem_to_seq sz va;
-  lem_blit_index_0 (Seq.create 1 dummy) (to_seq (l1_forward sz) va) (SZ.v i);
-  lem_index_chest1 va (SZ.v i);
+  lem_blit_index_0 (Seq.create 1 dummy) (to_seq (l1_forward sz) va) i;
+  lem_index_chest1 va i;
   x
 }
 
@@ -266,7 +266,7 @@ let ce_final_lemma
     (ensures cross_entropy_post b c inv_b sp stv res)
   = introduce exists (per_batch : Seq.lseq f32 b) (s' : f32).
       (forall (r : nat). r < b ==>
-         (per_batch @! r) %~ ce_term_r c sp r (SZ.v (stv @! r))) /\
+         (per_batch @! r) %~ ce_term_r c sp r (stv @! r)) /\
       s' %~ rsum (to_real_seq per_batch) /\
       res == mul s' inv_b
     with vt s
@@ -294,9 +294,9 @@ fn ce_loss_impl
     pure (forall (r : nat). r < SZ.v b ==> SZ.v (acc1 (reveal stv) r) < SZ.v c)
   returns res : f32
   ensures
-    pure (cross_entropy_post (SZ.v b) (SZ.v c) inv_b
+    pure (cross_entropy_post b c inv_b
             (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v c))
-            (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t (SZ.v b))
+            (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t b)
             res)
 {
   let sp_c : erased (Seq.lseq f32 (b * c)) =
@@ -309,8 +309,8 @@ fn ce_loss_impl
   let t_dev   = alloc0 #f32 b (l1_forward b);
   let t_host  = Vec.alloc #f32 (zero #f32) b;
 
-  ce_inv_init (SZ.v b) (SZ.v c) (reveal sp_c) (reveal stv_s)
-    (Seq.create (SZ.v b) (zero #f32));
+  ce_inv_init b c (reveal sp_c) (reveal stv_s)
+    (Seq.create b (zero #f32));
   let mut idx : SZ.t = 0sz;
   while (let i = !idx; SZ.(i <^ b))
     invariant
@@ -325,13 +325,13 @@ fn ce_loss_impl
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               Seq.length vt == SZ.v b /\
-              ce_carried (SZ.v b) (SZ.v c) (reveal sp_c) (reveal stv_s) vt (SZ.v vi))
+              ce_carried b c (reveal sp_c) (reveal stv_s) vt vi)
     decreases (SZ.v b - SZ.v !idx)
   {
     let i = !idx;
     let off : SZ.t = SZ.(i *^ c);
     assert pure (SZ.v off == SZ.v i * SZ.v c);
-    FStar.Math.Lemmas.lemma_mult_le_right (SZ.v c) (SZ.v i + 1) (SZ.v b);
+    FStar.Math.Lemmas.lemma_mult_le_right c (SZ.v i + 1) b;
     assert pure (SZ.v i * SZ.v c + SZ.v c <= SZ.v b * SZ.v c);
     assert pure (i * c + c <= b * c);
 
@@ -341,50 +341,50 @@ fn ce_loss_impl
     with sca. assert (on gpu_loc (scratch |-> reveal sca));
     assert pure (chest1_to_seq (reveal sca) ==
                  KS.seq_blit (chest1_to_seq (reveal va_prev)) 0
-                             (chest1_to_seq (reveal sp)) (SZ.v off) (SZ.v c));
+                             (chest1_to_seq (reveal sp)) off c);
     memcpy_row_eq #(b * c) c
       (chest1_to_seq (reveal va_prev)) (chest1_to_seq (reveal sp)) i off;
-    assert pure (chest1_to_seq (reveal sca) == crow (chest1_to_seq (reveal sp)) (SZ.v c) (SZ.v i));
+    assert pure (chest1_to_seq (reveal sca) == crow (chest1_to_seq (reveal sp)) c i);
     crow_coerce #(b * c) #(b * c)
       (chest1_to_seq (reveal sp)) (reveal sp_c) c i;
-    assert pure (chest1_to_seq (reveal sca) == crow (reveal sp_c) (SZ.v c) (SZ.v i));
+    assert pure (chest1_to_seq (reveal sca) == crow (reveal sp_c) c i);
 
     (* ── verified numerically-stable log-softmax in place ───────── *)
-    let ra : chest1 real (SZ.v c) = hide (to_real_chest (reveal sca));
+    let ra : chest1 real c = hide (to_real_chest (reveal sca));
     lemma_to_real_chest_approximates (reveal sca);
     assert pure (reveal sca %~ reveal ra);
     LSM.log_softmax_gpu #f32 1024sz scratch ra;
     with sca'. assert (on gpu_loc (scratch |-> reveal sca'));
     assert pure (reveal sca' %~ LSM.log_softmax_real (reveal ra));
-    ce_ra_eq (SZ.v c) (reveal sp_c) (SZ.v i) (reveal sca);
+    ce_ra_eq c (reveal sp_c) i (reveal sca);
     assert pure (reveal ra ==
-                 seq_to_chest1 (to_real_seq (crow (reveal sp_c) (SZ.v c) (SZ.v i)) <: Seq.lseq real (SZ.v c)));
+                 seq_to_chest1 (to_real_seq (crow (reveal sp_c) c i) <: Seq.lseq real c));
 
     (* ── gather the (negated) target lane ───────────────────────── *)
     let ti = t_read_1 targets i 0sz;
-    lem_index_chest1 (reveal stv) (SZ.v i);
-    assert pure (ti == acc1 (reveal stv) (SZ.v i));
+    lem_index_chest1 (reveal stv) i;
+    assert pure (ti == acc1 (reveal stv) i);
     assert pure (SZ.v ti < SZ.v c);
     let v = t_read_1 scratch ti (zero #f32);
-    assert pure (v == acc1 (reveal sca') (SZ.v ti));
+    assert pure (v == acc1 (reveal sca') ti);
     (* pointwise: scratch'[ti] approximates log_softmax(...)[ti] *)
-    approx_at (reveal sca') (LSM.log_softmax_real (reveal ra)) (SZ.v ti);
-    assert pure (v %~ acc1 (LSM.log_softmax_real (reveal ra)) (SZ.v ti));
+    approx_at (reveal sca') (LSM.log_softmax_real (reveal ra)) ti;
+    assert pure (v %~ acc1 (LSM.log_softmax_real (reveal ra)) ti);
     let neg_v : f32 = sub (zero #f32) v;
-    neg_approx_f32 v (acc1 (LSM.log_softmax_real (reveal ra)) (SZ.v ti));
+    neg_approx_f32 v (acc1 (LSM.log_softmax_real (reveal ra)) ti);
     (* fold back to the spec term [ce_term_r] *)
-    ce_term_fold (SZ.v c) (reveal sp_c) (SZ.v i) (SZ.v ti);
-    assert pure (neg_v %~ ce_term_r (SZ.v c) (reveal sp_c) (SZ.v i) (SZ.v ti));
-    assert pure (tgt (reveal stv_s) (SZ.v i) == SZ.v ti);
-    assert pure (neg_v %~ ce_term_r (SZ.v c) (reveal sp_c) (SZ.v i) (tgt (reveal stv_s) (SZ.v i)));
+    ce_term_fold c (reveal sp_c) i ti;
+    assert pure (neg_v %~ ce_term_r c (reveal sp_c) i ti);
+    assert pure (tgt (reveal stv_s) i == SZ.v ti);
+    assert pure (neg_v %~ ce_term_r c (reveal sp_c) i (tgt (reveal stv_s) i));
 
     (* ── store per-row loss ─────────────────────────────────────── *)
     Vec.pts_to_len t_host;
     Vec.(t_host.(i) <- neg_v);
     with vt_old. assert (Vec.pts_to t_host (reveal vt_old));
-    ce_prefix_extend (SZ.v b) (SZ.v c) (reveal sp_c) (reveal stv_s)
-      (reveal vt_old) (Seq.upd (reveal vt_old) (SZ.v i) neg_v)
-      (SZ.v i) neg_v;
+    ce_prefix_extend b c (reveal sp_c) (reveal stv_s)
+      (reveal vt_old) (Seq.upd (reveal vt_old) i neg_v)
+      i neg_v;
 
     idx := SZ.(!idx +^ 1sz);
   };
@@ -396,7 +396,7 @@ fn ce_loss_impl
   with vt_dev_final. assert (on gpu_loc (t_dev |-> reveal vt_dev_final));
   assert pure (chest1_to_seq (reveal vt_dev_final) == reveal vt_loop);
 
-  let vr : chest1 real (SZ.v b) = hide (to_real_chest (reveal vt_dev_final));
+  let vr : chest1 real b = hide (to_real_chest (reveal vt_dev_final));
   lemma_to_real_chest_approximates (reveal vt_dev_final);
   let s = HRed.reduce #f32 id id 1024sz b t_dev vr;
   assert pure (equal (chest_map id (reveal vr)) (reveal vr));
@@ -405,9 +405,9 @@ fn ce_loss_impl
 
   let m : f32 = mul s inv_b;
 
-  ce_final_lemma (SZ.v b) (SZ.v c) inv_b
+  ce_final_lemma b c inv_b
     (reveal sp_c) (reveal stv_s)
-    (reveal vt_loop <: Seq.lseq f32 (SZ.v b))
+    (reveal vt_loop <: Seq.lseq f32 b)
     s m;
 
   Vec.free t_host;

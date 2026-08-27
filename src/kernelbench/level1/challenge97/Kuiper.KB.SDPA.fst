@@ -517,7 +517,7 @@ fn sdpa
   SMul.smul_fw_f32 scale bhss (from_array (l1_forward p1) (core gScores));
   (* view |-> lseq_map (mul scale) (from1 (to3 (batched_matmul sQ sKT))) *)
 
-  smul_reshape_eq scale #(SZ.v bh) #(SZ.v s) #(SZ.v s) p1 () (batched_matmul sQ sKT);
+  smul_reshape_eq scale #bh #s #s p1 () (batched_matmul sQ sKT);
   map_loc gpu_loc (fun () ->
     reshape1to3_eq p1 gScores
       #(mscale scale (batched_matmul sQ sKT))
@@ -548,7 +548,7 @@ fn sdpa
   (* from_to2: from2 (to2 sa') == sa', and to3 probs == to2 sa' (A3.to_from),
      so flat3to2 probs == sa'. *)
   from_to2 (l2_row_major p2 s) sa';
-  softmax_corr #(SZ.v bh) #(SZ.v s) p2 ()
+  softmax_corr #bh #s p2 ()
     (mscale scale (batched_matmul sQ sKT)) sa' probs () ();
   map_loc gpu_loc (fun () -> reshape2to3_eq p2 gScores #probs #_ #sa');
   (* on gpu_loc (gScores |-> probs)

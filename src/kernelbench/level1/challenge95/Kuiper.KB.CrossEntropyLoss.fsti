@@ -56,9 +56,9 @@ type ce_loss_fw_ty =
       pure (forall (r : nat). r < SZ.v b ==> SZ.v (acc1 (reveal stv) r) < SZ.v c)
     returns res : f32
     ensures
-      pure (cross_entropy_post (SZ.v b) (SZ.v c) inv_b
+      pure (cross_entropy_post b c inv_b
               (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v c))
-              (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t (SZ.v b))
+              (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t b)
               res)
 
 val ce_loss_fw_f32 : ce_loss_fw_ty

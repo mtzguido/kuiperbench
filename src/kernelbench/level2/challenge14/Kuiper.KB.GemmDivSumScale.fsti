@@ -55,12 +55,12 @@ type gemm_div_sum_scale_ty (t:Type0) {| scalar t, real_like t |} =
         SZ.fits (SZ.v input * SZ.v hidden) /\
         SZ.fits (SZ.v batch * SZ.v hidden) })
      (k : t)
-     (x  : array2 t (l2_row_major (SZ.v batch) (SZ.v input))  { is_global x  })
-     (wt : array2 t (l2_row_major (SZ.v input) (SZ.v hidden)) { is_global wt })
-     (y  : array1 t (l1_forward (SZ.v batch))                 { is_global y  })
-     (#sx  : EM.chest2 t (SZ.v batch) (SZ.v input))
-     (#swt : EM.chest2 t (SZ.v input) (SZ.v hidden))
-     (#sy  : chest1 t (SZ.v batch))
+     (x  : array2 t (l2_row_major batch input)  { is_global x  })
+     (wt : array2 t (l2_row_major input hidden) { is_global wt })
+     (y  : array1 t (l1_forward batch)                 { is_global y  })
+     (#sx  : EM.chest2 t batch input)
+     (#swt : EM.chest2 t input hidden)
+     (#sy  : chest1 t batch)
      requires
        cpu **
        on gpu_loc (x  |-> sx)  **
@@ -70,7 +70,7 @@ type gemm_div_sum_scale_ty (t:Type0) {| scalar t, real_like t |} =
        cpu **
        on gpu_loc (x  |-> sx)  **
        on gpu_loc (wt |-> swt) **
-       (exists* (sy' : chest1 t (SZ.v batch)).
+       (exists* (sy' : chest1 t batch).
           on gpu_loc (y |-> sy') **
           pure (gdss_post k sx swt sy'))
 

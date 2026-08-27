@@ -88,7 +88,7 @@ fn conv3d_general_alloc
   ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v d_out) 1
     (SZ.v h_out * SZ.v w_out);
   ML.lemma_mult_le_left (SZ.v b * SZ.v cout * SZ.v d_out * SZ.v h_out) 1
-    (SZ.v w_out);
+    w_out;
   let len_y : szp = SZ.(b *^ cout *^ d_out *^ h_out *^ w_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   with em. assert (on gpu_loc (gy |-> em));

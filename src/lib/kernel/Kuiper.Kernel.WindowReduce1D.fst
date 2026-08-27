@@ -168,10 +168,10 @@ fn read_tap
   (#et : Type0) {| scalar et |}
   (m : cmonoid et)
   (#rows : SZ.t) (#l : SZ.t)
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
+  (#lin  : layout2 rows l)
   {| _ : ctlayout lin |}
   (input  : array2 et lin)
-  (#sx    : chest2 et (SZ.v rows) (SZ.v l))
+  (#sx    : chest2 et rows l)
   (#f     : perm)
   (r_sz : szlt rows)
   (raw  : SZ.t)
@@ -181,11 +181,11 @@ fn read_tap
     input |-> Frac f sx
   returns v : et
   ensures
-    pure (in_bounds ==> v == acc2 sx (SZ.v r_sz) (SZ.v raw)) **
+    pure (in_bounds ==> v == acc2 sx r_sz raw) **
     pure ((not in_bounds) ==> v == m.rid)
 {
   if in_bounds {
-    tensor_read input (cidx2 (r_sz <: szlt (SZ.v rows)) (raw <: szlt (SZ.v l)))
+    tensor_read input (cidx2 (r_sz <: szlt rows) (raw <: szlt l))
   } else {
     m.rid
   }
@@ -197,35 +197,35 @@ fn kf
   (m : cmonoid et)
   (#rows : SZ.t) (#l : SZ.t) (#lo : SZ.t)
   (k s p d : SZ.t)
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
-  (#lout : layout2 (SZ.v rows) (SZ.v lo))
+  (#lin  : layout2 rows l)
+  (#lout : layout2 rows lo)
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
-  (#sout : chest2 et (SZ.v rows) (SZ.v lo))
+  (#sx   : chest2 et rows l)
+  (#sout : chest2 et rows lo)
   (#fIn : perm)
   (#_ : squash (SZ.v k >= 1 /\ SZ.v s >= 1 /\ SZ.v d >= 1))
   (#_ : squash (SZ.v l >= 1))
-  (#_ : squash (sz_fits_window (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo)))
+  (#_ : squash (sz_fits_window k s p d lo))
   (gid : szlt (rows * lo))
   ()
   requires
     gpu **
-    kpre m input output sx sout fIn (SZ.v gid)
+    kpre m input output sx sout fIn gid
   ensures
     gpu **
-    kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn (SZ.v gid)
+    kpost m k s p d input output sx fIn gid
 {
   let r_sz : szlt rows = gid /^ lo;
   let j_sz : szlt lo   = gid %^ lo;
   assert (pure (SZ.v r_sz == SZ.v gid / SZ.v lo /\ SZ.v j_sz == SZ.v gid % SZ.v lo));
-  rewrite each (SZ.v gid / SZ.v lo) as (SZ.v r_sz);
-  rewrite each (SZ.v gid % SZ.v lo) as (SZ.v j_sz);
+  rewrite each (SZ.v gid / SZ.v lo) as r_sz;
+  rewrite each (SZ.v gid % SZ.v lo) as j_sz;
 
-  let row_view : erased (Seq.lseq et (SZ.v l)) = ematrix_to_row sx (SZ.v r_sz);
+  let row_view : erased (Seq.lseq et l) = ematrix_to_row sx r_sz;
 
-  window_red_prefix_zero m row_view (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz);
+  window_red_prefix_zero m row_view k s p d j_sz;
 
   let mut acc : et = m.rid;
   let mut di_ref : SZ.t = 0sz;
@@ -237,10 +237,10 @@ fn kf
       acc |-> acc_v **
       v_ref |-> v_v **
       input |-> Frac (fIn /. (rows * lo)) sx **
-      tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt (SZ.v rows)) (SZ.v j_sz <: natlt (SZ.v lo)))
-        (acc2 sout (SZ.v r_sz) (SZ.v j_sz)) **
+      tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt rows) (SZ.v j_sz <: natlt lo))
+        (acc2 sout r_sz j_sz) **
       pure (SZ.v di_v <= SZ.v k /\
-            acc_v == window_red_prefix m (reveal row_view) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz) (SZ.v di_v))
+            acc_v == window_red_prefix m (reveal row_view) k s p d j_sz di_v)
     decreases (SZ.v k - SZ.v !di_ref)
   {
     let di_v : erased nat = SZ.v !di_ref;
@@ -260,26 +260,26 @@ fn kf
     };
     let dpos_safe : sz = !dpos_ref;
     assert pure (SZ.v dpos_safe < SZ.v l);
-    let raw : et = tensor_read input (cidx2 (r_sz <: szlt (SZ.v rows)) (dpos_safe <: szlt (SZ.v l)));
+    let raw : et = tensor_read input (cidx2 (r_sz <: szlt rows) (dpos_safe <: szlt l));
     let v : et = if in_bounds { raw } else { m.rid };
 
     assert (pure (in_bounds <==>
-            pool_in_bounds (SZ.v l) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz) di_v));
+            pool_in_bounds l s p d j_sz di_v));
 
-    let w : erased (Seq.lseq et (SZ.v k)) =
-      oob_window m row_view (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz);
+    let w : erased (Seq.lseq et k) =
+      oob_window m row_view k s p d j_sz;
     assert (pure (v == Seq.index w di_v));
 
-    window_red_prefix_step m row_view (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz) di_v;
+    window_red_prefix_step m row_view k s p d j_sz di_v;
     acc := m.rop !acc v;
     di_ref := !di_ref +^ 1sz
   };
 
-  window_red_full m row_view (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz);
+  window_red_full m row_view k s p d j_sz;
   let acc_final : et = !acc;
-  assert pure (acc_final == window_red m (reveal row_view) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v j_sz));
-  assert pure (reveal row_view == ematrix_to_row sx (SZ.v r_sz));
-  tensor_write_cell output (cidx2 (r_sz <: szlt (SZ.v rows)) (j_sz <: szlt (SZ.v lo))) acc_final;
+  assert pure (acc_final == window_red m (reveal row_view) k s p d j_sz);
+  assert pure (reveal row_view == ematrix_to_row sx r_sz);
+  tensor_write_cell output (cidx2 (r_sz <: szlt rows) (j_sz <: szlt lo)) acc_final;
   rewrite each (SZ.v r_sz) as (SZ.v gid / SZ.v lo);
   rewrite each (SZ.v j_sz) as (SZ.v gid % SZ.v lo);
   ()
@@ -458,12 +458,12 @@ fn setup_windowreduce
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
-  (#lout : layout2 (SZ.v rows) (SZ.v lo))
+  (#lin  : layout2 rows l)
+  (#lout : layout2 rows lo)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
-  (#sout : chest2 et (SZ.v rows) (SZ.v lo))
+  (#sx   : chest2 et rows l)
+  (#sout : chest2 et rows lo)
   (#fIn  : perm)
   (#_ : squash (SZ.v rows >= 1 /\ SZ.v lo >= 1))
   ()
@@ -477,7 +477,7 @@ fn setup_windowreduce
   tensor_share_n input (SZ.v rows * SZ.v lo);
   tensor_ilower2 output;
   setup_fold_kpre_step #et #_ m
-    #(SZ.v rows) #(SZ.v l) #(SZ.v lo)
+    #rows #l #lo
     input output ();
   ()
 }
@@ -490,25 +490,25 @@ fn teardown_windowreduce
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
-  (#lout : layout2 (SZ.v rows) (SZ.v lo))
+  (#lin  : layout2 rows l)
+  (#lout : layout2 rows lo)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
+  (#sx   : chest2 et rows l)
   (#fIn  : perm)
   (#_ : squash (SZ.v rows >= 1 /\ SZ.v lo >= 1))
   ()
   norewrite
   requires
     forall+ (tid : natlt (SZ.v rows * SZ.v lo)).
-      kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid
+      kpost m k s p d input output sx fIn tid
   ensures
     input |-> Frac fIn sx **
-    output |-> windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo)
+    output |-> windowreduce_result m sx k s p d lo
 {
   teardown_unfold_kpost_step #et #_ m
-    (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d)
-    #(SZ.v rows) #(SZ.v l) #(SZ.v lo)
+    k s p d
+    #rows #l #lo
     input output #sx #fIn #() ();
   tensor_gather_n input (SZ.v rows * SZ.v lo);
   tensor_iraise2 output;
@@ -524,12 +524,12 @@ fn kdesc_setup
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
   (nthr : szp { SZ.v nthr == rows * lo })
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
-  (#lout : layout2 (SZ.v rows) (SZ.v lo))
+  (#lin  : layout2 rows l)
+  (#lout : layout2 rows lo)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
-  (#sout : chest2 et (SZ.v rows) (SZ.v lo))
+  (#sx   : chest2 et rows l)
+  (#sout : chest2 et rows lo)
   (#fIn  : perm)
   ()
   norewrite
@@ -553,20 +553,20 @@ fn kdesc_teardown
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
   (nthr : szp { SZ.v nthr == rows * lo })
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
-  (#lout : layout2 (SZ.v rows) (SZ.v lo))
+  (#lin  : layout2 rows l)
+  (#lout : layout2 rows lo)
   (input  : array2 et lin)
   (output : array2 et lout)
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
+  (#sx   : chest2 et rows l)
   (#fIn  : perm)
   ()
   norewrite
   requires
     (forall+ (tid : natlt nthr).
-       kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx fIn tid) ** emp
+       kpost m k s p d input output sx fIn tid) ** emp
   ensures
     input |-> Frac fIn sx **
-    output |-> windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo)
+    output |-> windowreduce_result m sx k s p d lo
 {
   forevery_rw_size nthr (rows * lo);
   teardown_windowreduce m k s p d rows l lo input output #sx #fIn #() ();
@@ -580,26 +580,26 @@ let kdesc
   (k s p d : SZ.t)
   (rows : szp)
   (l : SZ.t)
-  (lo : szp {SZ.v lo == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d)})
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))
-  (#lout : layout2 (SZ.v rows) (SZ.v lo))
+  (lo : szp {SZ.v lo == pool_out_len_1d l k s p d})
+  (#lin  : layout2 rows l)
+  (#lout : layout2 rows lo)
   {| _ : ctlayout lin, _ : ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
-  (#sout : chest2 et (SZ.v rows) (SZ.v lo))
+  (#sx   : chest2 et rows l)
+  (#sout : chest2 et rows lo)
   (#fIn  : perm)
   (#_ : squash (SZ.v rows * SZ.v lo <= max_blocks * max_threads))
   (#_ : squash (SZ.v k >= 1 /\ SZ.v s >= 1 /\ SZ.v d >= 1))
   (#_ : squash (SZ.v l >= 1))
-  (#_ : squash (sz_fits_window (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo)))
+  (#_ : squash (sz_fits_window k s p d lo))
   : kernel_desc
       (requires
         input  |-> Frac fIn sx **
         output |-> sout)
       (ensures
         input  |-> Frac fIn sx **
-        output |-> windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v lo))
+        output |-> windowreduce_result m sx k s p d lo)
   = [@@inline_let] let nthr : (x : szp { SZ.v x == rows * lo }) = rows *^ lo in {
     nthr = nthr;
     f = (fun (gid : szlt nthr) ->
@@ -612,7 +612,7 @@ let kdesc
     kpre  = (fun (tid : natlt (SZ.v rows * SZ.v lo)) ->
               kpre m input output sx sout fIn tid);
     kpost = (fun (tid : natlt (SZ.v rows * SZ.v lo)) ->
-              kpost m (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) input output sx
+              kpost m k s p d input output sx
                     fIn tid);
     kpre_sendable  = solve;
     kpost_sendable = solve;
@@ -631,13 +631,13 @@ fn windowreduce
   (d : szp)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l    : szp)
-  (l_out : sz { SZ.v l_out == pool_out_len_1d (SZ.v l) (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) })
-  (#lin  : layout2 (SZ.v rows) (SZ.v l))     {| ctlayout lin  |}
-  (#lout : layout2 (SZ.v rows) (SZ.v l_out)) {| ctlayout lout |}
+  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
+  (#lin  : layout2 rows l)     {| ctlayout lin  |}
+  (#lout : layout2 rows l_out) {| ctlayout lout |}
   (input  : array2 et lin  { is_global input  })
   (output : array2 et lout { is_global output })
-  (#sx   : chest2 et (SZ.v rows) (SZ.v l))
-  (#sout : chest2 et (SZ.v rows) (SZ.v l_out))
+  (#sx   : chest2 et rows l)
+  (#sout : chest2 et rows l_out)
   (#fIn  : perm)
   norewrite
   preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
@@ -647,7 +647,7 @@ fn windowreduce
     pure (SZ.v rows * SZ.v l_out <= max_blocks * max_threads)
   ensures
     on gpu_loc (output |->
-      windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out))
+      windowreduce_result m sx k s p d l_out)
 {
   if (l_out = 0sz) {
     (* Degenerate output (no columns): [sout] and the result matrix are
@@ -655,10 +655,10 @@ fn windowreduce
      * [equal]/[ematrix_ext] SMTPats turn that into a propositional
      * equality, so the post follows from the precondition directly. *)
     assert pure (equal (reveal sout)
-      (windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out)));
+      (windowreduce_result m sx k s p d l_out));
     rewrite (on gpu_loc (output |-> sout))
          as (on gpu_loc (output |->
-              windowreduce_result m sx (SZ.v k) (SZ.v s) (SZ.v p) (SZ.v d) (SZ.v l_out)));
+              windowreduce_result m sx k s p d l_out));
   } else {
     launch_sync (kdesc m k s p d rows l l_out input output)
   }

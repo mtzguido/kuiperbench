@@ -51,19 +51,19 @@ type batchnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
      (c  : szp)
      (hw : szp { SZ.v hw > 0 /\
                  SZ.fits (n * SZ.v hw) /\
-                 SZ.fits (SZ.v hw * SZ.v c) /\
-                 SZ.fits (n * (SZ.v hw * SZ.v c)) })
+                 SZ.fits (SZ.v hw * c) /\
+                 SZ.fits (n * (SZ.v hw * c)) })
      (nhw : szp { SZ.v nhw == n * SZ.v hw /\
                   nhw <= max_blocks * max_threads /\
                   SZ.fits (SZ.v nhw + 1024) })
      (eps : t)
-     (x     : array2 t (l2_bcm_channels n (SZ.v c) (SZ.v hw))
+     (x     : array2 t (l2_bcm_channels n c hw)
                         { is_global x })
      (gamma : array1 t (l1_forward c) { is_global gamma })
      (beta  : array1 t (l1_forward c) { is_global beta  })
      (#fg #fb : perm)
-     (#sx : chest2 t (SZ.v c) (n * SZ.v hw))
-     (#sg #sb : chest1 t (SZ.v c))
+     (#sx : chest2 t c (n * SZ.v hw))
+     (#sg #sb : chest1 t c)
      requires
        cpu **
        on gpu_loc (x |-> sx) **
@@ -73,9 +73,9 @@ type batchnorm_fw_ty (t:Type0) {| floating t, real_like t |} =
        cpu **
        on gpu_loc (gamma |-> Frac fg sg) **
        on gpu_loc (beta  |-> Frac fb sb) **
-       (exists* (sx' : chest2 t (SZ.v c) (n * SZ.v hw)).
+       (exists* (sx' : chest2 t c (n * SZ.v hw)).
           on gpu_loc (x |-> sx') **
-          pure (batchnorm_post (SZ.v c) (n * SZ.v hw) eps (bn_inv_n nhw)
+          pure (batchnorm_post c (n * SZ.v hw) eps (bn_inv_n nhw)
                   (chest1_to_seq sg) (chest1_to_seq sb) sx sx'))
 
 val batchnorm_fw_f32 : batchnorm_fw_ty f32

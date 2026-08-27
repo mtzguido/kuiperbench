@@ -99,7 +99,7 @@ fn read_at
   returns
     res : et
   ensures
-    pure (res == acc2 sx (SZ.v row) (SZ.v col))
+    pure (res == acc2 sx row col)
 {
   tensor_read x (cidx2 row col)
 }
@@ -142,7 +142,7 @@ fn sum_stride_map_2d
   (#f : perm)
   preserves
     gpu ** x |-> Frac f sx **
-    pure (forall (j:nat). j < SZ.v cols ==> acc2 sx (SZ.v row) j %~ (vr_row @! j)) **
+    pure (forall (j:nat). j < SZ.v cols ==> acc2 sx row j %~ (vr_row @! j)) **
     pure (SZ.fits (SZ.v cols + stride))
   returns
     res : et
@@ -171,7 +171,7 @@ fn sum_stride_map_2d
     let idx_v : szlt cols = idx_raw;
     let v = read_at rows cols x row idx_v;
     let v' = pre_map v;
-    (**)assert (pure (v == acc2 sx (SZ.v row) (SZ.v idx_v)));
+    (**)assert (pure (v == acc2 sx row idx_v));
     (**)assert (pure (v %~ (vr_row @! SZ.v idx_v)));
     (**)assert (pure (v' %~ (lseq_map pre_map_r vr_row @! SZ.v idx_v)));
 
@@ -189,7 +189,7 @@ fn sum_stride_map_2d
     ()
   };
 
-  stride_length_exact (gread gidx) (Seq.length (lseq_map pre_map_r vr_row)) (SZ.v stride) (SZ.v off);
+  stride_length_exact (gread gidx) (Seq.length (lseq_map pre_map_r vr_row)) stride off;
   assert pure (gread gidx == seq_stride_length (lseq_map pre_map_r vr_row) stride off);
   assert pure (seq_take (seq_stride_length (lseq_map pre_map_r vr_row) stride off)
                        (seq_stride (lseq_map pre_map_r vr_row) stride off)
@@ -276,35 +276,35 @@ fn kf_block
   requires
     gpu **
     pure (c_shmems_inv shmem) **
-    kpre_block pre_map pre_map_r rows cols nth x output sx vr sout shmem (SZ.v bid) (SZ.v tid) **
+    kpre_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid **
     thread_id nth tid **
     block_id rows bid **
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1)
-                       (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)) **
+                       (vr_partial pre_map_r (ematrix_row vr bid) nth)) **
     B.barrier_state 0
   ensures
     gpu **
-    kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem (SZ.v bid) (SZ.v tid) **
+    kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid **
     thread_id nth tid **
     block_id rows bid **
     mbarrier_tok nth (barrier_matrix nth (from_array (l1_forward nth) shmem._1)
-                       (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)) **
+                       (vr_partial pre_map_r (ematrix_row vr bid) nth)) **
     B.barrier_state (hreduce_barrier_count nth)
 {
-  unfold kpre_block pre_map pre_map_r rows cols nth x output sx vr sout shmem (SZ.v bid) (SZ.v tid);
+  unfold kpre_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid;
 
   let (gsa, _) = shmem;
   let sa = from_array (l1_forward nth) gsa;
   rewrite each from_array (l1_forward nth) gsa as sa;
 
   (* Row of vr at bid, as an lseq real cols. *)
-  let vr_row : erased (lseq real cols) = hide (ematrix_row (reveal vr) (SZ.v bid));
+  let vr_row : erased (lseq real cols) = hide (ematrix_row (reveal vr) bid);
 
   (* Bridge from (sx %~ vr) to row-level approximation. *)
   assert pure (forall (j:nat). j < SZ.v cols ==>
-                 (vr_row @! j) == acc2 (reveal vr) (SZ.v bid) j);
+                 (vr_row @! j) == acc2 (reveal vr) bid j);
   assert pure (forall (j:nat). j < SZ.v cols ==>
-                 acc2 sx (SZ.v bid) j %~ (vr_row @! j));
+                 acc2 sx bid j %~ (vr_row @! j));
 
   (* Compute partial sum over stride and write to shmem. *)
   let psum : et = sum_stride_map_2d pre_map pre_map_r rows cols x bid nth tid vr_row;
@@ -314,30 +314,30 @@ fn kf_block
   let mut n : szlt 32 = 0sz;
 
   let psum_chest : chest1 et 1 = mk1 #et #1 (fun _ -> psum);
-  slice_singleton sa (SZ.v tid) psum psum_chest;
+  slice_singleton sa tid psum psum_chest;
 
-  (* psum %~ (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth) @! tid == rsum (single-element slice [tid, tid+1)) *)
-  (**)assert (pure (psum %~ (reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth) @! SZ.v tid)));
-  (**)rsum_singleton (reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth) @! SZ.v tid);
-  (**)assert (pure (Seq.equal (Seq.slice (reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)) tid (tid + 1)) (seq![reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth) @! SZ.v tid])));
-  (**)assert (pure (acc1 psum_chest 0 %~ rsum (Seq.slice (reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)) tid (tid + 1))));
-  (**)fold (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth));
+  (* psum %~ (vr_partial pre_map_r (ematrix_row vr bid) nth) @! tid == rsum (single-element slice [tid, tid+1)) *)
+  (**)assert (pure (psum %~ (reveal (vr_partial pre_map_r (ematrix_row vr bid) nth) @! SZ.v tid)));
+  (**)rsum_singleton (reveal (vr_partial pre_map_r (ematrix_row vr bid) nth) @! SZ.v tid);
+  (**)assert (pure (Seq.equal (Seq.slice (reveal (vr_partial pre_map_r (ematrix_row vr bid) nth)) tid (tid + 1)) (seq![reveal (vr_partial pre_map_r (ematrix_row vr bid) nth) @! SZ.v tid])));
+  (**)assert (pure (acc1 psum_chest 0 %~ rsum (Seq.slice (reveal (vr_partial pre_map_r (ematrix_row vr bid) nth)) tid (tid + 1))));
+  (**)fold (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial pre_map_r (ematrix_row vr bid) nth));
   (**)assert (pure (pow2 (SZ.v !n) == 1));
-  (**)min_tid_pow2_step (SZ.v tid) (SZ.v nth) (SZ.v !n);
-  (**)rewrite (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth))
-  (**)     as (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth));
-  (**)if_intro_true' (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth));
+  (**)min_tid_pow2_step tid nth (SZ.v !n);
+  (**)rewrite (array1_pts_to_slice_sum sa tid (tid + 1) (vr_partial pre_map_r (ematrix_row vr bid) nth))
+  (**)     as (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (ematrix_row vr bid) nth));
+  (**)if_intro_true' (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (ematrix_row vr bid) nth));
 
   open FStar.SizeT;
   while (spow2 !n <^ nth)
     invariant
       live n **
       B.barrier_state !n **
-      if_ (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)) **
+      if_ (div_pow2 !n tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 !n) nth) (vr_partial pre_map_r (ematrix_row vr bid) nth)) **
       pure (v !n > 0 ==> pow2 (v !n - 1) < v nth)
     decreases (2 * nth - spow2 !n)
   {
-    iteration nth sa (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth) tid !n;
+    iteration nth sa (vr_partial pre_map_r (ematrix_row vr bid) nth) tid !n;
     n := !n +^ 1sz;
   };
 
@@ -345,19 +345,19 @@ fn kf_block
 
   FStar.Math.Lemmas.modulo_lemma tid (pow2 it);
   rewrite
-    (if_ (div_pow2 it tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 it) nth) (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)))
+    (if_ (div_pow2 it tid) (array1_pts_to_slice_sum sa tid (min (tid + pow2 it) nth) (vr_partial pre_map_r (ematrix_row vr bid) nth)))
   as
-    (if_ (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)));
+    (if_ (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr bid) nth)));
 
   log2_hreduce (v nth) it;
   rewrite (B.barrier_state it) as (B.barrier_state (hreduce_barrier_count nth));
 
   if (tid = 0sz) {
-    if_elim_true' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth));
-    if_elim_true' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt rows), ()) <: abs (rows @| INil)) |-> (acc1 sout (SZ.v bid)));
-    unfold array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth);
+    if_elim_true' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr bid) nth));
+    if_elim_true' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt rows), ()) <: abs (rows @| INil)) |-> (acc1 sout bid));
+    unfold array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr bid) nth);
     (**)strided_sum_is_sum pre_map_r vr_row nth;
-    (**)assert (pure (Seq.equal (Seq.slice (reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth)) 0 nth) (reveal (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth))));
+    (**)assert (pure (Seq.equal (Seq.slice (reveal (vr_partial pre_map_r (ematrix_row vr bid) nth)) 0 nth) (reveal (vr_partial pre_map_r (ematrix_row vr bid) nth))));
 
     let res = array1_read_from_slice sa 0sz;
     tensor_write_cell output (bid, ()) res;
@@ -384,20 +384,20 @@ fn kf_block
       live_c_shmem #(SHArray et nth) shmem._1 **
       exists* (v : et).
         Cell output (((SZ.v bid <: natlt rows), ()) <: abs (rows @| INil)) |-> v **
-        pure (v %~ rsum (lseq_map pre_map_r (ematrix_row vr (SZ.v bid))))
+        pure (v %~ rsum (lseq_map pre_map_r (ematrix_row vr bid)))
     );
-    fold kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem (SZ.v bid) (SZ.v tid);
+    fold kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid;
   } else {
-    if_elim_false' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr (SZ.v bid)) nth));
-    if_elim_false' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt rows), ()) <: abs (rows @| INil)) |-> (acc1 sout (SZ.v bid)));
+    if_elim_false' (op_Equals #nat tid 0) (array1_pts_to_slice_sum sa 0 nth (vr_partial pre_map_r (ematrix_row vr bid) nth));
+    if_elim_false' (op_Equals #nat tid 0) (Cell output (((SZ.v bid <: natlt rows), ()) <: abs (rows @| INil)) |-> (acc1 sout bid));
     if_intro_false' (op_Equals #nat tid 0) (
       live_c_shmem #(SHArray et nth) shmem._1 **
       exists* (v : et).
         Cell output (((SZ.v bid <: natlt rows), ()) <: abs (rows @| INil)) |-> v **
-        pure (v %~ rsum (lseq_map pre_map_r (ematrix_row vr (SZ.v bid))))
+        pure (v %~ rsum (lseq_map pre_map_r (ematrix_row vr bid)))
     );
     rewrite each sa as from_array (l1_forward nth) shmem._1;
-    fold kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem (SZ.v bid) (SZ.v tid);
+    fold kpost_block pre_map pre_map_r rows cols nth x output sx vr sout shmem bid tid;
     ()
   };
 }
@@ -563,7 +563,7 @@ fn setup_block_outer
     pure (SZ.fits (tlayout_ulen lout))
 {
   tensor_pts_to_ref output;
-  tensor_share_n x (SZ.v rows);
+  tensor_share_n x rows;
   tensor_explode output;
   forevery_iso abs_bij _;
 
@@ -615,7 +615,7 @@ fn teardown_block_outer
          Cell output ((bid, ()) <: abs (rows @| INil)) |-> v **
          pure (v %~ rsum (lseq_map pre_map_r (ematrix_row vr bid))));
 
-  tensor_gather_n x (SZ.v rows);
+  tensor_gather_n x rows;
 
   (* Skolemize the existential: get a function bid -> et naming each cell value *)
   let f =
@@ -626,7 +626,7 @@ fn teardown_block_outer
 
   (* Build a concrete chest carrying the cell values. *)
   let sout' : chest1 et rows =
-    hide (mk1 #et #(SZ.v rows) (fun (bid : natlt rows) -> f bid));
+    hide (mk1 #et #rows (fun (bid : natlt rows) -> f bid));
 
   (* Extract the per-row pure approximation fact across all bids. *)
   forevery_extract_pure

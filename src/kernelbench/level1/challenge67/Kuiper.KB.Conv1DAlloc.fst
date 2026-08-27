@@ -91,7 +91,7 @@ fn conv1d_general_alloc
   (* The partial product [b*cout] is bounded by the full product
      [b*cout*l_out] (every factor is [>= 1]), which fits per
      [conv1d_size_req]. *)
-  ML.lemma_mult_le_left (SZ.v b * SZ.v cout) 1 (SZ.v l_out);
+  ML.lemma_mult_le_left (SZ.v b * SZ.v cout) 1 l_out;
   let len_y : szp = SZ.(b *^ cout *^ l_out);
   let gy = alloc0 #f32 len_y (l1_forward len_y);
   with em. assert (on gpu_loc (gy |-> em));
