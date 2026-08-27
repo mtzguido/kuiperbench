@@ -1,23 +1,16 @@
 name: Advance Kuiper package
 
-# A KUIPERBENCH_ADVANCE_GH_TOKEN PAT is optional but recommended: PRs opened with
-# GITHUB_TOKEN do not trigger other workflows. The PAT needs Contents and Pull
-# requests read/write access to mtzguido/kuiperbench.
+# CI is dispatched explicitly after the PR is created because PR events caused
+# by GITHUB_TOKEN otherwise require manual approval.
 
 on:
   workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'
 
-# Candidate verification executes the downloaded compiler suite with read-only
-# permissions and no write credential in its environment. A separate job gets
-# write permission only after the candidate succeeds.
-permissions:
-  contents: read
-
 jobs:
-  verify_candidate:
-    name: Verify candidate (hosted CPU)
+  verify:
+    name: Verify
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/fstarlang/kuiper-base-nocuda:latest
@@ -110,10 +103,11 @@ jobs:
 
   open_pr:
     name: Open advance PR
-    needs: [verify_candidate]
-    if: ${{ needs.verify_candidate.outputs.moved == 'true' }}
+    needs: [verify]
+    if: ${{ needs.verify.outputs.moved == 'true' }}
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
@@ -131,7 +125,7 @@ jobs:
 
       - name: Reconstruct the verified candidate
         env:
-          LATEST: ${{ needs.verify_candidate.outputs.latest }}
+          LATEST: ${{ needs.verify.outputs.latest }}
         run: |
           [[ "$LATEST" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]
           printf '%s\n' "$LATEST" > kuiper-version.txt
@@ -146,16 +140,19 @@ jobs:
 
       - name: Commit and open pull request
         env:
-          GH_TOKEN: ${{ secrets.KUIPERBENCH_ADVANCE_GH_TOKEN || github.token }}
-          LATEST: ${{ needs.verify_candidate.outputs.latest }}
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ needs.verify.outputs.latest }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           branch=advance/kuiper-package
           title="Advance Kuiper package to $LATEST"
           if [ -s candidate/dist.patch ]; then
-            dist_note="Generated CUDA changed and dist/ was regenerated."
+            dist_changed=true
+            dist_note="Generated CUDA changed and dist/ was regenerated. Manual review requested."
           else
-            dist_note="Generated CUDA is unchanged."
+            dist_changed=false
+            dist_note="Generated CUDA is unchanged. This PR will merge automatically after CI succeeds."
           fi
 
           git config user.name "Actions bot"
@@ -163,13 +160,32 @@ jobs:
           git checkout -B "$branch"
           git add kuiper-version.txt dist
           git commit -m "$title"
+          head_sha=$(git rev-parse HEAD)
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git push --force origin "$branch"
 
           body="Automated Kuiper nightly advance to $LATEST. The package-backed build verified and extracted successfully. $dist_note"
-          pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number')
+          pr=$(gh pr list --repo "$REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number')
           if [ -n "$pr" ]; then
-            gh pr edit "$pr" --title "$title" --body "$body"
+            gh pr edit "$pr" --repo "$REPOSITORY" --title "$title" --body "$body"
           else
-            gh pr create --base "$DEFAULT_BRANCH" --head "$branch" --title "$title" --body "$body"
+            gh pr create --repo "$REPOSITORY" --base "$DEFAULT_BRANCH" --head "$branch" --title "$title" --body "$body"
+            pr=$(gh pr list --repo "$REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number')
+            test -n "$pr"
+          fi
+
+          gh workflow run ci.yml --repo "$REPOSITORY" --ref "$branch"
+
+          if [ "$dist_changed" = false ]; then
+            if [ "$(gh pr view "$pr" --repo "$REPOSITORY" --json reviewRequests --jq 'any(.reviewRequests[]; .login == "mtzguido")')" = true ]; then
+              gh pr edit "$pr" --repo "$REPOSITORY" --remove-reviewer mtzguido
+            fi
+            gh pr merge "$pr" --repo "$REPOSITORY" --auto --merge --match-head-commit "$head_sha"
+          else
+            if [ "$(gh pr view "$pr" --repo "$REPOSITORY" --json reviewRequests --jq 'any(.reviewRequests[]; .login == "mtzguido")')" = false ]; then
+              gh pr edit "$pr" --repo "$REPOSITORY" --add-reviewer mtzguido
+            fi
+            if [ "$(gh pr view "$pr" --repo "$REPOSITORY" --json autoMergeRequest --jq '.autoMergeRequest != null')" = true ]; then
+              gh pr merge "$pr" --repo "$REPOSITORY" --disable-auto
+            fi
           fi
