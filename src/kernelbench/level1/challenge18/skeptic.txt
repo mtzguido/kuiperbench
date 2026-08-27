@@ -40,7 +40,8 @@ spec, %~) carries over. Verified clean; test PASS at atol=rtol=1e-4.
 UPDATE 2026-06-12 — transpose now INSIDE the verification boundary
 --------------------------------------------------------
 Transpose is now captured in the proof, not in a bridge comment.
-Klas.GEMM.Naive3.spec_atbt takes all operands ROW-MAJOR, ghost-transposes BOTH
+Kuiper.KB.TransposedGEMM.spec_atbt takes all operands ROW-MAJOR, delegates to
+the packaged Klas.GEMM.Naive3.spec implementation, and ghost-transposes BOTH
 A and B via Kuiper.Ghost.TensorTranspose.ghost_transpose1 (verified row<->col
 reindexing holding `mtranspose`), runs the verified GEMM, and restores
 ownership with ghost_transpose1_back. Postcondition stated explicitly as

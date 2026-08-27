@@ -44,7 +44,8 @@ the spec g_matmul_f32_crr took a col-major operand, and only this comment (not
 F*) asserted that a col-major view of the row-major buffer equals A.T. Now the
 transpose is captured IN the proof:
 
-  Klas.GEMM.Naive3.spec_atb takes ALL operands ROW-MAJOR and internally calls
+  Kuiper.KB.TransposedGEMM.spec_atb takes ALL operands ROW-MAJOR, delegates to
+  the packaged Klas.GEMM.Naive3.spec implementation, and internally calls
   Kuiper.Ghost.TensorTranspose.ghost_transpose1 (a verified ghost reindexing:
   row-major (k,m) handle <-> col-major (m,k) handle holding `mtranspose`),
   runs the verified GEMM, then ghost_transpose1_back to restore ownership.
