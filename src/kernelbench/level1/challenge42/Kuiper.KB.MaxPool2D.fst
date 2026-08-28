@@ -214,10 +214,9 @@ let maxpool2d_axis_alloc_f32 =
    (B,C,H_out,W_out) result — so no permute-back is needed either.
 
    The intermediate [mid]/[mid2] share one backing array, which is freed
-   after pass 2.  The returned (W_out, H_out, buffer) triple's buffer carries
-   the pass-2 [windowreduce_result] post over some (B*C*W_out, H) matrix
-   [sx2]; tying [sx2] to pass 1's [windowreduce_result] (the full
-   [maxpool2d_post]) is left to a follow-up (milestone 2). *)
+   after pass 2.  [maxpool2d_mid_view] exposes the exact value obtained by
+   recasting the width-pass result, so the returned buffer's postcondition
+   composes both passes and remains tied to the original input [sx]. *)
 #push-options "--z3rlimit 40"
 inline_for_extraction noextract
 fn maxpool2d_full_alloc
@@ -250,10 +249,10 @@ fn maxpool2d_full_alloc
                   /\ SZ.v ho > 0 }
         & array2 f32 (l2_bcm_pages bc wo ho)))
   ensures
-    (exists* (sx2 : chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
-       on gpu_loc ((dsnd (dsnd r)) |->
-         windowreduce_result reducer_fmax_f32 sx2
-           kh sh ph dh (dfst (dsnd r))))
+    on gpu_loc ((dsnd (dsnd r)) |->
+      windowreduce_result reducer_fmax_f32
+        (maxpool2d_mid_view bc h w kw sw pw dw (dfst r) sx)
+        kh sh ph dh (dfst (dsnd r)))
 {
   (* All [bcv]/[ph2]/[pw2]/[wov]/[hov]-style values below are written
      inline as [SZ.v _] expressions: they appear ONLY as ghost lemma
