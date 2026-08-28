@@ -16,13 +16,13 @@ module Kuiper.Kernel.WindowReduce1D
  * exposed by [Kuiper.Spec.Pool1D]:
  *
  *   - [windowreduce_max_f32] : reduces by [fmax] (exact equality post,
- *     using the [Kuiper.Math.Fmax] axioms or the [cmonoid_fmax_f32]
+ *     using the [Kuiper.Math.Fmax] axioms or the [reducer_fmax_f32]
  *     instance from [Kuiper.Monoid.Reduce.F32]).
  *   - [windowreduce_plus_f32] : reduces by [+] (approximate [%~] post).
  *
- * The polymorphic core takes a [cmonoid t] explicitly (not a
- * [tcinstance]) since two reduction monoids on the same carrier would
- * be ambiguous to type-class resolution.
+ * The polymorphic core takes a law-free [reducer t] explicitly.  The
+ * implementation and specification both use the same left-to-right fold, so
+ * no associativity, commutativity, or neutrality assumptions are required.
  *
  * ────────────────────────────────────────────────────────────────────────
  * The core proof obligation is the K-fold *overlapping* permission
@@ -51,7 +51,7 @@ module Seq = FStar.Seq
 (* ── Spec helpers (also defined in the .fst, exposed here for the post) ─ *)
 
 let oob_window
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#l : nat) (row : Seq.lseq t l)
   (k s p d : nat) (j : nat)
   : GTot (Seq.lseq t k)
@@ -61,7 +61,7 @@ let oob_window
       else m.rid)
 
 let window_red
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#l : nat) (row : Seq.lseq t l)
   (k s p d : nat) (j : nat)
   : GTot t
@@ -73,7 +73,7 @@ let ematrix_to_row (#t : Type0) (#rows #l : nat)
   = Seq.init_ghost l (fun c -> acc2 sx r c)
 
 let windowreduce_result
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#rows #l : nat)
   (sx : chest2 t rows l)
   (k s p d lo : nat)
@@ -83,7 +83,7 @@ let windowreduce_result
 
 (* ── Polymorphic core ────────────────────────────────────────────────── *)
 
-(* Per-row windowed reduction over an arbitrary [cmonoid].  The output
+(* Per-row windowed reduction over an arbitrary law-free [reducer].  The output
  * row is filled with one [m.rop]-fold per output slot, where each
  * fold ranges over the in-bounds elements of a K-wide dilated window
  * starting at output position [j].
@@ -100,7 +100,7 @@ let windowreduce_result
 unfold inline_for_extraction
 type windowreduce_ty =
   fn (#et : Type0) {| scalar et |}
-     (m : cmonoid et)
+     (m : reducer et)
      (k s : szp)
      (p : sz)
      (d : szp)
@@ -131,12 +131,12 @@ val windowreduce : windowreduce_ty
 (* TODO: declare the [windowreduce_max_f32] entry whose ensures
  * clause is exactly [maxpool1d_post sx sout'] from
  * [Kuiper.Spec.Pool1D].  The bridge proof is a pure F* fact about
- * [cmonoid_fmax_f32] equalling the [fmax]-fold over in-bounds taps. *)
+ * [reducer_fmax_f32] equalling the [fmax]-fold over in-bounds taps. *)
 
 (* ── Monomorphic wrapper: avg-pool (#44) ─────────────────────────────── *)
 
 (* TODO: declare the [windowreduce_plus_f32] entry whose ensures
  * clause is the [%~]-form [avgpool1d_post] modulo the
  * caller-supplied [inv_k] scaling.  The bridge proof composes the
- * abstract [cmonoid_fadd_f32] reduction with the
+ * exact implementation-order [reducer_fadd_f32] reduction with the
  * [Kuiper.Approximates.a_add] %~-lemma chain. *)

@@ -36,13 +36,13 @@ module Seq = FStar.Seq
  * ────────────────────────────────────────────────────────────────────── *)
 
 let scan_partial
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (s : Seq.seq t) (di : nat{di <= Seq.length s})
   : GTot t
   = red_fold m m.rid (Seq.slice s 0 di)
 
 let scan_partial_zero
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (s : Seq.seq t)
   : Lemma (scan_partial m s 0 == m.rid)
   = let s0 = Seq.slice s 0 0 in
@@ -51,28 +51,22 @@ let scan_partial_zero
 
 #push-options "--z3rlimit 30"
 let scan_partial_step
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (s : Seq.seq t) (di : nat{di < Seq.length s})
   : Lemma (scan_partial m s (di + 1)
            == m.rop (scan_partial m s di) (Seq.index s di))
-  = let pre  : Seq.seq t = Seq.slice s 0 di in
-    let pre' : Seq.seq t = Seq.slice s 0 (di + 1) in
-    let one  : Seq.seq t = Seq.slice s di (di + 1) in
-    Seq.lemma_eq_intro pre' (Seq.append pre one);
-    Seq.lemma_eq_intro one (Seq.create 1 (Seq.index s di));
-    red_fold_append m pre one;
-    ()
+  = lemma_seq_fold_left_slice m.rid m.rop s 0 di
 #pop-options
 
 let scan_partial_eq_inclusive_at
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (s : Seq.seq t) (j : nat{j < Seq.length s})
   : Lemma (scan_partial m s (j + 1) == scan_inclusive_at m s j)
   = ()
 
 let macc_scan2d_inclusive_result
   (#t : Type0)
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows #cols : nat)
   (sx : chest2 t rows cols)
   (r : natlt rows) (j : natlt cols)
@@ -85,7 +79,7 @@ let macc_scan2d_inclusive_result
  * for [c : natlt cols]. *)
 let scan_postloop_eq
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows #cols : nat)
   (sx   : chest2 t rows cols)
   (sout : chest2 t rows cols)
@@ -112,7 +106,7 @@ let scan_postloop_eq
 unfold
 let kpre
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (rows : szp)
   (cols : nat)
   (#lin  : layout2 rows cols)
@@ -131,7 +125,7 @@ let kpre
 unfold
 let kpost
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (rows : szp)
   (cols : nat)
   (#lin  : layout2 rows cols)
@@ -156,7 +150,7 @@ let kpost
  * initial [acc2 sout bid c]. *)
 unfold
 let cell_at_iter
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#rows #cols : nat)
   (#lout : layout2 rows cols)
   (output : array2 t lout)
@@ -175,7 +169,7 @@ let cell_at_iter
 inline_for_extraction noextract
 fn kf
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (#lin  : layout2 rows cols)
@@ -324,7 +318,7 @@ fn kf
 ghost
 fn setup_rowblock
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (#lin  : layout2 rows cols)
@@ -368,7 +362,7 @@ fn setup_rowblock
 ghost
 fn teardown_rowblock
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (#lin  : layout2 rows cols)
@@ -428,7 +422,7 @@ fn teardown_rowblock
 inline_for_extraction noextract
 let kdesc
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (#lin  : layout2 rows cols)
@@ -468,7 +462,7 @@ let kdesc
 inline_for_extraction noextract
 fn scan1d_inclusive_rowblock
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { rows <= max_blocks })
   (cols : szp)
   (#lin  : layout2 rows cols) {| ctlayout lin  |}

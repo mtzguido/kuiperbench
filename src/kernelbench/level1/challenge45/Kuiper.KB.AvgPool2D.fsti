@@ -5,7 +5,7 @@ module Kuiper.KB.AvgPool2D
  * 2-D average pooling (with PyTorch's default count_include_pad=True
  * and stride defaulting to kernel_size) reduces to two passes of the
  * verified [Kuiper.Kernel.WindowReduce1D] primitive instantiated with
- * [cmonoid_fadd_f32] (rid = 0.0f, rop = +) plus a per-pass
+ * [reducer_fadd_f32] (rid = 0.0f, rop = +) plus a per-pass
  * (unverified) scale by 1/k.
  *
  *   pass 1: per-row sum over W (B*C*H rows of length W); then scale /kW
@@ -14,7 +14,7 @@ module Kuiper.KB.AvgPool2D
  * Composition: real-valued sum is associative+commutative so the
  * 2-D avg = sum/(kH*kW); applying /kW after pass 1 and /kH after
  * pass 2 yields /(kH*kW).  The verified primitive's post is the
- * exact-equality fold over [cmonoid_fadd_f32]; the cmonoid's
+ * exact-equality fold over [reducer_fadd_f32]; the reducer's
  * associativity/commutativity rests on the same f32 axioms as the
  * 1-D variant (#44), and approximation to the real sum follows the
  * existing %~ pattern.
@@ -29,7 +29,7 @@ module Kuiper.KB.AvgPool2D
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
-open Kuiper.Monoid.Reduce.F32 { cmonoid_fadd_f32 }
+open Kuiper.Monoid.Reduce.F32 { reducer_fadd_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 module SZ = Kuiper.SizeT
@@ -74,7 +74,7 @@ requires
  pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
 ensures
  on gpu_loc (output |->
-   windowreduce_result cmonoid_fadd_f32 sx
+   windowreduce_result reducer_fadd_f32 sx
      k s p d l_out)
 
 
@@ -101,7 +101,7 @@ requires
  pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
 ensures
  on gpu_loc (output |->
-   windowreduce_result cmonoid_fadd_f32 sx
+   windowreduce_result reducer_fadd_f32 sx
      k s p d l_out)
 
 
@@ -110,7 +110,7 @@ ensures
    into rows for this pass), the reduced axis length [l], and the input tensor.
    It computes [l_out] via the verified [pool_out_len_1d_sz], allocates the
    [(bc, l_out)] GPU output buffer, fills it with the per-window SUM
-   (cmonoid_fadd_f32, rid = 0, padding -> 0), divides every element by [K] in
+   (reducer_fadd_f32, rid = 0, padding -> 0), divides every element by [K] in
    place via the verified [Kuiper.KB.ScalarMul] kernel (scaling by
    [inv_k = avgpool_recip_f32 k = 1/K]), and returns the pair
    [(l_out, output_buffer)] — ownership passes to the caller.  The post is
@@ -154,7 +154,7 @@ ensures
  on gpu_loc ((dsnd r) |->
    mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
      mul (avgpool_recip_f32 k)
-         (acc2 (windowreduce_result cmonoid_fadd_f32 sx
+         (acc2 (windowreduce_result reducer_fadd_f32 sx
                     k s p d (dfst r)) i j))) **
  pure (SZ.v (dfst r) ==
          pool_out_len_1d l k s p d)

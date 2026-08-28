@@ -5,7 +5,7 @@ module Kuiper.KB.MaxPool1D
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
-open Kuiper.Monoid.Reduce.F32 { cmonoid_fmax_f32 }
+open Kuiper.Monoid.Reduce.F32 { reducer_fmax_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce, windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 module SZ = Kuiper.SizeT
@@ -34,7 +34,7 @@ let pool_out_len_1d_sz
 inline_for_extraction noextract
 fn maxpool1d_fw
   (#t : Type0) {| scalar t |}
-  (m_inst : Kuiper.Monoid.Reduce.cmonoid t)
+  (m_inst : Kuiper.Monoid.Reduce.reducer t)
   (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp)
@@ -64,7 +64,7 @@ fn maxpool1d_fw
 inline_for_extraction noextract
 let maxpool1d_fw_f32 =
   fun k s p d bc l l_out #_ #_ #_ #_ input output #fIn #sx #sout ->
-    maxpool1d_fw #f32 cmonoid_fmax_f32 k s p d bc l l_out input output
+    maxpool1d_fw #f32 reducer_fmax_f32 k s p d bc l l_out input output
       #fIn #sx #sout
 
 let maxpool1d_fw_rm_f32 =
@@ -125,7 +125,7 @@ fn maxpool1d_alloc
                & array2 f32 (l2_row_major (b * c) lo))
   ensures
     on gpu_loc ((dsnd r) |->
-      windowreduce_result cmonoid_fmax_f32 sx
+      windowreduce_result reducer_fmax_f32 sx
         k s p d (dfst r)) **
     pure (SZ.v (dfst r) ==
             pool_out_len_1d l k s p d)

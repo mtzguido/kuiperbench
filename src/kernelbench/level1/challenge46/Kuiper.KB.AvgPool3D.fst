@@ -5,7 +5,7 @@ module Kuiper.KB.AvgPool3D
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l2_row_major, l1_forward }
-open Kuiper.Monoid.Reduce.F32 { cmonoid_fadd_f32 }
+open Kuiper.Monoid.Reduce.F32 { reducer_fadd_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce, windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 open Kuiper.Seq.Common { lseq_map }
@@ -40,7 +40,7 @@ let avgpool_recip_f32 (k : szp) : f32 =
 inline_for_extraction noextract
 fn avgpool3d_axis_fw
   (#t : Type0) {| scalar t |}
-  (m_inst : Kuiper.Monoid.Reduce.cmonoid t)
+  (m_inst : Kuiper.Monoid.Reduce.reducer t)
   (k s : szp)
   (p : sz)
   (d : szp)
@@ -72,7 +72,7 @@ fn avgpool3d_axis_fw
 inline_for_extraction noextract
 let avgpool3d_axis_fw_f32 =
   fun k s p d bc l l_out #_ #_ #_ #_ input output #fIn #sx #sout ->
-    avgpool3d_axis_fw #f32 cmonoid_fadd_f32 k s p d bc l l_out input output
+    avgpool3d_axis_fw #f32 reducer_fadd_f32 k s p d bc l l_out input output
       #fIn #sx #sout
 
 let avgpool3d_axis_fw_rm_f32 =
@@ -223,7 +223,7 @@ fn avgpool3d_axis_alloc
     on gpu_loc ((dsnd r) |->
       mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
         mul (avgpool_recip_f32 k)
-            (acc2 (windowreduce_result cmonoid_fadd_f32 sx
+            (acc2 (windowreduce_result reducer_fadd_f32 sx
                        k s p d (dfst r)) i j))) **
     pure (SZ.v (dfst r) ==
             pool_out_len_1d l k s p d)
@@ -237,7 +237,7 @@ fn avgpool3d_axis_alloc
   assert pure (SZ.v n == SZ.v bc * SZ.v l_out);
   let pp : erased nat = SZ.v n;
   let wr : chest2 f32 bc l_out =
-    hide (windowreduce_result cmonoid_fadd_f32 sx
+    hide (windowreduce_result reducer_fadd_f32 sx
             k s p d l_out);
   (* View the row-major output buffer as a flat array1 over the same store. *)
   map_loc gpu_loc (fun () -> reshape2to1 pp output);
@@ -256,7 +256,7 @@ fn avgpool3d_axis_alloc
   scale_matrix_cong #bc #l_out
     inv_k (avgpool_recip_f32 k)
     (reveal wr)
-    (windowreduce_result cmonoid_fadd_f32 sx
+    (windowreduce_result reducer_fadd_f32 sx
        k s p d l_out);
   rewrite
     (on gpu_loc (output |->
@@ -266,7 +266,7 @@ fn avgpool3d_axis_alloc
     (on gpu_loc (output |->
        mk2 (fun (i:natlt bc) (j:natlt l_out) ->
          mul (avgpool_recip_f32 k)
-             (acc2 (windowreduce_result cmonoid_fadd_f32 sx
+             (acc2 (windowreduce_result reducer_fadd_f32 sx
                         k s p d l_out) i j))));
   (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
 }

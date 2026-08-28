@@ -5,27 +5,26 @@ Scope
 -----
 Kuiper.KB.MaxPool1D — a thin verified wrapper over the existing
 [Kuiper.Kernel.WindowReduce1D.windowreduce] primitive, instantiated with
-the f32 fmax monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fmax_f32].
+the law-free f32 fmax reducer [Kuiper.Monoid.Reduce.F32.reducer_fmax_f32].
 
 Spec faithfulness
 -----------------
 The verified entry point [maxpool1d_fw_rm_f32] establishes the post
 
-  output |-> windowreduce_result cmonoid_fmax_f32 sx k s p d l_out
+  output |-> windowreduce_result reducer_fmax_f32 sx k s p d l_out
 
 i.e. exactly the polymorphic post that the windowreduce primitive
 produces.  Concretely, [windowreduce_result m sx k s p d l_out] is the
 chest2 whose (r, j) cell is the m-fold over the k taps of the dilated
 window centred at (j*s - p), with out-of-row taps contributing the
-monoid identity m.rid.  For cmonoid_fmax_f32, m.rid = -INFINITY (via
+reducer seed m.rid.  For reducer_fmax_f32, m.rid = -INFINITY (via
 [Kuiper.Math.Fmax.neg_inf]) and m.rop = fmaxf, so:
 
     out[r, j] = fmaxf over di in [0, k) of
                   (in_bounds ? input[r, j*s + di*d - p] : -INFINITY)
 
-This is bit-equivalent to PyTorch nn.MaxPool1d(K, S, P, D), modulo the
-order-of-reduction freedom that fmax has anyway (fmax is associative
-and commutative — see Math.Fmax.fmax_assoc / fmax_comm axioms).
+The verified result records this exact increasing-[di] operation order;
+the window-reduction proof does not use fmax algebraic axioms.
 Padding contributes -inf (PyTorch's documented behaviour for
 max-pooling).  Output length L_out is computed by [pool_out_len_1d],
 which matches PyTorch's formula:
@@ -95,8 +94,8 @@ Follow-ups
   consumers don't need the manual define.
 - Bridge to [Kuiper.Spec.Pool1D.maxpool1d_post] (the option-based
   Some?.v form) so the wrapper's post is in the project-canonical
-  shape.  Provable from cmonoid axioms but not done here.
-- AvgPool1D #44 (sibling) reuses the same primitive with cmonoid_fadd_f32.
+  shape.  Provable from reducer axioms but not done here.
+- AvgPool1D #44 (sibling) reuses the same primitive with reducer_fadd_f32.
 - MaxPool2D #42, AvgPool2D #45: would need windowreduce2D or a host-loop
   decomposition.
 

@@ -4,7 +4,7 @@ module Kuiper.KB.MaxPool3D
  *
  * 3-D max pooling reduces to three passes of the verified
  * [Kuiper.Kernel.WindowReduce1D] primitive instantiated with
- * [cmonoid_fmax_f32] (rid = -inf, rop = fmaxf):
+ * [reducer_fmax_f32] (rid = -inf, rop = fmaxf):
  *
  *   pass 1: per-row max over W axis (B*C*D*H rows of length W)
  *   pass 2: per-row max over H axis (B*C*D*W_out rows of length H,
@@ -29,7 +29,7 @@ module Kuiper.KB.MaxPool3D
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
-open Kuiper.Monoid.Reduce.F32 { cmonoid_fmax_f32 }
+open Kuiper.Monoid.Reduce.F32 { reducer_fmax_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 module SZ = Kuiper.SizeT
@@ -69,7 +69,7 @@ requires
  pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
 ensures
  on gpu_loc (output |->
-   windowreduce_result cmonoid_fmax_f32 sx
+   windowreduce_result reducer_fmax_f32 sx
      k s p d l_out)
 
 
@@ -94,7 +94,7 @@ requires
  pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
 ensures
  on gpu_loc (output |->
-   windowreduce_result cmonoid_fmax_f32 sx
+   windowreduce_result reducer_fmax_f32 sx
      k s p d l_out)
 
 
@@ -128,7 +128,7 @@ returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
             & array2 f32 (l2_row_major bc lo))
 ensures
  on gpu_loc ((dsnd r) |->
-   windowreduce_result cmonoid_fmax_f32 sx
+   windowreduce_result reducer_fmax_f32 sx
      k s p d (dfst r)) **
  pure (SZ.v (dfst r) ==
          pool_out_len_1d l k s p d)

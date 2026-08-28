@@ -12,13 +12,13 @@ What changed
   leading product [bc], the reduced axis length [l], and the input tensor, it:
     * computes l_out via the verified [pool_out_len_1d_sz],
     * allocates the (bc, l_out) GPU output buffer (cudaMalloc),
-    * fills it with the per-window SUM (windowreduce, cmonoid_fadd_f32),
+    * fills it with the per-window SUM (windowreduce, reducer_fadd_f32),
     * divides every element by K IN PLACE via the verified Kuiper.KB.ScalarMul
       map (scaling by inv_k = avgpool_recip_f32 k = 1/K), and
     * returns (| l_out, output |) directly.
 
 - The ensures clause is UPGRADED from the sum-only post
-  [output |-> windowreduce_result cmonoid_fadd_f32 sx ...] to the
+  [output |-> windowreduce_result reducer_fadd_f32 sx ...] to the
   averaged post
   [output |-> map (mul (avgpool_recip_f32 k)) (windowreduce_result ...)],
   i.e. every output accumulator equals (1/K) * the corresponding windowed
@@ -72,7 +72,8 @@ Scope
 -----
 Kuiper.KB.AvgPool2D — a thin verified wrapper over the existing
 [Kuiper.Kernel.WindowReduce1D.windowreduce] primitive instantiated
-with the f32 fadd monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fadd_f32].
+with the law-free f32 addition reducer
+[Kuiper.Monoid.Reduce.F32.reducer_fadd_f32].
 
 Same shape as #44 AvgPool1D: a verified per-axis windowed *sum*
 kernel + an unverified per-axis scale-by-(1/K) post-pass.  The
@@ -85,9 +86,9 @@ Spec faithfulness (per-axis)
 ----------------------------
 Each verified pass establishes the post
 
-  output |-> windowreduce_result cmonoid_fadd_f32 sx k s p d l_out
+  output |-> windowreduce_result reducer_fadd_f32 sx k s p d l_out
 
-For cmonoid_fadd_f32, m.rid = 0.0f and m.rop = +, so:
+For reducer_fadd_f32, m.rid = 0.0f and m.rop = +, so:
 
     out[r, j] = sum over di in [0, k) of
                   (in_bounds ? input[r, j*s + di*d - p] : 0.0f)

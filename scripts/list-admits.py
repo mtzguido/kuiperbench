@@ -3,6 +3,7 @@
 
 import re
 import sys
+from pathlib import Path
 
 
 TRUST_WORD = re.compile(r"\b(?:assume|admit|tadmit|magic)\b")
@@ -65,6 +66,12 @@ def without_comments_and_strings(source: str) -> str:
 
 
 def list_file(path: str) -> None:
+    # git ls-files still reports tracked files deleted in the working tree.
+    # Skipping them keeps the scanner usable while an axiom-only module is
+    # being removed.
+    if not Path(path).is_file():
+        return
+
     with open(path, encoding="utf-8") as source_file:
         source = source_file.read()
 

@@ -36,7 +36,7 @@ module SC  = Kuiper.Seq.Common
 
 (* Identity element for [fmax].  Extracted as the IEEE-754
    [-infinity] literal.  Defined concretely via [Float32.of_literal]
-   so the cmonoid_fmax_f32 instance composes cleanly through Karamel. *)
+   so the reducer_fmax_f32 instance composes cleanly through Karamel. *)
 inline_for_extraction noextract
 let neg_inf : f32 = neg infinity
 

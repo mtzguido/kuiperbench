@@ -21,12 +21,11 @@ engagement.  Two rounds of preparatory work have landed:
     by a separable kernel implementation).  Per-axis predicates
     `row_{max,avg}_pooled_along_w` and `col_{max,avg}_pooled_along_h`.
   - `src/lib/kuiper/Kuiper.Monoid.Reduce.{fst,fsti}` and
-    `Kuiper.Monoid.Reduce.F32.fsti` — fold-style commutative
-    monoid abstraction with `cmonoid_fmax_f32` / `cmonoid_fadd_f32`
-    interface-only instances.  This is the "reduction monoid"
-    typeclass the `WindowReduce1D` primitive will consume.
-    (Distinct from the existing append-style `Kuiper.Monoid.monoid0`,
-    which is unsuited for fold-style accumulation.)
+    `Kuiper.Monoid.Reduce.F32.{fst,fsti}` — law-free seeded reducer
+    abstraction with concrete `reducer_fmax_f32` / `reducer_fadd_f32`
+    values.  `WindowReduce1D` specifies the exact left-to-right fold,
+    so it needs no algebraic laws.
+    (Distinct from the existing append-style `Kuiper.Monoid.monoid0`.)
   - `src/lib/kuiper/Kuiper.Math.Fmax.fsti` — narrower `fmax`
     reduction infrastructure for `f32` (axiomatised assoc / comm /
     `neg_inf` neutrality, sequence reducer + three derived lemmas).
@@ -277,8 +276,8 @@ When picking this back up:
 
 3. **Land `monoid_fadd` and `monoid_fmax` first** as standalone
    typeclass instances — they're independently useful.
-   ✅ **DONE** as `Kuiper.Monoid.Reduce.F32.cmonoid_fmax_f32` and
-   `cmonoid_fadd_f32`, plus a narrower `Kuiper.Math.Fmax` for the
+   ✅ **DONE** as `Kuiper.Monoid.Reduce.F32.reducer_fmax_f32` and
+   `reducer_fadd_f32`, plus a narrower `Kuiper.Math.Fmax` for the
    `seq_fmax` reducer used by tree reductions.
 
 4. **Implement `Kuiper.Kernel.WindowReduce1D`** following the

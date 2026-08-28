@@ -13,7 +13,7 @@ module Kuiper.Kernel.Scan1D.RowBlockExcl
  * postcondition: cell [(r, j)] holds the *exclusive* prefix fold
  * [scan_exclusive_at m row_r j == red_fold m m.rid (slice row_r 0 j)],
  * i.e. the fold over the strictly-earlier elements [row_r[0 .. j)].
- * Cell 0 is therefore the monoid identity [m.rid].  This is achieved
+ * Cell 0 is therefore the reducer seed [m.rid].  This is achieved
  * by writing the running accumulator into the output cell *before*
  * folding the cell's own input element into it.
  *
@@ -34,7 +34,7 @@ module Seq = FStar.Seq
 (* The result chest2: cell [(r, j)] is [scan_exclusive_at m row_r j]. *)
 let scan2d_exclusive_result
   (#t : Type0)
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows #cols : nat)
   (sx : chest2 t rows cols)
   : chest2 t rows cols
@@ -44,7 +44,7 @@ let scan2d_exclusive_result
 unfold inline_for_extraction
 type scan1d_exclusive_rowblock_ty =
   fn (#et : Type0) {| scalar et |}
-     (m : cmonoid et)
+     (m : reducer et)
      (rows : szp { rows <= max_blocks })
      (cols : szp)
      (#lin  : layout2 rows cols) {| ctlayout lin  |}

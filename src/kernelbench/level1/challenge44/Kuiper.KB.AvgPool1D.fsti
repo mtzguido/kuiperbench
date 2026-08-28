@@ -5,7 +5,7 @@ module Kuiper.KB.AvgPool1D
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
-open Kuiper.Monoid.Reduce.F32 { cmonoid_fadd_f32 }
+open Kuiper.Monoid.Reduce.F32 { reducer_fadd_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 module SZ = Kuiper.SizeT
@@ -48,7 +48,7 @@ requires
  pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
 ensures
  on gpu_loc (output |->
-   windowreduce_result cmonoid_fadd_f32 sx
+   windowreduce_result reducer_fadd_f32 sx
      k s p d l_out)
 
 
@@ -73,7 +73,7 @@ requires
  pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
 ensures
  on gpu_loc (output |->
-   windowreduce_result cmonoid_fadd_f32 sx
+   windowreduce_result reducer_fadd_f32 sx
      k s p d l_out)
 
 
@@ -116,7 +116,7 @@ ensures
  on gpu_loc ((dsnd r) |->
    mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
      mul (avgpool_recip_f32 k)
-         (acc2 (windowreduce_result cmonoid_fadd_f32 sx
+         (acc2 (windowreduce_result reducer_fadd_f32 sx
                     k s p d (dfst r)) i j))) **
  pure (SZ.v (dfst r) ==
          pool_out_len_1d l k s p d)

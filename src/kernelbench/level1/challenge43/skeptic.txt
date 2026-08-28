@@ -5,7 +5,8 @@ Scope
 -----
 Kuiper.KB.MaxPool3D — a thin verified wrapper over the existing
 [Kuiper.Kernel.WindowReduce1D.windowreduce] primitive instantiated
-with the f32 fmax monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fmax_f32].
+with the law-free f32 fmax reducer
+[Kuiper.Monoid.Reduce.F32.reducer_fmax_f32].
 
 The .fst is structurally identical to Kuiper.KB.MaxPool2D (#42); the
 extracted entry [maxpool3d_axis_fw_rm_f32] performs ONE per-axis
@@ -18,10 +19,10 @@ Spec faithfulness (per-axis)
 ----------------------------
 Each verified pass establishes the post
 
-  output |-> windowreduce_result cmonoid_fmax_f32 sx k s p d l_out
+  output |-> windowreduce_result reducer_fmax_f32 sx k s p d l_out
 
 i.e. exactly the polymorphic post that windowreduce produces.  For
-cmonoid_fmax_f32, m.rid = -INFINITY and m.rop = fmaxf, so:
+reducer_fmax_f32, m.rid = -INFINITY and m.rop = fmaxf, so:
 
     out[r, j] = fmaxf over di in [0, k) of
                   (in_bounds ? input[r, j*s + di*d - p] : -INFINITY)

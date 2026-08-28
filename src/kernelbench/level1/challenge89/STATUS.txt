@@ -27,7 +27,7 @@ This is the monoid-parametric specification for all five variants.  It
 defines:
 
   - [scan_inclusive_at] / [scan_inclusive] — fold of [s[0..i+1]] under
-    a [Kuiper.Monoid.Reduce.cmonoid].
+    a [Kuiper.Monoid.Reduce.reducer].
   - [scan_exclusive_at] / [scan_exclusive] — fold of [s[0..i]].
   - [seq_rev], [scan_inclusive_reverse] — for #91.
   - [mask_step], [mask_seq], [scan_inclusive_masked] — for #93.
@@ -79,8 +79,8 @@ Bring-up plan (ordered)
      - Spec: per-row output [%~] [scan_inclusive m_r (to_real_seq row)].
      - Reference: [Kuiper.Kernel.HReduce.Block] for the
        [shmem + sum_stride_map_2d + tree-reduce] proof skeleton.
-     - Floating-point monoid: take a [cmonoid t] argument plus a
-       [cmonoid real] real-arithmetic ideal plus a per-step
+     - Floating-point reducer: take a [reducer t] argument plus a
+       [reducer real] real-arithmetic ideal plus a per-step
        approximation hypothesis [m_t.rop %~ m_r.rop], following the
        same pattern as [reduce_batched_block]'s [pre_map %~ pre_map_r].
 
@@ -96,15 +96,14 @@ Bring-up plan (ordered)
 
 3. **Klas wrappers** (`Klas.Scan.{fst,fsti}`):
 
-     - [scan_inclusive_plus_f32]   — uses [cmonoid_fadd_f32].
-     - [scan_inclusive_mul_f32]    — uses [cmonoid_fmul_f32]
-       (NEW — needs to be added to [Kuiper.Monoid.Reduce.F32], same
-       axiomatic pattern as [cmonoid_fadd_f32]).
+     - [scan_inclusive_plus_f32]   — uses [reducer_fadd_f32].
+     - [scan_inclusive_mul_f32]    — uses [reducer_fmul_f32]
+       (a concrete law-free reducer, like [reducer_fadd_f32]).
 
 4. **Per-challenge wrappers** (`src/kernelbench/level1/challenge{89..93}/`):
 
-     - #89  cumsum            : Klas scan + [cmonoid_fadd_f32], identity pre-map.
-     - #90  cumprod           : Klas scan + [cmonoid_fmul_f32], identity pre-map.
+     - #89  cumsum            : Klas scan + [reducer_fadd_f32], identity pre-map.
+     - #90  cumprod           : Klas scan + [reducer_fmul_f32], identity pre-map.
      - #91  cumsum_reverse    : flip rows on input, scan, flip on output.
                                 Two cheap [Kuiper.Kernel.Map] passes around (1).
      - #92  cumsum_exclusive  : run inclusive scan, then a one-element-shift
@@ -146,7 +145,7 @@ UPDATE (kb-l1-scan, after Scan1D primitive landing)
 
 Landed in [src/lib/kernel/Kuiper.Kernel.Scan1D.{fst,fsti}] (508 LOC):
 
-  - Polymorphic [scan1d_inclusive] primitive over any [cmonoid t].
+  - Polymorphic [scan1d_inclusive] primitive over any [reducer t].
   - One thread per output cell; per-thread sequential left-fold.
   - Postcondition: [output |-> scan2d_inclusive_result m sx], i.e.
     exact equality (no [%~]) under the kernel monoid.
@@ -196,7 +195,7 @@ Bridge sketch for path B (#89 wrapper):
                  == scan_inclusive_at m_real (to_real_seq (row r)) i.
    QED, modulo a slice-of-to_real_seq lemma.
 
-The same shape applies to #90 (need [cmonoid_fmul_f32] axiom in
+The same shape applies to #90 (need [reducer_fmul_f32] axiom in
 [Kuiper.Monoid.Reduce.F32], plus a [prod_is_approx] in
 [Kuiper.Approximates] mirroring [sum_is_approx]), #91 (extra
 [seq_rev] bookkeeping), #92 (one-cell shift), and #93 (a [mask_seq]

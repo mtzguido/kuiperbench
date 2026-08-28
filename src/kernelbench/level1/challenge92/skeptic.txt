@@ -35,12 +35,11 @@ Specification tie:
   reference exactly.
 
 Floating-point note:
-  Kuiper's f32 [+] is axiomatised as a commutative monoid; bit-exact
-  IEEE-754 associativity is not assumed, so each output cell is pinned
-  only up to the [%~] relation against its real-arithmetic ideal,
+  The reducer carries no algebraic laws.  Each output cell is pinned
+  up to the [%~] relation against its real-arithmetic ideal,
   mirroring [Kuiper.Spec.SumReduceDim] / [Kuiper.Spec.Frobenius].  The
-  sequential single-thread scan does not reorder partial sums, so this
-  is a sound and tight specification.  KernelBench's
+  sequential single-thread scan does not reorder partial sums, and its
+  internal postcondition records that exact operation order.  KernelBench's
   eval_kernel_against_ref uses atol = rtol = 1e-4 for fp32.
 
 Verification hygiene:

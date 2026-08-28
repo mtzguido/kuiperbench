@@ -43,8 +43,8 @@ let macc_scan2d_inclusive_result_f32_mul
   (#rows #cols : nat)
   (sx : chest2 f32 rows cols)
   (r : natlt rows) (i : natlt cols)
-  : Lemma (acc2 (scan2d_inclusive_result cmonoid_fmul_f32 sx) r i
-           == scan_inclusive_at cmonoid_fmul_f32 (EM.ematrix_row sx r) i)
+  : Lemma (acc2 (scan2d_inclusive_result reducer_fmul_f32 sx) r i
+           == scan_inclusive_at reducer_fmul_f32 (EM.ematrix_row sx r) i)
   = ()
 
 #push-options " --z3rlimit 60"
@@ -54,7 +54,7 @@ let cell_post_eq
   (r : natlt rows)
   (i : natlt cols)
   : Lemma
-      (acc2 (scan2d_inclusive_result cmonoid_fmul_f32 sx) r i
+      (acc2 (scan2d_inclusive_result reducer_fmul_f32 sx) r i
        %~ rprod (Seq.slice (to_real_seq (EM.ematrix_row sx r)) 0 (i + 1)))
   = let row : Seq.seq f32 = EM.ematrix_row sx r in
     let s  : Seq.seq f32 = Seq.slice row 0 (i + 1) in
@@ -62,10 +62,10 @@ let cell_post_eq
     slice_is_approx #f32 row (i + 1);
     prod_is_approx #f32 s s';
     macc_scan2d_inclusive_result_f32_mul sx r i;
-    cmonoid_fmul_f32_proj ();
-    assert (acc2 (scan2d_inclusive_result cmonoid_fmul_f32 sx) r i
-              == scan_inclusive_at cmonoid_fmul_f32 row i);
-    assert (scan_inclusive_at cmonoid_fmul_f32 row i
+    reducer_fmul_f32_proj ();
+    assert (acc2 (scan2d_inclusive_result reducer_fmul_f32 sx) r i
+              == scan_inclusive_at reducer_fmul_f32 row i);
+    assert (scan_inclusive_at reducer_fmul_f32 row i
               == SC.seq_fold_left mul one s);
     assert (SC.seq_fold_left mul one s %~ rprod s')
 #pop-options
@@ -91,7 +91,7 @@ fn cumprod_fw_f32_impl
        on gpu_loc (output |-> sy) **
        pure (cumprod_post b d sx sy))
 {
-  scan1d_inclusive_rowblock #f32 cmonoid_fmul_f32 b d
+  scan1d_inclusive_rowblock #f32 reducer_fmul_f32 b d
     #(l2_row_major b d) #_
     #(l2_row_major b d) #_
     input output;

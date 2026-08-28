@@ -11,9 +11,9 @@ What's genuinely verified
 * The `Kuiper.KB.CumSum` wrapper proves the per-element functional
   spec `Seq.index sy (r * d + c) %~ rsum (slice (to_real_seq (row sx r))
   0 (c+1))` for every (r, c) by composing the monoid postcondition
-  (`scan2d_inclusive_result cmonoid_fadd_f32 sx`) with:
+  (`scan2d_inclusive_result reducer_fadd_f32 sx`) with:
     1. `macc_scan2d_inclusive_result_f32`   (definitional reduction)
-    2. `cmonoid_fadd_f32_proj`              (record component eq;
+    2. `reducer_fadd_f32_proj`              (record component eq;
        a real lemma in `Kuiper.Monoid.Reduce.F32`, body `= ()`)
     3. `slice_to_real_seq` + `slice_is_approx` (slice/to_real_seq
        commute; provable by `Seq.equal` extensionality)
@@ -26,8 +26,8 @@ What's genuinely verified
 What could hide bugs
 --------------------
 
-* `cmonoid_fadd_f32_proj` is `= ()`. It works only because in the
-  matching `.fst`, `cmonoid_fadd_f32.rop == add /\ rid == zero` reduces
+* `reducer_fadd_f32_proj` is `= ()`. It works only because in the
+  matching `.fst`, `reducer_fadd_f32.rop == add /\ rid == zero` reduces
   definitionally. If someone later swaps the body to a different
   monoid representation, the proof silently breaks AT the definition
   site (not here). This is the standard abstraction-barrier pattern.
@@ -53,7 +53,7 @@ Notes
 
 * Functional spec uses the "rsum/slice/to_real_seq" form rather than
   the canonical `scan_inclusive_at m_radd`. Functionally equivalent;
-  this form avoids constructing a `cmonoid real`.
+  this form avoids constructing a `reducer real`.
 * CumSum performs sequential work O(B*D) — every row is one block
   with one thread doing the prefix sum. This is correct but not
   performant; a fan-in (Hillis-Steele / Blelloch) scan would be a

@@ -4,7 +4,7 @@
 // PyTorch: y = torch.cumprod(x, dim=1), shape (B, D), float32.
 //
 // Kuiper: same row-per-block sequential prefix-scan as cumsum, but
-// parametrised by the multiplicative monoid [cmonoid_fmul_f32].  One
+// parametrised by the law-free multiplicative reducer [reducer_fmul_f32].  One
 // launch of [Kuiper_KB_CumProd_cumprod_fw_f32] does the whole forward.
 #include <torch/extension.h>
 #include "Kuiper_KB_CumProd.h"
