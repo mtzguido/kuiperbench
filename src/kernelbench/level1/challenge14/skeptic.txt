@@ -1,25 +1,32 @@
-Skeptic review — KB L1 challenge 14 (matmul wrapper)
-========================================================
+Skeptic review -- KB L1 challenge 14 (triu(A @ B))
+===================================================
+
+Reference: C = torch.triu(torch.matmul(A, B)), A, B (N, N), N = 4096.
 
 Verified component
 ------------------
-Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
-the GEMM kernel is verified end-to-end in
-src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
-its Inst module).  Kahan-style summation in Naive3 keeps the
-column-reduction error O(eps) regardless of K, which is why we
-use it for every challenge except #1/#2 (where rows/cols/K are
-multiples of 128/128/32 and the BlockTiling2D variant verifies +
-extracts cleanly).  No assume / admit / magic in the kernel
-proofs themselves.
+EVERYTHING on the GPU is verified.  The single extracted entry
+Kuiper_KB_TriuMatmul_triu_matmul_f32(uint32_t n, float* A, float* B, float* Y)
+composes two launches in place on Y:
+
+  1. GEMM: Y := A @ B via Kuiper.Kernel.GEMM.Naive3.mmcomb_gpu_approx.
+  2. triu: Y := s_triu Y via the generic verified in-place kernel
+     Kuiper.Kernel.Triu (src/lib/kernel/Kuiper.Kernel.Triu.fst).
+
+The exported postcondition states, for every output (i,j), that the result
+approximates the real matmul entry when i <= j and is exactly zero when i > j.
+The complete KernelBench operation is therefore covered by one Kuiper theorem.
+
+No assume / admit / magic / --admit_smt_queries is used.
 
 Unverified glue in the .cu bridge
 ---------------------------------
-Upper-triangular result: triu(A @ B).  Bridge does plain GEMM, then calls torch.triu on the result.  torch.triu is not part of the verified core; it is a PyTorch-side post-processing.  Correctness = (verified GEMM) ∘ (PyTorch triu); since triu is a pure index mask the composition matches the PyTorch reference exactly.
+NONE of the math.  The bridge performs dtype/device/shape and ABI-range checks,
+makes contiguous inputs, allocates the output, calls the verified entry, and
+reshapes the flat allocation to (N,N).  It contains no torch::triu call.
 
-Result
-------
-run.sh PASSes against the KernelBench reference (correctness
-check via kernelbench.eval.eval_kernel_against_ref).
-No new verified Kuiper code was written; this is a thin
-bridge over the existing Klas.GEMM.* primitives.
+Performance note
+----------------
+Like challenge 15, this deliberately closes the proof gap by composing a full
+dense GEMM with a verified mask.  It does not yet exploit triangular inputs to
+avoid computing entries that will be zeroed.
