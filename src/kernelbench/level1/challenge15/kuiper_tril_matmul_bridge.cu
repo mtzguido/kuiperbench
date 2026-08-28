@@ -2,11 +2,9 @@
 //
 // PyTorch reference:  C = torch.tril(torch.matmul(A, B))   with A, B (N, N).
 //
-// FULLY VERIFIED pipeline (single extracted entry, 2 GPU launches):
-//   1. GEMM (Kahan / Naive3) : gC := A @ B          (N x N)
-//   2. tril mask             : y[i*N+j] := (j <= i) ? gC[i,j] : 0
-// The lower-triangular mask is performed INSIDE a verified Kuiper kernel
-// (Kuiper.Kernel.Tril); there is NO unverified torch::tril post-processing.
+// The single verified launch computes only the nonzero reduction range.
+// The lower case reuses the upper kernel through transposed logical views;
+// there is no physical transpose and no torch::tril post-processing.
 #include <torch/extension.h>
 #include "Kuiper_KB_TrilMatmul.h"
 #include "Kuiper_KB_TrilMatmul.cu"

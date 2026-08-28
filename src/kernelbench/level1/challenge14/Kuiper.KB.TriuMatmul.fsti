@@ -1,4 +1,9 @@
-module Kuiper.KB.TrilMatmul
+module Kuiper.KB.TriuMatmul
+
+(* KernelBench L1 #14: upper-triangular part of a square matmul.
+
+   KernelBench supplies upper-triangular operands.  The verified kernel uses
+   that precondition to compute only the retained reduction range. *)
 
 #lang-pulse
 open Kuiper
@@ -8,8 +13,7 @@ module SZ = Kuiper.SizeT
 module MS = Kuiper.Spec.GEMM
 module TM = Kuiper.Kernel.TriangularMatmul
 
-inline_for_extraction noextract
-fn tril_matmul_f32_impl
+fn triu_matmul_f32
   (n : szp {
      SZ.v n * SZ.v n <= max_blocks * max_threads /\
      SZ.fits (SZ.v n * SZ.v n) })
@@ -23,20 +27,13 @@ fn tril_matmul_f32_impl
     on gpu_loc (gA |-> sA) **
     on gpu_loc (gB |-> sB)
   requires
-    on gpu_loc (y |-> sy) **
+    on gpu_loc (y  |-> sy) **
     pure (
       sA %~ rA /\
       sB %~ rB /\
-      TM.is_lower_triangular rA /\
-      TM.is_lower_triangular rB)
+      TM.is_upper_triangular rA /\
+      TM.is_upper_triangular rB)
   ensures
-    exists* (sy' : chest2 f32 n n).
-      on gpu_loc (y |-> sy') **
-      pure (sy' %~ MS.matmul rA rB)
-{
-  TM.lower_triangular_matmul n gA gB y
-    #sA #sB #sy #rA #rB;
-  ()
-}
-
-let tril_matmul_f32 = tril_matmul_f32_impl
+    (exists* (sy' : chest2 f32 n n).
+       on gpu_loc (y |-> sy') **
+       pure (sy' %~ MS.matmul rA rB))

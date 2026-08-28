@@ -1,25 +1,41 @@
-Skeptic review — KB L1 challenge 14 (matmul wrapper)
-========================================================
+Skeptic review -- KB L1 challenge 14 (triu(A @ B))
+===================================================
+
+Reference: C = torch.triu(torch.matmul(A, B)), A, B (N, N), N = 4096.
 
 Verified component
 ------------------
-Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
-the GEMM kernel is verified end-to-end in
-src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
-its Inst module).  Kahan-style summation in Naive3 keeps the
-column-reduction error O(eps) regardless of K, which is why we
-use it for every challenge except #1/#2 (where rows/cols/K are
-multiples of 128/128/32 and the BlockTiling2D variant verifies +
-extracts cleanly).  No assume / admit / magic in the kernel
-proofs themselves.
+EVERYTHING on the GPU is verified.  The single extracted entry
+Kuiper_KB_TriuMatmul_triu_matmul_f32(uint32_t n, float* A, float* B, float* Y)
+performs one launch in place on Y.
+
+For a retained cell (i,j), i <= j, the kernel accumulates only k=i..j.
+Terms k<i vanish because A is upper triangular; terms k>j vanish because B
+is upper triangular.  For i>j it writes zero without performing a product.
+The proof establishes that upper-triangular matrices are closed under matmul
+and that the shortened reduction equals the ordinary dense MS.matmul.
+
+The exported postcondition directly states Y %~ MS.matmul A B.  The closure
+theorem proves that this dense result is already upper triangular, so it is
+also the KernelBench triu(matmul(A,B)) reference result.
+
+No assume / admit / magic / --admit_smt_queries is used.
 
 Unverified glue in the .cu bridge
 ---------------------------------
-Upper-triangular result: triu(A @ B).  Bridge does plain GEMM, then calls torch.triu on the result.  torch.triu is not part of the verified core; it is a PyTorch-side post-processing.  Correctness = (verified GEMM) ∘ (PyTorch triu); since triu is a pure index mask the composition matches the PyTorch reference exactly.
+NONE of the math.  The bridge performs dtype/device/shape and ABI-range checks,
+makes contiguous inputs, allocates the output, calls the verified entry, and
+reshapes the flat allocation to (N,N).  It contains no torch::triu call.
 
-Result
-------
-run.sh PASSes against the KernelBench reference (correctness
-check via kernelbench.eval.eval_kernel_against_ref).
-No new verified Kuiper code was written; this is a thin
-bridge over the existing Klas.GEMM.* primitives.
+The theorem is conditional on A and B being upper triangular, matching
+KernelBench's input generator.  The bridge does not scan arbitrary caller
+inputs to revalidate that semantic precondition; doing so would add an O(N^2)
+pass outside the kernel.  Calls with non-triangular inputs are outside the
+verified entry's contract.
+
+Performance note
+----------------
+The kernel performs N(N+1)(N+2)/6 scalar products instead of N^3 and has no
+separate masking launch.  Its specification explicitly requires the real
+witnesses for A and B to be upper triangular; concrete skipped entries need
+only approximate those real zeroes.

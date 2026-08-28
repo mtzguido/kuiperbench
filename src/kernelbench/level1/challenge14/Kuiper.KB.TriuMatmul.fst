@@ -1,4 +1,4 @@
-module Kuiper.KB.TrilMatmul
+module Kuiper.KB.TriuMatmul
 
 #lang-pulse
 open Kuiper
@@ -9,7 +9,7 @@ module MS = Kuiper.Spec.GEMM
 module TM = Kuiper.Kernel.TriangularMatmul
 
 inline_for_extraction noextract
-fn tril_matmul_f32_impl
+fn triu_matmul_f32_impl
   (n : szp {
      SZ.v n * SZ.v n <= max_blocks * max_threads /\
      SZ.fits (SZ.v n * SZ.v n) })
@@ -27,16 +27,16 @@ fn tril_matmul_f32_impl
     pure (
       sA %~ rA /\
       sB %~ rB /\
-      TM.is_lower_triangular rA /\
-      TM.is_lower_triangular rB)
+      TM.is_upper_triangular rA /\
+      TM.is_upper_triangular rB)
   ensures
     exists* (sy' : chest2 f32 n n).
       on gpu_loc (y |-> sy') **
       pure (sy' %~ MS.matmul rA rB)
 {
-  TM.lower_triangular_matmul n gA gB y
+  TM.upper_triangular_matmul n gA gB y
     #sA #sB #sy #rA #rB;
   ()
 }
 
-let tril_matmul_f32 = tril_matmul_f32_impl
+let triu_matmul_f32 = triu_matmul_f32_impl
