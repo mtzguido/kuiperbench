@@ -12,8 +12,9 @@ module Kuiper.Math.Argmax
  *
  * This module adds the IEEE-754 facts needed to verify the
  * one-thread-per-row argmax kernel in [Kuiper.Kernel.HReduce.Argmax].
- * Each [val] is a plain admitted axiom at the .fsti boundary; all are
- * sound for IEEE-754 [fmaxf] / [Float32.gt] = [>] on non-NaN inputs.
+ * Each [val] has an explicit admitted implementation in the matching
+ * [.fst]; all are sound for IEEE-754 [fmaxf] / [Float32.gt] = [>] on
+ * non-NaN inputs.
  *
  * NaN caveat: KernelBench inputs are [torch.rand(...)] (no NaNs); on
  * NaN inputs, both PyTorch and these axioms become unspecified.  This

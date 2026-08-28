@@ -13,9 +13,9 @@ module Kuiper.Math.Fmax
  * floating-point reassociation slop.
  *
  * The associativity / commutativity / neutrality of [fmax] over
- * the abstract [Kuiper.Float32.t] are stated here as axioms in
- * the same idiom as [Kuiper.Float32.add_comm] and the lemmas in
- * [Kuiper.Approximates.F32].  The identity element [neg_inf] is
+ * the abstract [Kuiper.Float32.t] are stated here as axioms with
+ * explicit admitted implementations in the matching [.fst].  The
+ * identity element [neg_inf] is
  * exposed as an extractable [val] (printed as [(-INFINITY)] by
  * Karamel via [Float32.of_literal]).
  *

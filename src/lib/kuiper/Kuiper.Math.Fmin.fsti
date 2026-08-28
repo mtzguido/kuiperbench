@@ -9,7 +9,8 @@ module Kuiper.Math.Fmin
  * commutative, so the min-reduction post-condition uses exact
  * sequence equality (no [%~]).
  *
- * Identity element is [pos_inf] (+infinity).
+ * Identity element is [pos_inf] (+infinity).  The algebraic axioms have
+ * explicit admitted implementations in the matching [.fst].
  *
  * NOTE: an alternative implementation route for #53 is
  *
