@@ -12,9 +12,9 @@ What is genuinely verified (no admits/assumes/magic in the new code)
   - Pure spec row_fmin_partial defined recursively (opaque), with
     unfolding lemmas.  The bridge lemma row_fmin_eq_seq_fmin proves by
     induction on k that the partial fold at length k equals
-    seq_fmin over the row prefix, using seq_fmin_append +
-    seq_fmin_singleton + Seq.lemma_eq_intro from Kuiper.Math.Fmin.
-    No new assumes introduced.
+    seq_fmin over the row prefix, using the structural seq_fmin_snoc
+    lemma.  Both sides have the same left-fold order; no floating-point
+    algebra is assumed.
   - Uses kernel_desc_n (bounds-checked variant), so any rows up to
     max_blocks * max_threads = 2^31 are accepted.
 
@@ -26,30 +26,18 @@ What is genuinely verified (no admits/assumes/magic in the new code)
   - Layout reuse: the (B, D, M) row-major buffer is re-viewed as a
     rows=B*M, cols=D Array2 via l2_bcm_pages B M D.  Same as #49.
 
-What is *axiomatized* (carried over from existing infrastructure, not
-introduced by this challenge)
----------------------------------------------------------------------
+Reduction model
+---------------
 
-* Kuiper.Math.Fmin: the type-class-style boundary axiomatizes
-  - val fmin : f32 -> f32 -> f32     (in Kuiper.Float32; extracts as fminf)
-  - val fmin_assoc / fmin_comm / fmin_pos_inf_neutral : Lemma ...
-  These are *axioms* in F* (val, not let) and discharge to fminf at
-  extraction.  The seq_fmin_stride_step lemma in Kuiper.Math.Fmin has
-  a fully-discharged proof body (no admit) — same style as Fmax.
+Kuiper.Math.Fmin defines [seq_fmin] as a concrete left fold seeded by
++infinity.  Its implementation contains no admitted algebraic laws.  The
+kernel post and bridge use exact equality because the serial implementation
+performs that same fold in that same order—not because [fmin] is assumed to
+be associative, commutative, or globally neutral at +infinity.
 
-  This challenge promoted [pos_inf] from a [val] (axiom) to an
-  [inline_for_extraction noextract let pos_inf : f32 = F32.of_literal
-  "(INFINITY)"], mirroring Kuiper.Math.Fmax's [neg_inf].  This means
-  the literal +INFINITY is inlined directly into the extracted .cu,
-  so the bridge does not need the [extern float] strip-and-redefine
-  hack that #49 used.  No new axioms introduced.
-
-* IEEE-754 rationale: on the modeled f32 carrier, fminf is genuinely
-  associative and commutative on non-NaN inputs, so unlike
-  sum-reduction we do NOT need the [%~] approximate-equality
-  relation; the kernel post and bridge_post both use ==.  PyTorch's
-  torch.min produces the same fold and admits the same ordering
-  freedom, so equality holds bit-exactly.
+The contract therefore establishes an exact operational fmin fold.  Its
+refinement to PyTorch's semantic minimum on ordinary non-NaN inputs is not a
+separate theorem in this repository.
 
 What's potentially weak / worth flagging
 ----------------------------------------
@@ -60,10 +48,9 @@ What's potentially weak / worth flagging
   memory-bandwidth bound but NOT optimal for typical KernelBench
   shapes (B*M=4096, D=256).
 
-* NaN semantics: fminf(NaN, y) = y on most hardware, which differs
-  from std::min but matches PyTorch torch.min.  KernelBench's
-  reference inputs are torch.rand (no NaNs), so this is a non-issue
-  for the harness.
+* NaN semantics: the exact fold remains well specified, but this review makes
+  no claim that it equals PyTorch's reduction for NaN-containing inputs.
+  KernelBench's reference inputs are torch.rand and contain no NaNs.
 
 * The Python wrapper still includes the Kuiper_Math_Fmin_pos_inf
   regex-strip from the #49 template; it is now a no-op (since

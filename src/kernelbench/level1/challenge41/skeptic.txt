@@ -30,34 +30,19 @@ max-pooling).  Output length L_out is computed by [pool_out_len_1d],
 which matches PyTorch's formula:
     L_out = floor((L + 2P - D*(K-1) - 1)/S) + 1.
 
-Inherited debt
---------------
-[Kuiper.Kernel.WindowReduce1D] carries three pre-existing named
-admit-stubs in setup/teardown (setup_fold_kpre_step,
-teardown_unfold_kpost_step, rewrite_macc_windowreduce_result) plus the
-two kdesc-level [magic ()] (kpre_sendable / kpost_sendable) shared by
-every plain-kernel_desc kernel in tree.  Same legacy class as RowScale,
-HReduce, and Map.  See WindowReduce1D.fst comments and the cluster's
-POOLING_DESIGN.md for context.
+Trust accounting
+----------------
+[Kuiper.Kernel.WindowReduce1D] and this challenge wrapper contain no
+[admit ()], [magic ()], or [assume pure].  Its setup, teardown, and
+result-rewrite helpers now have checked implementations.
 
-MaxPool1D itself adds zero new [admit ()] / [magic ()] / [assume pure].
-
-Newly minted infrastructure
----------------------------
-The fmax monoid was previously declared as a bare [val] in
-Kuiper.Monoid.Reduce.F32.fsti — purely axiomatic, NOT extractable.  We
-made it concrete:
-
-- Kuiper.Math.Fmax.neg_inf : went from [val] to [let neg_inf =
-  F32.of_literal "(-INFINITY)"], so it has a real C constant.
-- Kuiper.Monoid.Reduce.F32 (new .fst): provides the record literal
-  [{ rid = neg_inf; rop = fmax; ... }] using the existing fmax_assoc /
-  fmax_comm / fmax_neg_inf_neutral squash axioms in Math.Fmax.fsti.
-
-These three squash axioms (fp associativity/commutativity/neutrality)
-are NOT proved — they are accepted as model assumptions.  PyTorch's
-max-pool reference relies on the same assumptions implicitly, so the
-end-to-end harness comparison validates the model.
+Reduction model
+---------------
+Kuiper.Monoid.Reduce.F32 provides the concrete law-free record
+[{ rid = neg_inf; rop = fmax }].  Despite the historical module name,
+the reducer record carries no monoid proof.  The verified post records
+the exact increasing-tap fold order, so it needs no fmax associativity,
+commutativity, or infinity-neutral assumption.
 
 Edge cases
 ----------
@@ -94,7 +79,8 @@ Follow-ups
   consumers don't need the manual define.
 - Bridge to [Kuiper.Spec.Pool1D.maxpool1d_post] (the option-based
   Some?.v form) so the wrapper's post is in the project-canonical
-  shape.  Provable from reducer axioms but not done here.
+  shape.  This requires a precise refinement between the exact fold
+  and the semantic maximum; it is not currently claimed.
 - AvgPool1D #44 (sibling) reuses the same primitive with reducer_fadd_f32.
 - MaxPool2D #42, AvgPool2D #45: would need windowreduce2D or a host-loop
   decomposition.

@@ -4,6 +4,10 @@ reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
 kernel, bridge, python wrapper and run.sh are all in place. The text below
 is HISTORICAL and was written before the kernel landed; treat its
 "deferred"/"pending" wording as obsolete.
+
+UPDATED 2026-08-28: The historical fmax/fmin monoid axioms described below
+have also been removed.  Current max/min contracts use exact left-fold order,
+and argmax/argmin use exact comparison-scan contracts.
 ========================================================================
 
 STATUS — KernelBench L1 #49/#51/#52/#53 (max / argmax / argmin / min over dim=1)

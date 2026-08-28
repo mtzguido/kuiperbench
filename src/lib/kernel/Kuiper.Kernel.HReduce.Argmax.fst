@@ -4,24 +4,20 @@ module Kuiper.Kernel.HReduce.Argmax
 
 open Kuiper
 open Kuiper.Math.Fmax
-open Kuiper.Math.Argmax
 open Kuiper.Tensor
 open Kuiper.Bijection { ( =~ ) }
 open Kuiper.Float32
 module SZ = Kuiper.SizeT
-module EM = Kuiper.EMatrix
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module I64 = FStar.Int64
 module Cast = FStar.Int.Cast
-module HRM = Kuiper.Kernel.HReduce.Max.RowFmax
 
 (* ── Pure spec ─────────────────────────────────────────────────────── *)
 
 (* Per-row partial argmax over an [(rows, cols)] row-major chest2.
-   Returns the (idx, val) pair after scanning columns [0..k).  The
-   strict-[gt] update mirrors PyTorch's "first occurrence"
-   convention; we verify the weaker "is_a_max" property. *)
+   Returns the exact (idx, val) state after scanning columns [0..k).
+   The strict-[gt] update is the operation performed by the kernel. *)
 
 [@@"opaque_to_smt"]
 let rec row_argmax_partial
@@ -60,60 +56,19 @@ let row_argmax_partial_succ
   = reveal_opaque (`%row_argmax_partial) (row_argmax_partial sx r (k + 1))
 #pop-options
 
-(* The val component of [row_argmax_partial] equals [row_fmax_partial]
-   from the verified Max primitive. *)
-let rec row_argmax_val_eq_fmax
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : Lemma (ensures snd (row_argmax_partial sx r k) ==
-                   HRM.row_fmax_partial sx r k)
-          (decreases k)
-  = if k = 0 then ()
-    else begin
-      row_argmax_val_eq_fmax sx r (k - 1);
-      HRM.row_fmax_partial_succ sx r (k - 1);
-      let (bi, bv) = row_argmax_partial sx r (k - 1) in
-      let v = acc2 sx r (k - 1) in
-      let _ = fmax_comm in
-      assert (bv == HRM.row_fmax_partial sx r (k - 1));
-      assert (HRM.row_fmax_partial sx r k == fmax bv v);
-      assert (fmax bv v == fmax v bv);
-      if gt v bv then begin
-        gt_iff_fmax_strict v bv;
-        assert (fmax v bv == v);
-        assert (snd (row_argmax_partial sx r k) == v)
-      end else begin
-        not_gt_fmax_keeps v bv;
-        assert (fmax v bv == bv);
-        assert (snd (row_argmax_partial sx r k) == bv)
-      end
-    end
-
-(* The selected idx is in range and points to its value. *)
+(* The selected index is in the scanned prefix.  We deliberately do
+   not identify the accumulator with [fmax]: Kuiper's abstract [gt]
+   API currently exposes no law connecting the comparison to [fmax],
+   especially in the presence of NaNs. *)
 let rec row_argmax_idx_inv
   (#rows #cols : nat)
   (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
-  : Lemma (ensures (let (bi, bv) = row_argmax_partial sx r k in
-                    bi <= (if k = 0 then 0 else k - 1) /\
-                    (k > 0 ==> acc2 sx r bi == bv)))
+  : Lemma (ensures fst (row_argmax_partial sx r k) <=
+                       (if k = 0 then 0 else k - 1))
           (decreases k)
   = if k = 0 then ()
-    else if k = 1 then begin
-      row_argmax_partial_succ sx r 0;
-      assert (row_argmax_partial sx r 0 == (0, neg_inf));
-      let v0 = acc2 sx r 0 in
-      gt_neg_inf_or_eq v0;
-      if gt v0 neg_inf then begin
-        assert (row_argmax_partial sx r 1 == (0, v0))
-      end else begin
-        assert (row_argmax_partial sx r 1 == (0, neg_inf));
-        assert (v0 == neg_inf)
-      end
-    end
     else begin
       row_argmax_idx_inv sx r (k - 1);
       row_argmax_partial_succ sx r (k - 1);
@@ -122,104 +77,6 @@ let rec row_argmax_idx_inv
       if gt v bv_pre then ()
       else ()
     end
-
-(* Local prefix machinery used to lift the [seq_fmax_geq] axiom to
-   running-max prefixes (mirrors the un-exported helpers in RowFmax). *)
-let arg_row_prefix
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : GTot (Seq.lseq f32 k)
-  = Seq.init_ghost k (fun j -> acc2 sx r j)
-
-let rec arg_row_fmax_eq
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : Lemma (ensures HRM.row_fmax_partial sx r k == seq_fmax (arg_row_prefix sx r k))
-          (decreases k)
-  = if k = 0 then begin
-      HRM.row_fmax_partial_zero sx r;
-      assert (Seq.equal (arg_row_prefix sx r 0) Seq.empty);
-      seq_fmax_empty ()
-    end else begin
-      arg_row_fmax_eq sx r (k - 1);
-      assert (Seq.equal (arg_row_prefix sx r k)
-                (Seq.append (arg_row_prefix sx r (k - 1))
-                            (Seq.create 1 (acc2 sx r (k - 1)))));
-      seq_fmax_append (arg_row_prefix sx r (k - 1))
-                      (Seq.create 1 (acc2 sx r (k - 1)));
-      seq_fmax_singleton (acc2 sx r (k - 1));
-      HRM.row_fmax_partial_succ sx r (k - 1)
-    end
-
-(* First-occurrence invariant: every column strictly *before* the
-   selected index has a value different from the running maximum.
-   This is what the strict-[gt] update buys us — it pins the PyTorch
-   "first occurrence" tie-break.  Proved by induction on [k]: in the
-   update branch (new value [v] strictly greater than the running max
-   [bv]), every earlier column is [<= bv < v] so cannot equal [v]; in
-   the keep branch the property is inherited unchanged. *)
-let rec row_argmax_first_inv
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : Lemma (ensures (let (bi, bv) = row_argmax_partial sx r k in
-                    bi <= (if k = 0 then 0 else k - 1) /\
-                    (forall (j : nat). j < bi ==> ~(acc2 sx r j == bv))))
-          (decreases k)
-  = if k = 0 then ()
-    else begin
-      row_argmax_first_inv sx r (k - 1);
-      row_argmax_idx_inv sx r (k - 1);
-      row_argmax_partial_succ sx r (k - 1);
-      let (bi, bv) = row_argmax_partial sx r (k - 1) in
-      let v = acc2 sx r (k - 1) in
-      if gt v bv then begin
-        (* new partial = (k-1, v); show no earlier column equals v *)
-        row_argmax_val_eq_fmax sx r (k - 1);  (* bv == row_fmax_partial (k-1) *)
-        arg_row_fmax_eq sx r (k - 1);         (* == seq_fmax (prefix (k-1)) *)
-        let aux (j : nat{j < k - 1}) : Lemma (~(acc2 sx r j == v)) =
-          (* each earlier value is not strictly above the running max bv;
-             but v is, so they differ. *)
-          seq_fmax_geq (arg_row_prefix sx r (k - 1)) j
-        in
-        Classical.forall_intro aux
-      end else ()
-    end
-
-(* Bridge to is_a_max: at k=cols, the selected idx points at the max
-   value of the full row.  Full functional bridge to seq_fmax via the
-   Max primitive's row_fmax_eq_seq_fmax. *)
-let row_argmax_at_full
-  (#rows : nat) (#cols : nat{cols > 0})
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  : Lemma (let (bi, bv) = row_argmax_partial sx r cols in
-           bi < cols /\
-           bv == seq_fmax (EM.ematrix_row sx r) /\
-           acc2 sx r bi == seq_fmax (EM.ematrix_row sx r))
-  = row_argmax_idx_inv sx r cols;
-    row_argmax_val_eq_fmax sx r cols;
-    HRM.row_fmax_eq_seq_fmax sx r
-
-(* Strong full bridge: the selected idx is the *first* row-max, i.e. it
-   points at [seq_fmax] and no strictly-earlier column attains it.  This
-   is exactly the PyTorch first-occurrence argmax tie-break. *)
-let row_argmax_first_at_full
-  (#rows : nat) (#cols : nat{cols > 0})
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  : Lemma (let (bi, bv) = row_argmax_partial sx r cols in
-           bi < cols /\
-           acc2 sx r bi == seq_fmax (EM.ematrix_row sx r) /\
-           (forall (j : nat). j < bi ==>
-              ~(acc2 sx r j == seq_fmax (EM.ematrix_row sx r))))
-  = row_argmax_at_full sx r;
-    row_argmax_first_inv sx r cols
 
 (* ── Per-thread predicates ─────────────────────────────────────────── *)
 

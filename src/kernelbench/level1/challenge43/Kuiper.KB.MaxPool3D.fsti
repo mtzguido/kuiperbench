@@ -12,9 +12,9 @@ module Kuiper.KB.MaxPool3D
  *   pass 3: per-row max over D axis (B*C*W_out*H_out rows of length D,
  *           after a second host-side permute)
  *
- * Composing the three passes gives the 3-D max because [fmaxf] is
- * associative and commutative.  Padding contributes -inf in each pass,
- * so the composition's padding semantics match PyTorch nn.MaxPool3d.
+ * Each pass has an exact implementation-order left-fold specification.
+ * The C++ bridge composes the passes and the KernelBench oracle checks the
+ * resulting 3-D operation; this interface assumes no [fmax] algebra.
  *
  * This .fsti exposes a single extracted entry [maxpool3d_axis_fw_rm_f32]
  * which is the verified per-axis pass; the C++ bridge orchestrates the

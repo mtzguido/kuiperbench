@@ -11,9 +11,9 @@ module Kuiper.KB.MinReduceDim
    primitive [Kuiper.Kernel.HReduce.Min.reduce_batched_min_f32]
    produces, per row r, the f32 min of that row (i.e., y[b, j]).
 
-   Unlike sum-reduction, IEEE-754 [fmin] on the modeled carrier is
-   bit-exactly associative+commutative, so the post is exact equality
-   (no [%~]).
+   The post is exact equality to the deterministic [seq_fmin] left fold.
+   The serial implementation uses that same order, so no [fmin]
+   associativity, commutativity, or infinity-neutral law is assumed.
 
    The output is a flat length-(B*M) Array1; the bridge reshapes it
    to (B, M) on the host for the harness comparison.

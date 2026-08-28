@@ -1,30 +1,10 @@
 module Kuiper.Kernel.WindowReduce1D
 
-(* ────────────────────────────────────────────────────────────────────────
- * WIP CONTRACT-ONLY .fsti — *not* on main.
- *
- * This file is the intended interface for the [WindowReduce1D] Pulse
- * primitive that backs KernelBench L1 #41-#46 (1-D / 2-D / 3-D max-pool
- * and avg-pool).  It is checked in on the [kb-windowreduce1d-wip] feature
- * branch as a handoff artifact for the next session; there is no .fst yet
- * and the kernel itself is *not* axiomatised on main.  See
- * [src/kernelbench/level1/POOLING_DESIGN.md] §2 and §5 for the design
- * rationale and resume instructions.
- *
- * Two monomorphic instantiations are intended on top of the polymorphic
- * core, mirroring the [maxpool1d_post] / [avgpool1d_post] postconditions
- * exposed by [Kuiper.Spec.Pool1D]:
- *
- *   - [windowreduce_max_f32] : reduces by [fmax] (exact equality post,
- *     using the [Kuiper.Math.Fmax] axioms or the [reducer_fmax_f32]
- *     instance from [Kuiper.Monoid.Reduce.F32]).
- *   - [windowreduce_plus_f32] : reduces by [+] (approximate [%~] post).
- *
- * The polymorphic core takes a law-free [reducer t] explicitly.  The
- * implementation and specification both use the same left-to-right fold, so
+(* The verified [WindowReduce1D] Pulse primitive backing KernelBench L1
+ * #41-#46.  The polymorphic core takes a law-free [reducer t] explicitly.
+ * Its implementation and specification use the same left-to-right fold, so
  * no associativity, commutativity, or neutrality assumptions are required.
  *
- * ────────────────────────────────────────────────────────────────────────
  * The core proof obligation is the K-fold *overlapping* permission
  * split: when stride S < kernel K, every input element [i] is read by
  * up to ⌈K/S⌉ output threads, so the input permission must be split
@@ -33,9 +13,7 @@ module Kuiper.Kernel.WindowReduce1D
  * [forevery_zip] plumbing per the design doc).
  *
  * For the trivial subcase S = K (no overlap, e.g. #45), the setup
- * collapses to the [RowScale]-style pattern.  Implementing the
- * trivial-subcase first is the recommended bring-up path — see
- * design doc §5 step 5. *)
+ * collapses to the [RowScale]-style pattern. *)
 
 #lang-pulse
 

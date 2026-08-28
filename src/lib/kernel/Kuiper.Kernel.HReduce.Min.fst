@@ -34,8 +34,7 @@ let row_fmin_partial_succ
 #pop-options
 
 (* ── Bridge: [row_fmin_partial sx r cols == seq_fmin (ematrix_row sx r)] ─
-   Proved by induction on [k = 0..cols] using [seq_fmin_append] on the
-   one-element extension and the [seq_fmin_singleton] axiom. *)
+   Both sides use the same left-fold order; no algebraic law is needed. *)
 
 let row_prefix
   (#rows #cols : nat)
@@ -77,9 +76,8 @@ let rec row_fmin_partial_eq_seq_fmin_aux
     end else begin
       row_fmin_partial_eq_seq_fmin_aux sx r (k - 1);
       row_prefix_succ sx r (k - 1);
-      seq_fmin_append (row_prefix sx r (k - 1))
-                      (Seq.create 1 (acc2 sx r (k - 1)));
-      seq_fmin_singleton (acc2 sx r (k - 1));
+      seq_fmin_snoc (row_prefix sx r (k - 1))
+                    (acc2 sx r (k - 1));
       row_fmin_partial_succ sx r (k - 1)
     end
 

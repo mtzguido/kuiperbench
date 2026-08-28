@@ -22,10 +22,9 @@ module Kuiper.Spec.Pool1D
 
    Two reductions are specified here:
 
-   - **Max-pool (#41)** is *exact*: floating-point [fmax] is
-     associative and commutative on non-NaN inputs, so the spec
-     pins the output to a deterministic [fmax]-fold over the
-     in-bounds elements of each window (no existential, no [%~]).
+   - **Max-pool (#41)** is *exact*: the spec pins the output to a
+     deterministic, increasing-offset [fmax]-fold over the in-bounds
+     elements of each window (no existential, no [%~]).
      Out-of-bounds (padded) positions are *skipped* — this matches
      PyTorch's effective semantics, which uses -inf padding so
      that padded positions never win the max.  We do not model
@@ -148,8 +147,8 @@ let max_window
    [sx] (length [l]) and the row starting at [off_out] in [sx']
    (length [lo == pool_out_len_1d l k s p d]), every output slot
    equals the [fmax]-fold over the in-bounds 1-D dilated window in
-   the input row.  Exact equality (no [%~]) because [fmax] is
-   associative + commutative on non-NaN floats. *)
+   the input row.  Exact equality records this specified fold order and
+   does not assume an algebraic law for [fmax]. *)
 let row_max_pooled_1d
   (#t:Type0) {| scalar t |} {| floating t |}
   (#bn_in #bn_out : nat)

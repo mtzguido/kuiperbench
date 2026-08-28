@@ -7,12 +7,10 @@ module Kuiper.Spec.Pool2D
    shape produced by a separable kernel implementation (two
    sequential calls to [Kuiper.Kernel.WindowReduce1D]), and is
    semantically equivalent to a single rectangle-shaped 2-D
-   reduction whenever the underlying reducer is
-   associative+commutative.  See the design notes in
+   reduction under suitable reducer laws.  See the design notes in
    [src/kernelbench/level1/POOLING_DESIGN.md] §2 for context.
 
-   This module is layered strictly on top of [Kuiper.Spec.Pool1D]
-   so the algebraic correctness of the 2-D spec is inherited:
+   This module is layered strictly on top of [Kuiper.Spec.Pool1D]:
 
    - [maxpool2d_post] / [maxpool2d_post_via_intermediate]: the
      2-D max-pool postcondition is "exists an intermediate buffer
@@ -46,10 +44,10 @@ module Kuiper.Spec.Pool2D
        proved by a `(K_h * K_w) ↔ K_h × K_w` index decomposition
        lemma (see [avg_window_sum_2d_via_1d_eq] below).
 
-     - For max-pool the equivalence reduces to associativity and
-       commutativity of [fmax] on non-NaN floats.  [Pool1D] does
-       not currently expose those algebraic axioms; bridging the
-       compositional and rectangle forms is therefore deferred
+     - For max-pool the equivalence can be justified for non-NaN
+       floats, but this repository intentionally assumes no global
+       [fmax] algebraic law.  Bridging the compositional and rectangle
+       forms is therefore deferred
        to the future [Kuiper.Spec.Pool2D.Rect] companion module
        and is not needed by either the kernel proof or the
        KernelBench challenges (#42 / #45) themselves, which are

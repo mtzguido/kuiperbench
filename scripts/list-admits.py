@@ -69,8 +69,16 @@ def list_file(path: str) -> None:
     # git ls-files still reports tracked files deleted in the working tree.
     # Skipping them keeps the scanner usable while an axiom-only module is
     # being removed.
-    if not Path(path).is_file():
+    source_path = Path(path)
+    if not source_path.is_file():
         return
+
+    if source_path.suffix == ".fsti":
+        implementation_path = source_path.with_suffix(".fst")
+        if not implementation_path.is_file():
+            print(
+                f"{path}:1:missing implementation file: {implementation_path}"
+            )
 
     with open(path, encoding="utf-8") as source_file:
         source = source_file.read()

@@ -8,16 +8,6 @@ open Kuiper
 open Kuiper.Seq.Common
 module SZ = Kuiper.SizeT
 
-(** Trusted extraction boundary for an offset-aware CUDA device-to-device copy.
-    Its implementation is the function with the corresponding extracted name
-    in [include/kbench.h].  Keeping [sized a] out of this foreign signature is
-    intentional: C++ infers the element type from the pointer arguments.
-
-    KaRaMeL retains placeholders for the erased [dst_sz], [src_sz], [f], [v],
-    and [gv] arguments at calls to this polymorphic trusted function.  Their
-    generated null-pointer values are expected and ignored by the C++ shim;
-    only the arrays, offsets, and count are runtime inputs.  The matching
-    [.fst] makes this trusted boundary explicit to [list-admits]. *)
 noextract
 fn gpu_memcpy_device_to_device'
   (#a : Type u#0)
@@ -44,3 +34,6 @@ fn gpu_memcpy_device_to_device'
       on gpu_loc (dst_garr |-> s') **
       pure (s' == seq_blit gv dst_off v src_off cnt /\
             Seq.length s' == reveal dst_sz)
+{
+  admit();
+}

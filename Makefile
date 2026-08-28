@@ -258,5 +258,5 @@ lint:
 	@! git grep -n '[[:blank:]]$$' -- 'src/*.fst' 'src/*.fsti' 'src/**/*.fst' 'src/**/*.fsti'
 
 list-admits:
-	@git ls-files -z -- 'src/*.fst' 'src/*.fsti' 'src/**/*.fst' 'src/**/*.fsti' | \
-		xargs -0 python3 scripts/list-admits.py
+	@find src -type f \( -name '*.fst' -o -name '*.fsti' \) -print0 | \
+		sort -z | xargs -0 python3 scripts/list-admits.py

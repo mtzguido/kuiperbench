@@ -11,13 +11,10 @@ module Kuiper.KB.AvgPool2D
  *   pass 1: per-row sum over W (B*C*H rows of length W); then scale /kW
  *   pass 2: per-row sum over H (B*C*W_out rows of length H); then scale /kH
  *
- * Composition: real-valued sum is associative+commutative so the
- * 2-D avg = sum/(kH*kW); applying /kW after pass 1 and /kH after
- * pass 2 yields /(kH*kW).  The verified primitive's post is the
- * exact-equality fold over [reducer_fadd_f32]; the reducer's
- * associativity/commutativity rests on the same f32 axioms as the
- * 1-D variant (#44), and approximation to the real sum follows the
- * existing %~ pattern.
+ * The verified primitive's post is the exact implementation-order fold over
+ * [reducer_fadd_f32].  The C++ bridge's composition and scaling are outside
+ * that contract; their refinement to the real-valued average is covered only
+ * by the KernelBench numerical oracle, not by f32 algebraic axioms.
  *
  * Same pattern as #44 AvgPool1D: a verified per-axis sum kernel +
  * an unverified scale post-pass.  The C++ bridge orchestrates the

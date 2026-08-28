@@ -10,14 +10,9 @@ module Kuiper.Spec.MinReduceDim
    factor (B, D, M) as a 2-D matrix of shape (B*M, D); row r = b*M + j
    carries the length-D slice x[b, :, j].
 
-   IEEE-754 [fmin] on non-NaN inputs is bit-exactly associative+commutative,
-   so this spec uses exact sequence equality.
-
-   Two valid implementation routes:
-     (a) direct clone of HReduce.Block with [(fmin, pos_inf)] —
-         ~700 LOC of Pulse work, parallels the max clone.
-     (b) compose: [min x = -max (-x)] — one extra Map kernel.
-   Path (b) is much cheaper and matches PyTorch bit-exactly on non-NaN. *)
+   [seq_fmin] is a deterministic left fold seeded by +infinity.  This
+   spec uses exact equality because the serial kernel performs that same
+   fold order; it assumes no global algebraic law for [fmin]. *)
 
 open Kuiper
 open Kuiper.Chest

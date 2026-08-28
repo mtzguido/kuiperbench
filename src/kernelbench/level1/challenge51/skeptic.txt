@@ -1,105 +1,38 @@
 Skeptic review — KernelBench L1 #51 (argmax over dim=1)
 ================================================================
 
-What is genuinely verified (no admits/assumes/magic in the new code)
---------------------------------------------------------------------
+Verified contract
+-----------------
 
-* Kuiper.Kernel.HReduce.Argmax  (new module, .fst only):
-  - One-thread-per-row argmax kernel reduce_batched_argmax_f32.  Same
-    skeleton as the verified Kuiper.Kernel.HReduce.Max primitive
-    shipped for #49: kpre/kpost/kf/setup/teardown/kdesc + entry
-    point, all verified.  Tracks a (idx, val) tuple of references
-    (bi_ref : sz, bv_ref : f32) per thread; updates them strictly on
-    F32.gt (PyTorch first-occurrence semantics).
-  - Pure spec row_argmax_partial defined recursively (opaque) with
-    unfolding lemmas row_argmax_partial_zero/_succ.
-  - row_argmax_val_eq_fmax bridges the value component of the
-    partial fold to row_fmax_partial (reusing
-    Kuiper.Kernel.HReduce.Max.row_fmax_partial_succ + fmax_comm).
-  - row_argmax_idx_inv proves by induction that the index component
-    is always in-bounds (bi <= max 0 (k-1)) AND the value at that
-    index in the matrix equals the partial-fold value.
-  - row_argmax_at_full assembles those two into the
-    "is-a-row-fmax" property at k = cols.
-  - row_argmax_first_inv proves by induction the first-occurrence
-    invariant: every column strictly before the selected index has a
-    value different from the running max (it relies on a local prefix
-    sequence + the seq_fmax_geq axiom and the strict-gt update).
-  - row_argmax_first_at_full assembles the full PyTorch tie-break:
-    bi < cols, x[r,bi] == seq_fmax (row), and for all j < bi,
-    x[r,j] =/= seq_fmax (row).
-  - argmax_i64 wrapper coerces the partial-fold index to I64.t given
-    the precondition cols < pow2 63.
+The kernel performs one deterministic left-to-right scan per row.  Its pure
+specification [row_argmax_partial] starts at index 0 with value -infinity and
+replaces the pair (index, value) exactly when [Float32.gt] returns true.  The
+challenge postcondition says that every output is the in-bounds index returned
+by that exact scan.
 
-* Kuiper.KB.ArgmaxReduceDim  (challenge wrapper, .fsti + .fst):
-  - bridge_post lemma promotes the per-row argmax post produced by
-    the kernel (HRA.seq_reduce_rows_argmax cols sx) to
-    argmaxreduce_post via Classical.forall_intro of the in-bounds +
-    value-match + first-occurrence facts proven by
-    row_argmax_first_at_full.
-  - Layout reuse: the (B, D, M) row-major buffer is re-viewed as a
-    rows=B*M, cols=D Array2 via l2_bcm_pages B M D.  Same as #49/#53.
+The Pulse loop, conversion to [i64], row layout for the (B,D,M) input, and the
+bridge from the kernel postcondition to the challenge postcondition are all
+checked.  The relevant modules contain no [admit ()], [magic ()], or
+[assume pure].
 
-What is *axiomatized* (introduced for this PR; sound under non-NaN
-IEEE-754 semantics)
----------------------------------------------------------------------
+Deliberate limitation
+---------------------
 
-* Kuiper.Math.Argmax  (new .fsti, no .fst — vals act as axioms):
-  - val gt_iff_fmax_strict (v w : f32) : Lemma
-        (F32.gt v w == true <==> (fmax v w == v /\ ~(v == w)))
-  - val not_gt_fmax_keeps  (v w : f32) : Lemma
-        (F32.gt v w == false ==> fmax v w == w)
-  - val gt_neg_inf_or_eq   (v   : f32) : Lemma
-        (F32.gt v neg_inf == true \/ v == neg_inf)
-  - val seq_fmax_geq       (s : Seq.seq f32) (i : nat) : Lemma
-        (i < Seq.length s ==> F32.gt (s @! i) (seq_fmax s) == false)
-  - Symmetric .lt/fmin/pos_inf versions for #52 (lt_iff_fmin_strict,
-    not_lt_fmin_keeps, lt_pos_inf_or_eq, seq_fmin_leq).
-  These connect F32's abstract gt/lt comparators to the
-  fmax/fmin reductions we already use for #49/#53.  They are sound
-  on the modeled f32 carrier whenever inputs are non-NaN, which is
-  the case for KernelBench's torch.rand inputs.  They are *new
-  axioms* — the alternative is to provide a concrete carrier model
-  and discharge them, which is significantly more work and out of
-  scope for this PR.
+Kuiper's abstract floating-point API does not currently expose enough laws to
+prove that [gt] selects a semantic maximum, particularly for NaNs.  The former
+proof asserted that connection through eight admitted fmax/fmin comparison
+lemmas.  Those lemmas have been removed.
 
-What's potentially weak / worth flagging
-----------------------------------------
+Consequently, this contract does not claim that the returned index is the
+first mathematical maximum.  It claims the exact comparison scan implemented
+by the kernel.  KernelBench's non-NaN test inputs make the operational scan
+agree with the PyTorch reference in testing, but that refinement remains
+outside the formal contract.
 
-* Tie-break: PROVED.  The kernel uses a strict-gt update, which gives
-  the PyTorch "first occurrence" behavior (smallest k with
-  x[k] == max), and we now formally verify it.  The post is:
+Other notes
+-----------
 
-      argmaxreduce_post: 0 <= y[r] < cols /\
-                         x[r, y[r]] == seq_fmax (x[r, *]) /\
-                         (forall j < y[r].
-                            x[r, j] =/= seq_fmax (x[r, *]))
-
-  i.e. y[r] is the FIRST index attaining the row max — exactly the
-  is_seq_argmax first-max predicate of Kuiper.Spec.ArgmaxReduceDim.
-  The extra induction step lives in row_argmax_first_inv /
-  row_argmax_first_at_full (no admit/assume; z3rlimit <= 40 in the
-  wrapper, default in the primitive).
-
-  Caveat: like the value-match facts, this is proved relative to the
-  Kuiper.Math.Argmax axioms (seq_fmax_geq etc.), which are sound on
-  non-NaN IEEE-754 inputs (KernelBench feeds torch.rand, no NaNs).
-
-* Performance: this clones the *one-thread-per-row* primitive — same
-  trade-off as #49/#53.  Memory-bandwidth bound; not optimal for
-  typical KernelBench shapes (B*M=4096, D=256).
-
-* Cols bound: argmaxreduce_dim_fw_f32 requires SZ.v d < pow2 63 to
-  coerce the (nat) partial-fold index into an i64.  Since our szp is
-  ≤ pow2 64, this strictly restricts the API.  In practice the bridge
-  asserts D <= UINT32_MAX which is far smaller than pow2 63, so this
-  is a tight precondition relative to the actual hardware envelope.
-
-* Output dtype: we produce torch.int64 (matching torch.argmax's
-  default).  The bridge allocates Y with dtype=torch.kInt64 and
-  passes &Y[0] as int64_t* — Kuiper's i64 = FStar.Int64.t = int64_t
-  in the extracted ABI.
-
-* run.sh exercises KernelBench's own eval_kernel_against_ref via
-  src/kernelbench/run_test.py.  Reports PASS for the harness's
-  default trial schedule.
+- The precondition [cols < 2^63] justifies conversion of the natural index to
+  [i64]; the CUDA bridge's dimensions are much smaller.
+- The implementation is one thread per row and prioritizes proof simplicity
+  over a block-level parallel reduction.
