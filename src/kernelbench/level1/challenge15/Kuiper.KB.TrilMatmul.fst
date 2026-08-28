@@ -2,35 +2,12 @@ module Kuiper.KB.TrilMatmul
 
 #lang-pulse
 open Kuiper
-open Kuiper.Approximates
 open Kuiper.Tensor
-open Kuiper.Tensor.Layout.Alg { l2_row_major, c_l2_row_major }
-module EM = Kuiper.EMatrix
+open Kuiper.Tensor.Layout.Alg { l2_row_major }
 module SZ = Kuiper.SizeT
 module MS = Kuiper.Spec.GEMM
-module Tril = Kuiper.Kernel.Tril
-module P = Kuiper.Kernel.GEMM.Naive3
+module TM = Kuiper.Kernel.TriangularMatmul
 
-(* Per-(i,j) discharge of [tril_matmul_post].  After the in-place mask the
-   output matrix is [s_tril eC'], so entry [(i, j)] is [acc2 eC' i j] on/below
-   the diagonal and exactly [zero] above it.  The GEMM's elementwise
-   approximation [eC' %~ rAB] (i.e. [acc2 eC' i j %~ acc2 rAB i j]) gives the
-   on/below case; [zero %~ 0.0R] gives the above case.  No flat indices. *)
-#push-options "--z3rlimit 50"
-let tril_row_aux
-  (n : nat)
-  (eC' : chest2 f32 n n)
-  (rAB : chest2 real n n)
-  (h_approx : squash (eC' %~ rAB))
-  (i j : natlt n)
-  : Lemma
-      (ensures
-        acc2 (Tril.s_tril eC') i j %~
-          (if j <= i then acc2 rAB i j else 0.0R))
-  = assert ((zero #f32) %~ 0.0R)
-#pop-options
-
-#push-options "--z3rlimit 100"
 inline_for_extraction noextract
 fn tril_matmul_f32_impl
   (n : szp {
@@ -39,56 +16,27 @@ fn tril_matmul_f32_impl
   (gA : array2 f32 (l2_row_major n n) { is_global gA })
   (gB : array2 f32 (l2_row_major n n) { is_global gB })
   (y  : array2 f32 (l2_row_major n n) { is_global y  })
-  (#sA : chest2 f32 n n)
-  (#sB : chest2 f32 n n)
-  (#sy : chest2 f32 n n)
-  (#rA : chest2 real n n)
-  (#rB : chest2 real n n)
+  (#sA #sB #sy : chest2 f32 n n)
+  (#rA #rB : chest2 real n n)
   preserves
     cpu **
     on gpu_loc (gA |-> sA) **
     on gpu_loc (gB |-> sB)
   requires
-    on gpu_loc (y  |-> sy) **
-    pure (reveal sA %~ reveal rA /\ reveal sB %~ reveal rB)
+    on gpu_loc (y |-> sy) **
+    pure (
+      sA %~ rA /\
+      sB %~ rB /\
+      TM.is_lower_triangular rA /\
+      TM.is_lower_triangular rB)
   ensures
-    (exists* (sy' : chest2 f32 n n).
-       on gpu_loc (y |-> sy') **
-       pure (tril_matmul_post n (reveal rA) (reveal rB) sy'))
+    exists* (sy' : chest2 f32 n n).
+      on gpu_loc (y |-> sy') **
+      pure (sy' %~ MS.matmul rA rB)
 {
-  (* Expose Seq.length / SZ.fits facts for the concrete layouts. *)
-  map_loc gpu_loc (fun () -> tensor_pts_to_ref gA);
-  map_loc gpu_loc (fun () -> tensor_pts_to_ref gB);
-
-  (* Real witness for the output buffer's initial content (the operand real
-     witnesses [rA]/[rB] come from the caller via [sA %~ rA /\ sB %~ rB]). *)
-  let rC : chest2 real n n =
-    hide (EM.to_real_matrix (reveal sy));
-
-  assert pure (MS.comb2 #f32 `approx2` MS.comb2 #real);
-
-  (* Launch 1: Kahan GEMM straight into the output buffer [y].  comb2 ignores
-     the old [y] value, so the result is the plain real matmul
-     (matmul_is_gemm SMTPat). *)
-  P.mmcomb_gpu_approx (MS.comb2 #f32) (MS.comb2 #real)
-    #n #n #n
-    (gA) (gB) (y)
-    (reveal rA) (reveal rB) (reveal rC);
-  with eC'. assert on gpu_loc (y |-> eC');
-  assert pure (reveal eC' %~ MS.matmul (reveal rA) (reveal rB));
-
-  (* Launch 2: in-place lower-triangular mask.  [y] now holds [s_tril eC']. *)
-  Tril.tril f32 n n y;
-  with sy'. assert on gpu_loc (y |-> sy');
-  assert pure (reveal sy' == Tril.s_tril (reveal eC'));
-
-  (* Discharge per-(i,j) [tril_matmul_post]. *)
-  let rAB : chest2 real n n =
-    hide (MS.matmul (reveal rA) (reveal rB));
-  Classical.forall_intro_2
-    (tril_row_aux n (reveal eC') (reveal rAB) ());
+  TM.lower_triangular_matmul n gA gB y
+    #sA #sB #sy #rA #rB;
   ()
 }
-#pop-options
 
 let tril_matmul_f32 = tril_matmul_f32_impl

@@ -7,15 +7,17 @@ Verified component
 ------------------
 EVERYTHING on the GPU is verified.  The single extracted entry
 Kuiper_KB_TriuMatmul_triu_matmul_f32(uint32_t n, float* A, float* B, float* Y)
-composes two launches in place on Y:
+performs one launch in place on Y.
 
-  1. GEMM: Y := A @ B via Kuiper.Kernel.GEMM.Naive3.mmcomb_gpu_approx.
-  2. triu: Y := s_triu Y via the generic verified in-place kernel
-     Kuiper.Kernel.Triu (src/lib/kernel/Kuiper.Kernel.Triu.fst).
+For a retained cell (i,j), i <= j, the kernel accumulates only k=i..j.
+Terms k<i vanish because A is upper triangular; terms k>j vanish because B
+is upper triangular.  For i>j it writes zero without performing a product.
+The proof establishes that upper-triangular matrices are closed under matmul
+and that the shortened reduction equals the ordinary dense MS.matmul.
 
-The exported postcondition states, for every output (i,j), that the result
-approximates the real matmul entry when i <= j and is exactly zero when i > j.
-The complete KernelBench operation is therefore covered by one Kuiper theorem.
+The exported postcondition directly states Y %~ MS.matmul A B.  The closure
+theorem proves that this dense result is already upper triangular, so it is
+also the KernelBench triu(matmul(A,B)) reference result.
 
 No assume / admit / magic / --admit_smt_queries is used.
 
@@ -25,8 +27,15 @@ NONE of the math.  The bridge performs dtype/device/shape and ABI-range checks,
 makes contiguous inputs, allocates the output, calls the verified entry, and
 reshapes the flat allocation to (N,N).  It contains no torch::triu call.
 
+The theorem is conditional on A and B being upper triangular, matching
+KernelBench's input generator.  The bridge does not scan arbitrary caller
+inputs to revalidate that semantic precondition; doing so would add an O(N^2)
+pass outside the kernel.  Calls with non-triangular inputs are outside the
+verified entry's contract.
+
 Performance note
 ----------------
-Like challenge 15, this deliberately closes the proof gap by composing a full
-dense GEMM with a verified mask.  It does not yet exploit triangular inputs to
-avoid computing entries that will be zeroed.
+The kernel performs N(N+1)(N+2)/6 scalar products instead of N^3 and has no
+separate masking launch.  Its specification explicitly requires the real
+witnesses for A and B to be upper triangular; concrete skipped entries need
+only approximate those real zeroes.

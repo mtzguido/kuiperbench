@@ -31,5 +31,6 @@ torch::Tensor kuiper_triu_matmul_cuda(torch::Tensor A, torch::Tensor B) {
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("kuiper_triu_matmul_cuda", &kuiper_triu_matmul_cuda, "Kuiper GEMM then triu");
+    m.def("kuiper_triu_matmul_cuda", &kuiper_triu_matmul_cuda,
+          "Kuiper verified upper-triangular matmul");
 }
