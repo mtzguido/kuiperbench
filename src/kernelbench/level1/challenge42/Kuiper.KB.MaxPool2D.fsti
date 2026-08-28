@@ -10,10 +10,9 @@ module Kuiper.KB.MaxPool2D
  *   pass 2: per-row max over H axis (B*C*W_out rows of length H,
  *           after a host-side (B,C,H,W_out) -> (B,C,W_out,H) permute)
  *
- * Composing the two passes gives the 2-D max because [fmaxf] is
- * associative and commutative — see [Kuiper.Math.Fmax.fmax_assoc /
- * fmax_comm] axioms.  Padding contributes -inf in each pass, so the
- * composition's padding semantics match PyTorch nn.MaxPool2d.
+ * Each pass has an exact implementation-order left-fold specification.
+ * The C++ bridge composes the passes and the KernelBench oracle checks the
+ * resulting 2-D operation; this interface assumes no [fmax] algebra.
  *
  * This .fsti exposes a single extracted entry [maxpool2d_axis_fw_rm_f32]
  * which is the verified per-axis pass; the C++ bridge orchestrates the

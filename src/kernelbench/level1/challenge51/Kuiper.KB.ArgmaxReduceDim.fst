@@ -2,20 +2,15 @@ module Kuiper.KB.ArgmaxReduceDim
 
 #lang-pulse
 open Kuiper
-open Kuiper.Math.Fmax
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg
 open Kuiper.Tensor.Layout.BCMPages
-module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 module HRA = Kuiper.Kernel.HReduce.Argmax
 module Seq = FStar.Seq
 module I64 = FStar.Int64
 
-(* Connect kernel post (per-row argmax_partial → i64) to the post: the
-   first-occurrence bridge from row_argmax_first_at_full guarantees that
-   the i64 index produced is in-bounds, points at the row-fmax, and is
-   the first (smallest) column attaining it. *)
+(* Connect the kernel's per-row result to the exact operational scan. *)
 let bridge_post
   (#rows : nat) (cols : szp { SZ.v cols > 0 /\ SZ.v cols < pow2 63 })
   (sx : chest2 f32 rows cols)
@@ -27,16 +22,13 @@ let bridge_post
     let aux (r : nat{r < rows}) : Lemma
         (let bi = I64.v (Seq.index (chest1_to_seq sy) r) in
          0 <= bi /\ bi < SZ.v cols /\
-         acc2 sx r bi == seq_fmax (EM.ematrix_row sx r) /\
-         (forall (j : nat). j < bi ==>
-            ~(acc2 sx r j == seq_fmax (EM.ematrix_row sx r)))) =
+         bi == fst (HRA.row_argmax_partial sx r cols)) =
       let bi_nat = fst (HRA.row_argmax_partial sx r cols) in
       HRA.row_argmax_idx_inv sx r cols;
       assert (Seq.index (chest1_to_seq sy) r == acc1 sy r);
       assert (acc1 sy r == Seq.index sys r);
       assert (Seq.index sys r == HRA.argmax_i64 cols sx r);
-      assert (I64.v (Seq.index (chest1_to_seq sy) r) == bi_nat);
-      HRA.row_argmax_first_at_full sx r
+      assert (I64.v (Seq.index (chest1_to_seq sy) r) == bi_nat)
     in
     Classical.forall_intro aux
 

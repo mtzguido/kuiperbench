@@ -4,24 +4,20 @@ module Kuiper.Kernel.HReduce.Argmin
 
 open Kuiper
 open Kuiper.Math.Fmin
-open Kuiper.Math.Argmax
 open Kuiper.Tensor
 open Kuiper.Bijection { ( =~ ) }
 open Kuiper.Float32
 module SZ = Kuiper.SizeT
-module EM = Kuiper.EMatrix
 module Seq = FStar.Seq
 module U32 = FStar.UInt32
 module I64 = FStar.Int64
 module Cast = FStar.Int.Cast
-module HRMin = Kuiper.Kernel.HReduce.Min
 
 (* ── Pure spec ─────────────────────────────────────────────────────── *)
 
 (* Per-row partial argmin over an [(rows, cols)] row-major chest2.
-   Returns the (idx, val) pair after scanning columns [0..k).  The
-   strict-[lt] update mirrors PyTorch's "first occurrence"
-   convention; we verify the weaker "is_a_max" property. *)
+   Returns the exact (idx, val) state after scanning columns [0..k).
+   The strict-[lt] update is the operation performed by the kernel. *)
 
 [@@"opaque_to_smt"]
 let rec row_argmin_partial
@@ -60,60 +56,19 @@ let row_argmin_partial_succ
   = reveal_opaque (`%row_argmin_partial) (row_argmin_partial sx r (k + 1))
 #pop-options
 
-(* The val component of [row_argmin_partial] equals [row_fmin_partial]
-   from the verified Max primitive. *)
-let rec row_argmin_val_eq_fmin
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : Lemma (ensures snd (row_argmin_partial sx r k) ==
-                   HRMin.row_fmin_partial sx r k)
-          (decreases k)
-  = if k = 0 then ()
-    else begin
-      row_argmin_val_eq_fmin sx r (k - 1);
-      HRMin.row_fmin_partial_succ sx r (k - 1);
-      let (bi, bv) = row_argmin_partial sx r (k - 1) in
-      let v = acc2 sx r (k - 1) in
-      let _ = fmin_comm in
-      assert (bv == HRMin.row_fmin_partial sx r (k - 1));
-      assert (HRMin.row_fmin_partial sx r k == fmin bv v);
-      assert (fmin bv v == fmin v bv);
-      if lt v bv then begin
-        lt_iff_fmin_strict v bv;
-        assert (fmin v bv == v);
-        assert (snd (row_argmin_partial sx r k) == v)
-      end else begin
-        not_lt_fmin_keeps v bv;
-        assert (fmin v bv == bv);
-        assert (snd (row_argmin_partial sx r k) == bv)
-      end
-    end
-
-(* The selected idx is in range and points to its value. *)
+(* The selected index is in the scanned prefix.  We deliberately do
+   not identify the accumulator with [fmin]: Kuiper's abstract [lt]
+   API currently exposes no law connecting the comparison to [fmin],
+   especially in the presence of NaNs. *)
 let rec row_argmin_idx_inv
   (#rows #cols : nat)
   (sx : chest2 f32 rows cols)
   (r : natlt rows)
   (k : nat{k <= cols})
-  : Lemma (ensures (let (bi, bv) = row_argmin_partial sx r k in
-                    bi <= (if k = 0 then 0 else k - 1) /\
-                    (k > 0 ==> acc2 sx r bi == bv)))
+  : Lemma (ensures fst (row_argmin_partial sx r k) <=
+                       (if k = 0 then 0 else k - 1))
           (decreases k)
   = if k = 0 then ()
-    else if k = 1 then begin
-      row_argmin_partial_succ sx r 0;
-      assert (row_argmin_partial sx r 0 == (0, pos_inf));
-      let v0 = acc2 sx r 0 in
-      lt_pos_inf_or_eq v0;
-      if lt v0 pos_inf then begin
-        assert (row_argmin_partial sx r 1 == (0, v0))
-      end else begin
-        assert (row_argmin_partial sx r 1 == (0, pos_inf));
-        assert (v0 == pos_inf)
-      end
-    end
     else begin
       row_argmin_idx_inv sx r (k - 1);
       row_argmin_partial_succ sx r (k - 1);
@@ -122,105 +77,6 @@ let rec row_argmin_idx_inv
       if lt v bv_pre then ()
       else ()
     end
-
-(* Local prefix machinery (mirrors the un-exported helpers in the Min
-   primitive) used to lift the [seq_fmin_leq] axiom to running-min
-   prefixes. *)
-let arg_row_prefix
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : GTot (Seq.lseq f32 k)
-  = Seq.init_ghost k (fun j -> acc2 sx r j)
-
-let rec arg_row_fmin_eq
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : Lemma (ensures HRMin.row_fmin_partial sx r k == seq_fmin (arg_row_prefix sx r k))
-          (decreases k)
-  = if k = 0 then begin
-      HRMin.row_fmin_partial_zero sx r;
-      assert (Seq.equal (arg_row_prefix sx r 0) Seq.empty);
-      seq_fmin_empty ()
-    end else begin
-      arg_row_fmin_eq sx r (k - 1);
-      assert (Seq.equal (arg_row_prefix sx r k)
-                (Seq.append (arg_row_prefix sx r (k - 1))
-                            (Seq.create 1 (acc2 sx r (k - 1)))));
-      seq_fmin_append (arg_row_prefix sx r (k - 1))
-                      (Seq.create 1 (acc2 sx r (k - 1)));
-      seq_fmin_singleton (acc2 sx r (k - 1));
-      HRMin.row_fmin_partial_succ sx r (k - 1)
-    end
-
-(* First-occurrence invariant: every column strictly *before* the
-   selected index has a value different from the running minimum.
-   This is what the strict-[lt] update buys us — it pins the PyTorch
-   "first occurrence" tie-break.  Proved by induction on [k]: in the
-   update branch (new value [v] strictly smaller than the running min
-   [bv]), every earlier column is [>= bv > v] so cannot equal [v]; in
-   the keep branch the property is inherited unchanged. *)
-let rec row_argmin_first_inv
-  (#rows #cols : nat)
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  (k : nat{k <= cols})
-  : Lemma (ensures (let (bi, bv) = row_argmin_partial sx r k in
-                    bi <= (if k = 0 then 0 else k - 1) /\
-                    (forall (j : nat). j < bi ==> ~(acc2 sx r j == bv))))
-          (decreases k)
-  = if k = 0 then ()
-    else begin
-      row_argmin_first_inv sx r (k - 1);
-      row_argmin_idx_inv sx r (k - 1);
-      row_argmin_partial_succ sx r (k - 1);
-      let (bi, bv) = row_argmin_partial sx r (k - 1) in
-      let v = acc2 sx r (k - 1) in
-      if lt v bv then begin
-        (* new partial = (k-1, v); show no earlier column equals v *)
-        row_argmin_val_eq_fmin sx r (k - 1);  (* bv == row_fmin_partial (k-1) *)
-        arg_row_fmin_eq sx r (k - 1);         (* == seq_fmin (prefix (k-1)) *)
-        let aux (j : nat{j < k - 1}) : Lemma (~(acc2 sx r j == v)) =
-          (* each earlier value is not strictly below the running min bv;
-             but v is, so they differ. *)
-          seq_fmin_leq (arg_row_prefix sx r (k - 1)) j
-        in
-        Classical.forall_intro aux
-      end else ()
-    end
-
-(* Bridge to is_a_max: at k=cols, the selected idx points at the max
-   value of the full row.  Full functional bridge to seq_fmin via the
-   Max primitive's row_fmin_eq_seq_fmin. *)
-let row_argmin_at_full
-  (#rows : nat) (#cols : nat{cols > 0})
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  : Lemma (let (bi, bv) = row_argmin_partial sx r cols in
-           bi < cols /\
-           bv == seq_fmin (EM.ematrix_row sx r) /\
-           acc2 sx r bi == seq_fmin (EM.ematrix_row sx r))
-  = row_argmin_idx_inv sx r cols;
-    row_argmin_val_eq_fmin sx r cols;
-    HRMin.row_fmin_eq_seq_fmin sx r
-
-(* Strong full bridge: the selected idx is the *first* row-min, i.e. it
-   points at [seq_fmin] and no strictly-earlier column attains it.  This
-   is exactly the PyTorch first-occurrence argmin tie-break. *)
-let row_argmin_first_at_full
-  (#rows : nat) (#cols : nat{cols > 0})
-  (sx : chest2 f32 rows cols)
-  (r : natlt rows)
-  : Lemma (let (bi, bv) = row_argmin_partial sx r cols in
-           bi < cols /\
-           acc2 sx r bi == seq_fmin (EM.ematrix_row sx r) /\
-           (forall (j : nat). j < bi ==>
-              ~(acc2 sx r j == seq_fmin (EM.ematrix_row sx r))))
-  = row_argmin_at_full sx r;
-    row_argmin_first_inv sx r cols
 
 (* ── Per-thread predicates ─────────────────────────────────────────── *)
 

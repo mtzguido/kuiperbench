@@ -10,10 +10,9 @@ module EM = Kuiper.EMatrix
 module Seq = FStar.Seq
 
 (* ── Spec functions for reduce_batched_min ─────────────────────────────────
-   Per-row partial fmin fold over an [(rows, cols)] row-major
-   chest2.  IEEE-754 [fmin] on [f32] is bit-exactly associative+
-   commutative on this carrier (axiomatized in [Kuiper.Math.Fmin]),
-   so the spec is exact equality (no [%~]).
+   Per-row partial fmin fold over an [(rows, cols)] row-major chest2.  The
+   exact spec records the serial kernel's left-to-right operation order and
+   relies on no algebraic laws.
 
    Mirrors [Kuiper.Kernel.HReduce.row_reduce_partial] with [add]
    replaced by [fmin] and seed [zero] by [pos_inf]. *)

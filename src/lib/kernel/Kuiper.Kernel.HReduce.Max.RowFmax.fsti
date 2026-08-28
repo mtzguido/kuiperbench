@@ -14,10 +14,9 @@ module Seq = FStar.Seq
    pure ghost folds with no runtime content and are re-introduced here so
    downstream modules (argmax-value bridge, etc.) keep working.
 
-   Per-row partial fmax fold over an [(rows, cols)] row-major chest2.
-   IEEE-754 [fmax] on [f32] is bit-exactly associative+commutative on this
-   carrier (axiomatized in [Kuiper.Math.Fmax]), so the spec is exact
-   equality (no [%~]). *)
+   Per-row partial fmax fold over an [(rows, cols)] row-major chest2.  The
+   exact spec records the serial kernel's left-to-right operation order and
+   relies on no algebraic laws. *)
 
 [@@"opaque_to_smt"]
 let rec row_fmax_partial

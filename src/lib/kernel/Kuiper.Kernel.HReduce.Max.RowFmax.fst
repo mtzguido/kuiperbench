@@ -31,8 +31,7 @@ let row_fmax_partial_succ
 #pop-options
 
 (* ── Bridge: [row_fmax_partial sx r cols == seq_fmax (ematrix_row sx r)] ─
-   Proved by induction on [k = 0..cols] using [seq_fmax_append] on the
-   one-element extension and the [seq_fmax_singleton] axiom. *)
+   Both sides use the same left-fold order; no algebraic law is needed. *)
 
 let row_prefix
   (#rows #cols : nat)
@@ -74,9 +73,8 @@ let rec row_fmax_partial_eq_seq_fmax_aux
     end else begin
       row_fmax_partial_eq_seq_fmax_aux sx r (k - 1);
       row_prefix_succ sx r (k - 1);
-      seq_fmax_append (row_prefix sx r (k - 1))
-                      (Seq.create 1 (acc2 sx r (k - 1)));
-      seq_fmax_singleton (acc2 sx r (k - 1));
+      seq_fmax_snoc (row_prefix sx r (k - 1))
+                    (acc2 sx r (k - 1));
       row_fmax_partial_succ sx r (k - 1)
     end
 

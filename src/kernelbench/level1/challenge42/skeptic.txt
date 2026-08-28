@@ -27,15 +27,14 @@ reducer_fmax_f32, m.rid = -INFINITY and m.rop = fmaxf, so:
     out[r, j] = fmaxf over di in [0, k) of
                   (in_bounds ? input[r, j*s + di*d - p] : -INFINITY)
 
-This matches PyTorch nn.MaxPool1d, modulo the order-of-reduction
-freedom that fmax has anyway (see Math.Fmax.fmax_assoc /
-fmax_comm axioms).  Padding contributes -inf (PyTorch's documented
-max-pool behaviour).
+The verified fact is this exact increasing-tap fold, with padding
+represented by -inf.  Relating it to PyTorch's semantic maximum is an
+external refinement argument; no fmax algebraic axiom is assumed.
 
 Spec faithfulness (2-D composition)
 -----------------------------------
-2-D max pool is the composition of two 1-D max pools because fmax
-is associative and commutative:
+For non-NaN values, 2-D max pool can be computed as two 1-D maximum
+passes:
 
   max{x[h+dh, w+dw] : 0<=dh<k, 0<=dw<k}
   = max_{0<=dh<k} (max_{0<=dw<k} x[h+dh, w+dw])
@@ -54,16 +53,10 @@ composition's padding semantics also match PyTorch nn.MaxPool2d
 This composition equality is NOT mechanically proved in F* — the
 verified guarantee is per-axis.  See "Verification gaps" below.
 
-Inherited debt
---------------
-[Kuiper.Kernel.WindowReduce1D] carries three pre-existing named
-admit-stubs in setup/teardown (setup_fold_kpre_step,
-teardown_unfold_kpost_step, rewrite_macc_windowreduce_result) plus
-the two kdesc-level [magic ()] (kpre_sendable / kpost_sendable)
-shared by every plain-kernel_desc kernel in tree.  Same legacy
-class as RowScale, HReduce, Map.
-
-MaxPool2D itself adds zero new [admit ()] / [magic ()] / [assume pure].
+Trust accounting
+----------------
+[Kuiper.Kernel.WindowReduce1D] and this challenge wrapper contain no
+[admit ()], [magic ()], or [assume pure].
 
 Verification gaps (unverified glue)
 -----------------------------------
@@ -76,10 +69,8 @@ The following are NOT verified by Kuiper:
    that every Kuiper bridge uses.  If PyTorch's permute is
    buggy, every Kuiper KB solution is at risk.
 
-2. **2-D-as-composition argument**: that "2-D max-pool = max
-   over W then max over H" is a pure mathematical fact about
-   commutative+associative operations on finite multisets,
-   appealed to in this skeptic but not formalised in
+2. **2-D-as-composition argument**: that the two exact per-axis folds
+   refine PyTorch's 2-D max-pool is appealed to here but not formalised in
    Kuiper.Spec.Pool2D (the spec is sketched in tree but the
    rectangle-equivalence lemma is stubbed — see
    POOLING_DESIGN.md §3 row "rectangle equivalence deferred").
