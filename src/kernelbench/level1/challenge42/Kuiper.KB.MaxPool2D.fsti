@@ -26,6 +26,7 @@ module Kuiper.KB.MaxPool2D
 
 open Kuiper
 open Kuiper.Tensor
+open Kuiper.Tensor.Layout { from_seq, to_seq }
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
 open Kuiper.Monoid.Reduce.F32 { reducer_fmax_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce_result }
@@ -44,6 +45,22 @@ val pool_out_len_1d_sz
                 SZ.fits (SZ.v l + 2 * SZ.v p))
       (ensures fun r ->
          SZ.v r == pool_out_len_1d l k s p d)
+
+(* The exact ghost value presented to the height pass after the width-pass
+   result is reinterpreted through the BCM-pages layout.  The recast moves no
+   data: [to_seq] exposes the width-pass buffer in physical order and
+   [from_seq] views those same elements as (bc * w_out, h). *)
+unfold
+let maxpool2d_mid_view
+  (bc h w : nat)
+  (kw sw : pos) (pw : nat) (dw : pos)
+  (w_out : pos)
+  (sx : chest2 f32 (bc * h) w)
+  : chest2 f32 (bc * w_out) h
+  = from_seq (l2_bcm_pages bc w_out h)
+      (to_seq (l2_row_major (bc * h) w_out)
+        (windowreduce_result reducer_fmax_f32 sx
+          kw sw pw dw w_out))
 
 (* Verification-facing wrapper type (layout-polymorphic, f32 carrier). *)
 inline_for_extraction noextract
@@ -143,8 +160,9 @@ ensures
 
    Input is a row-major (B*C*H, W) view ([bc = B*C], inner = W).  The
    returned (W_out, H_out, buffer) triple's buffer is physically the
-   row-major (B*C, H_out, W_out) result and carries the pass-2
-   [windowreduce_result] post over some (B*C*W_out, H) matrix [sx2]. *)
+   row-major (B*C, H_out, W_out) result.  Its post composes both passes:
+   [maxpool2d_mid_view] is exactly the width-pass result viewed as
+   (B*C*W_out, H), and the returned buffer is its height-pass result. *)
 fn maxpool2d_full_alloc_f32
   (kh kw sh sw ph pw dh dw bc h w : szp)
 (#_ : squash (SZ.fits (SZ.v bc * SZ.v h)))
@@ -172,7 +190,7 @@ returns r : (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw
                          /\ SZ.v ho > 0 }
                & array2 f32 (l2_bcm_pages bc wo ho)))
 ensures
- (exists* (sx2 : chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
-    on gpu_loc ((dsnd (dsnd r)) |->
-      windowreduce_result reducer_fmax_f32 sx2
-        kh sh ph dh (dfst (dsnd r))))
+ on gpu_loc ((dsnd (dsnd r)) |->
+   windowreduce_result reducer_fmax_f32
+     (maxpool2d_mid_view bc h w kw sw pw dw (dfst r) sx)
+     kh sh ph dh (dfst (dsnd r)))
