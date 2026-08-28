@@ -5,8 +5,8 @@ module Kuiper.KB.CumProd
        y = torch.cumprod(x, dim=1)                   # shape (B, D)
 
    Same row-per-block sequential-scan kernel as CumSum, just specialised
-   to the [cmonoid_fmul_f32] (multiplication / one) commutative monoid
-   instead of [cmonoid_fadd_f32] (addition / zero).
+   to the law-free [reducer_fmul_f32] (multiplication / one) reducer
+   instead of [reducer_fadd_f32] (addition / zero).
 
    Postcondition lifts the bit-exact f32 product fold to an
    [%~]-approximation of the real-arithmetic ideal cumulative product

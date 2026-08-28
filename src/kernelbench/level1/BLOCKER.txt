@@ -107,7 +107,7 @@ The teardown is symmetric: `gather_n` on the input side,
 This insight does NOT resolve the rest of the engagement — the
 per-thread loop's inductive invariant matching
 `window_fmax_aux` / `avg_window_sum_r`, the bridge from the
-`cmonoid`-fold post to the Spec.Pool1D row-predicates, and the
+`reducer`-fold post to the Spec.Pool1D row-predicates, and the
 two-axis (#42/#45) and three-axis (#43/#46) compositions — but
 it eliminates the single hardest setup-proof obstacle the
 design doc called out, and brings the primitive's LOC budget
@@ -137,7 +137,7 @@ Why not:
      (Seq.init di (...))` (for avg).  These are ~150 LOC of
      tight Pulse `with_invariant`-style proofs each.
 
-  b. A bridge proof from the polymorphic `cmonoid`-fold
+  b. A bridge proof from the polymorphic `reducer`-fold
      postcondition of the primitive to the concrete
      `row_max_pooled_1d` / `row_avg_pooled_1d` predicates from
      `Kuiper.Spec.Pool1D`.  For max-pool this requires
@@ -217,7 +217,7 @@ rule continues to hold): 4–6 working days of dedicated focus.
     contract-only interface (already on main).
   - src/lib/spec/Kuiper.Spec.Pool1D.{fst,fsti} — postcondition.
   - src/lib/kuiper/Kuiper.Monoid.Reduce.{fst,fsti} +
-    Kuiper.Monoid.Reduce.F32.fsti — cmonoid abstraction.
+    Kuiper.Monoid.Reduce.F32.fsti — reducer abstraction.
   - src/lib/kernel/Kuiper.Kernel.Map.fst — `kmap2` is the
     template the no-overlap WindowReduce1D should be modeled
     after (per §3 above).

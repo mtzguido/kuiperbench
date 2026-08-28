@@ -34,7 +34,7 @@ module Seq = FStar.Seq
 (* The result chest2: cell [(r, j)] is [scan_inclusive_at m row_r j]. *)
 let scan2d_inclusive_result
   (#t : Type0)
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows #cols : nat)
   (sx : chest2 t rows cols)
   : chest2 t rows cols
@@ -44,7 +44,7 @@ let scan2d_inclusive_result
 unfold inline_for_extraction
 type scan1d_inclusive_rowblock_ty =
   fn (#et : Type0) {| scalar et |}
-     (m : cmonoid et)
+     (m : reducer et)
      (rows : szp { rows <= max_blocks })
      (cols : szp)
      (#lin  : layout2 rows cols) {| ctlayout lin  |}

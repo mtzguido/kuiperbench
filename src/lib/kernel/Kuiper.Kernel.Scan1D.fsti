@@ -46,7 +46,7 @@ module Seq = FStar.Seq
 
 let scan2d_inclusive_result
   (#t : Type0)
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows #cols : nat)
   (sx : chest2 t rows cols)
   : chest2 t rows cols
@@ -58,7 +58,7 @@ let scan2d_inclusive_result
 unfold inline_for_extraction
 type scan1d_inclusive_ty =
   fn (#et : Type0) {| scalar et |}
-     (m : cmonoid et)
+     (m : reducer et)
      (rows cols : szp)
      (#lin  : layout2 rows cols) {| ctlayout lin  |}
      (#lout : layout2 rows cols) {| ctlayout lout |}

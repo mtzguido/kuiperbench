@@ -13,7 +13,7 @@
 // verification boundary*:
 //   * computes L_out via the verified [pool_out_len_1d_sz],
 //   * allocates the (bc, L_out) GPU output buffer (cudaMalloc),
-//   * fills it with the per-window SUM (cmonoid_fadd_f32; rid=0, rop=+),
+//   * fills it with the per-window SUM (reducer_fadd_f32; rid=0, rop=+),
 //   * divides every element by K in place (verified ScalarMul, *1/K), and
 //   * returns the pair (L_out, output_device_ptr).
 // The /K that DEFINES average pooling is therefore VERIFIED, not done in

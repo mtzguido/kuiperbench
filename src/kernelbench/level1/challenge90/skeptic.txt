@@ -6,14 +6,14 @@ What's genuinely verified
 
 * `Kuiper.Kernel.Scan1D.RowBlock.scan1d_inclusive_rowblock` is the
   same fully-verified primitive used by #89 CumSum. It is generic in
-  the commutative monoid; this challenge instantiates it with
-  `cmonoid_fmul_f32` (multiplicative monoid on f32: rop=mul, rid=one).
+  a law-free seeded reducer; this challenge instantiates it with
+  `reducer_fmul_f32` (rop=mul, rid=one).
 * The `Kuiper.KB.CumProd` wrapper proves the per-element functional
   spec `Seq.index sy (r * d + c) %~ rprod (slice (to_real_seq (row sx
   r)) 0 (c+1))` by composing the monoid postcondition with:
     1. `macc_scan2d_inclusive_result_f32` (definitional reduction)
-    2. `cmonoid_fmul_f32_proj` (record-component equalities; body `=
-       ()`, mirrors `cmonoid_fadd_f32_proj`)
+    2. `reducer_fmul_f32_proj` (record-component equalities; body `=
+       ()`, mirrors `reducer_fadd_f32_proj`)
     3. `prod_is_approx` + slice/to_real_seq commute
     4. `Pulse.Lib.Forall.intro_2` over a per-cell postcondition.
 * The bridge `kuiper_cumprod_bridge.cu` does NOT contain any
@@ -25,18 +25,14 @@ What's genuinely verified
 What could hide bugs
 --------------------
 
-* `cmonoid_fmul_f32_proj` is `= ()` — same abstraction-barrier
+* `reducer_fmul_f32_proj` is `= ()` — same abstraction-barrier
   pattern as the additive case. Works only because the body of
-  `cmonoid_fmul_f32` literally pins `rop = mul`, `rid = one`. If
+  `reducer_fmul_f32` literally pins `rop = mul`, `rid = one`. If
   someone refactors the body, the proof here silently breaks at the
   definition site (not at this proj).
-* `Kuiper.Math.Fmul` axiomatises `fmul_assoc`, `fmul_comm`,
-  `fmul_one_neutral`. These are project-level postulates about IEEE
-  fp32 multiplication. They are NOT bit-exact — fp32 multiplication is
-  in fact non-associative. The whole project's float-real abstraction
-  (`%~`, `prod_is_approx`) is what bridges this gap: `%~` denotes
-  "approximately equal within real_like bounds". Same caveat as
-  `fadd_assoc` for #89, just for mul.
+* The reducer and scan proof assume no multiplication laws.  The exact
+  internal result is the implementation-order left fold; `prod_is_approx`
+  relates that fold to the real-arithmetic ideal.
 * `prod_is_approx`/`prod_is_approx'` are new (added to
   `Kuiper.Approximates`). They mirror `sum_is_approx` and are proved
   by induction using the existing `a_mul` lemma in the `real_like`
@@ -63,6 +59,6 @@ Bridge correctness
 Bottom line
 -----------
 
-#90 is as solid as #89; it adds only one new axiom family
-(`Kuiper.Math.Fmul`) and one new approx lemma (`prod_is_approx`),
-both small and well-contained.
+#90 is as solid as #89 and adds no new axiom family.  Its
+`prod_is_approx` lemma is proved inductively from the existing
+floating-point approximation interface.

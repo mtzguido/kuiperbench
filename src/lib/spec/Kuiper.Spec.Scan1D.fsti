@@ -1,33 +1,29 @@
 module Kuiper.Spec.Scan1D
 
 (* Functional specification for inclusive / exclusive prefix-scan
-   over a sequence under an arbitrary commutative monoid, plus the
+   over a sequence under an arbitrary seeded reducer, plus the
    row-batched 2-D postconditions used by the KernelBench L1 scan
    challenges:
 
-       #89  cumsum            — forward inclusive, sum  monoid
-       #90  cumprod           — forward inclusive, prod monoid
-       #91  cumsum_reverse    — reverse inclusive, sum  monoid
-       #92  cumsum_exclusive  — forward exclusive, sum  monoid
-       #93  masked_cumsum     — forward inclusive, sum  monoid
+       #89  cumsum            — forward inclusive, sum reducer
+       #90  cumprod           — forward inclusive, product reducer
+       #91  cumsum_reverse    — reverse inclusive, sum reducer
+       #92  cumsum_exclusive  — forward exclusive, sum reducer
+       #93  masked_cumsum     — forward inclusive, sum reducer
                                 with element-wise pre-masking
 
    All five variants reduce to a single primitive — the
-   monoid-parametric inclusive scan [scan_inclusive] — composed
+   reducer-parametric inclusive scan [scan_inclusive] — composed
    with a small number of cheap pre-/post-transforms (mask, shift,
    sequence reversal).  The kernel side (deferred — see
    [src/kernelbench/level1/challenge89/STATUS.txt]) ships a single
    block-wide inclusive scan and the wrapper code follows.
 
-   Floating-point note.  Kuiper's [+]/[*] on [f32] are axiomatised
-   as commutative monoids at the type-class instance boundary
-   ([Kuiper.Monoid.Reduce.F32]), but bit-exact associativity does
-   *not* hold in IEEE-754.  Tree-reduction and Hillis–Steele scans
-   reorder partial sums, so each output cell is pinned only up to
-   the [%~] approximation relation against its real-arithmetic
-   ideal.  The [scan2d_*_post] predicates below use [%~]
-   accordingly, mirroring [Kuiper.Spec.SumReduceDim] /
-   [Kuiper.Spec.Frobenius]. *)
+   Floating-point note.  The current kernels scan each row sequentially and
+   their internal result is the exact implementation-order fold.  No
+   floating-point algebraic laws are assumed.  The public [scan2d_*_post]
+   predicates use [%~] to relate that fold to the real-arithmetic ideal,
+   mirroring [Kuiper.Spec.SumReduceDim] / [Kuiper.Spec.Frobenius]. *)
 
 open Kuiper
 open Kuiper.Chest
@@ -38,29 +34,29 @@ open Kuiper.Monoid.Reduce
 module Seq = FStar.Seq
 module EM  = Kuiper.EMatrix
 
-(* ── Monoid-parametric scans on a single sequence ──────────────────────── *)
+(* ── Reducer-parametric scans on a single sequence ────────────────────── *)
 
 (* Inclusive prefix at index [i]: fold over [s[0..i+1]] under [m]. *)
 let scan_inclusive_at
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t) (i : nat { i < Seq.length s })
+  (#t:Type) (m : reducer t) (s : Seq.seq t) (i : nat { i < Seq.length s })
   : GTot t
   = red_fold m m.rid (Seq.slice s 0 (i+1))
 
 (* Whole-sequence inclusive scan: same length as [s]. *)
 let scan_inclusive
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : GTot (Seq.lseq t (Seq.length s))
   = Seq.init_ghost (Seq.length s) (scan_inclusive_at m s)
 
 (* Exclusive prefix at index [i]: fold over [s[0..i]] under [m].
-   Cell 0 is therefore [m.rid] (the monoid identity). *)
+   Cell 0 is therefore the reducer seed [m.rid]. *)
 let scan_exclusive_at
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t) (i : nat { i < Seq.length s })
+  (#t:Type) (m : reducer t) (s : Seq.seq t) (i : nat { i < Seq.length s })
   : GTot t
   = red_fold m m.rid (Seq.slice s 0 i)
 
 let scan_exclusive
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : GTot (Seq.lseq t (Seq.length s))
   = Seq.init_ghost (Seq.length s) (scan_exclusive_at m s)
 
@@ -75,26 +71,26 @@ let seq_rev (#a:Type) (s : Seq.seq a)
    [reverse (scan_inclusive m (reverse s))], matching the PyTorch
    pattern [torch.cumsum(x.flip(d), d).flip(d)] used by #91. *)
 let scan_inclusive_reverse
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : GTot (Seq.lseq t (Seq.length s))
   = seq_rev (scan_inclusive m (seq_rev s))
 
 (* ── Element-wise pre-mask (used for #93) ──────────────────────────────── *)
 
-(* A masked element behaves as the monoid identity.  For sum this
+(* A masked element is replaced by the reducer seed.  For sum this
    maps [false] to [0.0], for product to [1.0]. *)
 let mask_step
-  (#t:Type) (m : cmonoid t) (x : t) (b : bool) : t
+  (#t:Type) (m : reducer t) (x : t) (b : bool) : t
   = if b then x else m.rid
 
 let mask_seq
-  (#t:Type) (m : cmonoid t)
+  (#t:Type) (m : reducer t)
   (s : Seq.seq t) (mask : Seq.seq bool { Seq.length mask == Seq.length s })
   : GTot (Seq.lseq t (Seq.length s))
   = Seq.init_ghost (Seq.length s) (fun i -> mask_step m (s @! i) (mask @! i))
 
 let scan_inclusive_masked
-  (#t:Type) (m : cmonoid t)
+  (#t:Type) (m : reducer t)
   (s : Seq.seq t) (mask : Seq.seq bool { Seq.length mask == Seq.length s })
   : GTot (Seq.lseq t (Seq.length s))
   = scan_inclusive m (mask_seq m s mask)
@@ -107,12 +103,12 @@ let scan_inclusive_masked
    length-equation. *)
 
 val scan_inclusive_length
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : Lemma (Seq.length (scan_inclusive m s) == Seq.length s)
           [SMTPat (Seq.length (scan_inclusive m s))]
 
 val scan_exclusive_length
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : Lemma (Seq.length (scan_exclusive m s) == Seq.length s)
           [SMTPat (Seq.length (scan_exclusive m s))]
 
@@ -125,20 +121,20 @@ val seq_rev_length
    client wants the per-cell defining equation without unfolding. *)
 
 val scan_inclusive_index
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t) (i : nat { i < Seq.length s })
+  (#t:Type) (m : reducer t) (s : Seq.seq t) (i : nat { i < Seq.length s })
   : Lemma ((scan_inclusive m s) @! i == scan_inclusive_at m s i)
           [SMTPat ((scan_inclusive m s) @! i)]
 
 val scan_exclusive_index
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t) (i : nat { i < Seq.length s })
+  (#t:Type) (m : reducer t) (s : Seq.seq t) (i : nat { i < Seq.length s })
   : Lemma ((scan_exclusive m s) @! i == scan_exclusive_at m s i)
           [SMTPat ((scan_exclusive m s) @! i)]
 
-(* Boundary identity of the exclusive scan: cell 0 is the monoid
-   identity.  Comes free from [Seq.slice s 0 0 == Seq.empty] and
+(* Boundary value of the exclusive scan: cell 0 is the reducer seed.
+   This comes free from [Seq.slice s 0 0 == Seq.empty] and
    [seq_fold_left _ acc empty == acc]. *)
 val scan_exclusive_zero
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t { Seq.length s > 0 })
+  (#t:Type) (m : reducer t) (s : Seq.seq t { Seq.length s > 0 })
   : Lemma ((scan_exclusive m s) @! 0 == m.rid)
 
 (* ── Row-batched 2-D postconditions ────────────────────────────────────── *)
@@ -152,7 +148,7 @@ val scan_exclusive_zero
 (* #89 / #90: forward inclusive scan along the inner dimension. *)
 let scan2d_inclusive_post
   (#t:Type0) {| scalar t, real_like t |}
-  (m_r : cmonoid real)
+  (m_r : reducer real)
   (n_rows n_cols : nat)
   (sx : chest2 t n_rows n_cols)
   (sy : chest2 t n_rows n_cols)
@@ -165,7 +161,7 @@ let scan2d_inclusive_post
 (* #92: forward exclusive. *)
 let scan2d_exclusive_post
   (#t:Type0) {| scalar t, real_like t |}
-  (m_r : cmonoid real)
+  (m_r : reducer real)
   (n_rows n_cols : nat)
   (sx : chest2 t n_rows n_cols)
   (sy : chest2 t n_rows n_cols)
@@ -179,7 +175,7 @@ let scan2d_exclusive_post
    Equivalently: cell [i] is the fold of [row[i..n_cols]]. *)
 let scan2d_inclusive_reverse_post
   (#t:Type0) {| scalar t, real_like t |}
-  (m_r : cmonoid real)
+  (m_r : reducer real)
   (n_rows n_cols : nat)
   (sx : chest2 t n_rows n_cols)
   (sy : chest2 t n_rows n_cols)
@@ -193,7 +189,7 @@ let scan2d_inclusive_reverse_post
    batched boolean mask, same shape as the input. *)
 let scan2d_inclusive_masked_post
   (#t:Type0) {| scalar t, real_like t |}
-  (m_r : cmonoid real)
+  (m_r : reducer real)
   (n_rows n_cols : nat)
   (sx : chest2 t n_rows n_cols)
   (smask : chest2 bool n_rows n_cols)

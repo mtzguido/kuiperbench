@@ -5,15 +5,16 @@ Scope
 -----
 Kuiper.KB.AvgPool1D — a thin verified wrapper over the existing
 [Kuiper.Kernel.WindowReduce1D.windowreduce] primitive, instantiated with
-the f32 fadd monoid [Kuiper.Monoid.Reduce.F32.cmonoid_fadd_f32].
+the law-free f32 addition reducer
+[Kuiper.Monoid.Reduce.F32.reducer_fadd_f32].
 
 Spec faithfulness (verified portion)
 -------------------------------------
 The verified entry point [avgpool1d_fw_rm_f32] establishes the post
 
-  output |-> windowreduce_result cmonoid_fadd_f32 sx k s p d l_out
+  output |-> windowreduce_result reducer_fadd_f32 sx k s p d l_out
 
-where cmonoid_fadd_f32 has rid = 0.0f and rop = (+).  Concretely:
+where reducer_fadd_f32 has rid = 0.0f and rop = (+).  Concretely:
 
     out[r, j] = sum over di in [0, k) of
                   (in_bounds ? input[r, j*s + di*d - p] : 0.0f)
@@ -46,14 +47,10 @@ as RowScale, HReduce, Map, MaxPool1D.
 
 AvgPool1D itself adds zero new [admit ()] / [magic ()] / [assume pure].
 
-The fadd monoid record is concrete (Kuiper.Monoid.Reduce.F32.fst,
-landed with #41) using:
-- Float32.add_comm (axiom in Float32.fsti);
-- fadd_assoc, fadd_zero_neutral (axioms in Kuiper.Math.Fadd.fsti, new
-  with #41).
-These three squash axioms (fp associativity/commutativity/neutrality)
-are NOT proved — same model assumptions PyTorch's reference relies on
-implicitly.  End-to-end harness comparison validates the model.
+The reducer record is concrete and contains only [rid = 0] and [rop = add].
+The kernel and its internal specification use the same left-to-right fold.
+The prefix-step proof uses the general [lemma_seq_fold_left_slice] lemma;
+it assumes no floating-point associativity, commutativity, or neutrality.
 
 Edge cases
 ----------
@@ -61,7 +58,7 @@ Edge cases
 - All-padded window: sum = 0, output = 0, divisor still K — matches
   PyTorch.
 - K = 0: rejected by the [szp] type (k > 0).
-- Float catastrophic cancellation: AvgPool's cmonoid is true addition
+- Float catastrophic cancellation: AvgPool's reducer is true addition
   with order = increasing-di tap order, same scan order as PyTorch's
   reference cuda kernel.  KernelBench's default rtol=1e-5/atol=1e-8
   comparison tolerates the ULP wiggle.
@@ -122,7 +119,7 @@ What is genuinely verified now:
   (L_out, output_ptr). Ownership of the pts_to for the returned buffer is
   transferred to the caller in the postcondition (no F* leak).
 - The post is exactly "windowed SUM, then /K": every output accumulator equals
-  mul inv_k (macc (windowreduce_result cmonoid_fadd_f32 ...) i j). This is the
+  mul inv_k (macc (windowreduce_result reducer_fadd_f32 ...) i j). This is the
   faithful spec of what the two kernels compute, fully discharged at the file
   default z3rlimit (no bump).
 - The new lemma [pool_out_len_1d_ub] proves L_out <= L + 2P (div-mod + kspan>=1),

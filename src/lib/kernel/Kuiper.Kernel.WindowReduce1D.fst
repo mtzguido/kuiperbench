@@ -8,12 +8,11 @@ module Kuiper.Kernel.WindowReduce1D
  *   out[r, j] = m.rop-fold over the K-element OOB-filled dilated window
  *               at position j of input row r, with kernel/stride/pad/dilation
  *               (k, s, p, d).  Out-of-bounds positions are filled with [m.rid]
- *               so the seeded-fold result equals the fold over in-bounds
- *               elements alone (modulo the monoid laws).
+ *               as part of the exact left-to-right implementation fold.
  *
- * The primitive is polymorphic over [cmonoid t] so a single Pulse proof
- * covers both max-pool ([cmonoid_fmax_f32]) and avg-pool
- * ([cmonoid_fadd_f32]) instantiations.  The bridge from this fold-form
+ * The primitive is polymorphic over [reducer t] so a single Pulse proof
+ * covers both max-pool ([reducer_fmax_f32]) and avg-pool
+ * ([reducer_fadd_f32]) instantiations.  The bridge from this fold-form
  * postcondition to the [Kuiper.Spec.Pool1D] [maxpool1d_post] /
  * [avgpool1d_post] predicates is delivered by per-challenge wrappers
  * (Kuiper.KB.{MaxPool*,AvgPool*}). *)
@@ -43,14 +42,14 @@ module Seq = FStar.Seq
 (* Partial fold over the first [di] taps (di ∈ [0, k]).  The per-thread
  * accumulator equals this value at iteration [di]. *)
 let window_red_prefix
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#l : nat) (row : Seq.lseq t l)
   (k s p d : nat) (j : nat) (di : nat{di <= k})
   : GTot t
   = seq_fold_left m.rop m.rid (Seq.slice (oob_window m row k s p d j) 0 di)
 
 let window_red_prefix_zero
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#l : nat) (row : Seq.lseq t l)
   (k s p d : nat) (j : nat)
   : Lemma (window_red_prefix m row k s p d j 0 == m.rid)
@@ -63,7 +62,7 @@ let window_red_prefix_zero
  * value and folds it in at the right end.  The key invariant-step. *)
 #push-options "--z3rlimit 30"
 let window_red_prefix_step
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#l : nat) (row : Seq.lseq t l)
   (k s p d : nat) (j : nat) (di : nat{di < k})
   : Lemma
@@ -71,18 +70,12 @@ let window_red_prefix_step
        window_red_prefix m row k s p d j (di + 1)
        == m.rop (window_red_prefix m row k s p d j di) (Seq.index w di))
   = let w : Seq.lseq t k = oob_window m row k s p d j in
-    let pre  : Seq.seq t = Seq.slice w 0 di in
-    let pre' : Seq.seq t = Seq.slice w 0 (di + 1) in
-    let one  : Seq.seq t = Seq.slice w di (di + 1) in
-    Seq.lemma_eq_intro pre' (Seq.append pre one);
-    Seq.lemma_eq_intro one (Seq.create 1 (Seq.index w di));
-    red_fold_append m pre one;
-    ()
+    lemma_seq_fold_left_slice m.rid m.rop w 0 di
 #pop-options
 
 (* The full fold equals the prefix at di == k. *)
 let window_red_full
-  (#t : Type0) (m : cmonoid t)
+  (#t : Type0) (m : reducer t)
   (#l : nat) (row : Seq.lseq t l)
   (k s p d : nat) (j : nat)
   : Lemma (window_red m row k s p d j == window_red_prefix m row k s p d j k)
@@ -97,7 +90,7 @@ let window_red_full
 unfold
 let kpre
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows : nat) (#l : nat) (#lo : nat)
   (#lin  : layout2 rows l)
   (#lout : layout2 rows lo)
@@ -115,7 +108,7 @@ let kpre
 unfold
 let kpost
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (k s p d : nat)
   (#rows : nat) (#l : nat) (#lo : nat)
   (#lin  : layout2 rows l)
@@ -147,7 +140,7 @@ let kpost
 (* Per-thread predicate invariant: parametrized by [di] (loop counter). *)
 let inv_at
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (k s p d : nat)
   (#rows : nat) (#l : nat) (#lo : nat)
   (sx : chest2 t rows l)
@@ -166,7 +159,7 @@ let sz_fits_window (k s p d lo : nat) : prop =
 inline_for_extraction noextract
 fn read_tap
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (#rows : SZ.t) (#l : SZ.t)
   (#lin  : layout2 rows l)
   {| _ : ctlayout lin |}
@@ -194,7 +187,7 @@ fn read_tap
 inline_for_extraction noextract
 fn kf
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (#rows : SZ.t) (#l : SZ.t) (#lo : SZ.t)
   (k s p d : SZ.t)
   (#lin  : layout2 rows l)
@@ -310,7 +303,7 @@ fn kf
  * so [acc2] of that at [(r, c)] reduces to the body. *)
 let rewrite_macc_windowreduce_result
   (#t : Type0) {| scalar t |}
-  (m : cmonoid t)
+  (m : reducer t)
   (#rows #l : nat)
   (sx : chest2 t rows l)
   (k s p d lo : nat)
@@ -354,7 +347,7 @@ fn pts_to_cell_fits
 ghost
 fn setup_fold_kpre_step
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (#rows : nat) (#l : nat) (#lo : nat)
   (#lin  : layout2 rows l)
   (#lout : layout2 rows lo)
@@ -394,7 +387,7 @@ fn setup_fold_kpre_step
 ghost
 fn teardown_unfold_kpost_step
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (k s p d : nat)
   (#rows : nat) (#l : nat) (#lo : nat)
   (#lin  : layout2 rows l)
@@ -453,7 +446,7 @@ fn teardown_unfold_kpost_step
 ghost
 fn setup_windowreduce
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
@@ -484,7 +477,7 @@ fn setup_windowreduce
 ghost
 fn teardown_windowreduce
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (k s p d : SZ.t)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
@@ -518,7 +511,7 @@ fn teardown_windowreduce
 ghost
 fn kdesc_setup
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
   (lo : szp { SZ.v rows * SZ.v lo <= max_blocks * max_threads })
@@ -546,7 +539,7 @@ fn kdesc_setup
 ghost
 fn kdesc_teardown
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (k s p d : SZ.t)
   (rows : szp { SZ.v rows <= max_blocks * max_threads })
   (l : SZ.t)
@@ -575,7 +568,7 @@ fn kdesc_teardown
 inline_for_extraction noextract
 let kdesc
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (k s p d : SZ.t)
   (rows : szp)
   (l : SZ.t)
@@ -624,7 +617,7 @@ let kdesc
 inline_for_extraction noextract
 fn windowreduce
   (#et : Type0) {| scalar et |}
-  (m : cmonoid et)
+  (m : reducer et)
   (k s : szp)
   (p : sz)
   (d : szp)

@@ -12,13 +12,13 @@ module KS  = Kuiper.Seq.Common
    identity as an [SMTPat] for downstream specs. *)
 
 let scan_inclusive_length
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : Lemma (Seq.length (scan_inclusive m s) == Seq.length s)
           [SMTPat (Seq.length (scan_inclusive m s))]
   = ()
 
 let scan_exclusive_length
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t)
+  (#t:Type) (m : reducer t) (s : Seq.seq t)
   : Lemma (Seq.length (scan_exclusive m s) == Seq.length s)
           [SMTPat (Seq.length (scan_exclusive m s))]
   = ()
@@ -30,22 +30,22 @@ let seq_rev_length
   = ()
 
 let scan_inclusive_index
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t) (i : nat { i < Seq.length s })
+  (#t:Type) (m : reducer t) (s : Seq.seq t) (i : nat { i < Seq.length s })
   : Lemma ((scan_inclusive m s) @! i == scan_inclusive_at m s i)
           [SMTPat ((scan_inclusive m s) @! i)]
   = ()
 
 let scan_exclusive_index
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t) (i : nat { i < Seq.length s })
+  (#t:Type) (m : reducer t) (s : Seq.seq t) (i : nat { i < Seq.length s })
   : Lemma ((scan_exclusive m s) @! i == scan_exclusive_at m s i)
           [SMTPat ((scan_exclusive m s) @! i)]
   = ()
 
-(* Cell 0 of the exclusive scan equals the monoid identity.
+(* Cell 0 of the exclusive scan equals the reducer seed.
    [Seq.slice s 0 0] is empty, so [red_fold m m.rid empty == m.rid]
    by [seq_fold_left]'s [SNil] arm. *)
 let scan_exclusive_zero
-  (#t:Type) (m : cmonoid t) (s : Seq.seq t { Seq.length s > 0 })
+  (#t:Type) (m : reducer t) (s : Seq.seq t { Seq.length s > 0 })
   : Lemma ((scan_exclusive m s) @! 0 == m.rid)
   = let empty : Seq.seq t = Seq.slice s 0 0 in
     assert (Seq.equal empty Seq.empty);

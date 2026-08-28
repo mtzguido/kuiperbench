@@ -6,7 +6,7 @@ open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout { is_full }
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
-open Kuiper.Monoid.Reduce.F32 { cmonoid_fmax_f32 }
+open Kuiper.Monoid.Reduce.F32 { reducer_fmax_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce, windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 open Kuiper.Tensor.Layout.BCMPages { l2_bcm_pages, c_l2_bcm_pages }
@@ -37,7 +37,7 @@ let pool_out_len_1d_sz
 inline_for_extraction noextract
 fn maxpool2d_axis_fw
   (#t : Type0) {| scalar t |}
-  (m_inst : Kuiper.Monoid.Reduce.cmonoid t)
+  (m_inst : Kuiper.Monoid.Reduce.reducer t)
   (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l    : szp)
@@ -67,7 +67,7 @@ fn maxpool2d_axis_fw
 inline_for_extraction noextract
 let maxpool2d_axis_fw_f32 =
   fun k s p d bc l l_out #_ #_ #_ #_ input output #fIn #sx #sout ->
-    maxpool2d_axis_fw #f32 cmonoid_fmax_f32 k s p d bc l l_out input output
+    maxpool2d_axis_fw #f32 reducer_fmax_f32 k s p d bc l l_out input output
       #fIn #sx #sout
 
 let maxpool2d_axis_fw_rm_f32 =
@@ -172,7 +172,7 @@ fn maxpool2d_axis_alloc
                & array2 f32 (l2_row_major bc lo))
   ensures
     on gpu_loc ((dsnd r) |->
-      windowreduce_result cmonoid_fmax_f32 sx
+      windowreduce_result reducer_fmax_f32 sx
         k s p d (dfst r)) **
     pure (SZ.v (dfst r) ==
             pool_out_len_1d l k s p d) **
@@ -252,7 +252,7 @@ fn maxpool2d_full_alloc
   ensures
     (exists* (sx2 : chest2 f32 (SZ.v bc * SZ.v (dfst r)) h).
        on gpu_loc ((dsnd (dsnd r)) |->
-         windowreduce_result cmonoid_fmax_f32 sx2
+         windowreduce_result reducer_fmax_f32 sx2
            kh sh ph dh (dfst (dsnd r))))
 {
   (* All [bcv]/[ph2]/[pw2]/[wov]/[hov]-style values below are written
@@ -296,7 +296,7 @@ fn maxpool2d_full_alloc
 
   (* ── Allocate the final (BCM-pages) output and run pass 2 over H ── *)
   let out = alloc0 #f32 ((bc *^ wo) *^ ho) (l2_bcm_pages (SZ.v bc) (SZ.v wo) (SZ.v ho));
-  maxpool2d_axis_fw #f32 cmonoid_fmax_f32 kh sh ph dh (bc *^ wo) h ho
+  maxpool2d_axis_fw #f32 reducer_fmax_f32 kh sh ph dh (bc *^ wo) h ho
     #(l2_bcm_pages (SZ.v bc) (SZ.v wo) (SZ.v h))
     #(c_l2_bcm_pages (FStar.Ghost.hide (SZ.v bc)) wo h)
     #(l2_bcm_pages (SZ.v bc) (SZ.v wo) (SZ.v ho))
