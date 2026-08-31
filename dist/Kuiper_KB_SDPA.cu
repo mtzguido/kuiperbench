@@ -155,15 +155,10 @@ extern void Kuiper_KB_BatchedGEMM_batched_gemm_f32(uint32_t batch,
                                                    uint32_t cols, float *a,
                                                    float *b, float *c);
 
-float Kuiper_KB_SDPA_sdpa_scale_f32(uint32_t d)
+void Kuiper_KB_SDPA_sdpa_f32(uint32_t bh, uint32_t s, uint32_t d, float *gQ,
+                             float *gKT, float *gV, float *gScores, float *gOut)
 {
-    return 1.0f / sqrtf((float) (int64_t) (uint64_t) d);
-}
-
-void Kuiper_KB_SDPA_sdpa_f32(uint32_t bh, uint32_t s, uint32_t d, float scale,
-                             float *gQ, float *gKT, float *gV, float *gScores,
-                             float *gOut)
-{
+    float scale = rsqrtf((float) (int64_t) (uint64_t) d);
     Kuiper_KB_BatchedGEMM_batched_gemm_f32(bh, s, d, s, gQ, gKT, gScores);
     uint32_t bhs = bh * s;
     smul_fw_f32(scale, bhs * s, gScores);

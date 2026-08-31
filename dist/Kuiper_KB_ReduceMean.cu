@@ -1,11 +1,6 @@
 
 #include "Kuiper_KB_ReduceMean.h"
 
-float Kuiper_KB_ReduceMean_reducemean_recip_f32(uint32_t d)
-{
-    return 1.0f / (float) (int64_t) (uint64_t) d;
-}
-
 __global__
 /**
   hoisted when extracting reduce_mean_fw_f32
@@ -38,15 +33,16 @@ __global__
   hoisted when extracting reduce_mean_fw_f32
 */
 static void
-__hoisted_reduce_mean_fw_f32_1(float inv_d, float *y, uint32_t bm)
+__hoisted_reduce_mean_fw_f32_1(float *y, float inv_d, uint32_t bm)
 {
     if (1024U * blockIdx.x + threadIdx.x < bm)
         y[1024U * blockIdx.x + threadIdx.x] *= inv_d;
 }
 
 void Kuiper_KB_ReduceMean_reduce_mean_fw_f32(uint32_t b, uint32_t m, uint32_t d,
-                                             float inv_d, float *x, float *y)
+                                             float *x, float *y)
 {
+    float inv_d = 1.0f / (float) (int64_t) (uint64_t) d;
     uint32_t bm = b * m;
     cudaStream_t s = KPR_FRESH_STREAM();
     KPR_SHMEM_FITS(4096U);
@@ -55,8 +51,8 @@ void Kuiper_KB_ReduceMean_reduce_mean_fw_f32(uint32_t b, uint32_t m, uint32_t d,
     MUST(cudaStreamDestroy(s));
     cudaStream_t s0 = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_reduce_mean_fw_f32_1,
-              bm / 1024U + (uint32_t) (bm % 1024U != 0U), 1024U, 0U, s0, inv_d,
-              y, bm);
+              bm / 1024U + (uint32_t) (bm % 1024U != 0U), 1024U, 0U, s0, y,
+              inv_d, bm);
     MUST(cudaStreamSynchronize(s0));
     MUST(cudaStreamDestroy(s0));
 }

@@ -32,9 +32,6 @@ open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.CrossEntropyLoss
 module SZ = Kuiper.SizeT
 
-(* Verified, extractable reciprocal 1/B as f32 (see .fst). *)
-val ce_recip_f32 (b : szp) : f32
-
 inline_for_extraction noextract
 type ce_loss_fw_ty =
   fn
@@ -43,21 +40,21 @@ type ce_loss_fw_ty =
     (c : szp { c <= max_blocks * max_threads /\
                SZ.fits (c + max_threads) /\
                SZ.fits (b * c) })
-    (inv_b : f32)
     (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
     (targets : array1 SZ.t (l1_forward b) { is_global targets })
     (#sp : chest1 f32 (b * c))
     (#stv : chest1 SZ.t b)
+    (rp : erased (lseq real (b * c)))
     (#fp #ft : perm)
     preserves cpu **
               on gpu_loc (predictions |-> Frac fp sp) **
-              on gpu_loc (targets |-> Frac ft stv)
+              on gpu_loc (targets |-> Frac ft stv) **
+              pure (sp %~ seq_to_chest1 rp)
     requires
       pure (forall (r : nat). r < SZ.v b ==> SZ.v (acc1 (reveal stv) r) < SZ.v c)
     returns res : f32
     ensures
-      pure (cross_entropy_post b c inv_b
-              (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v c))
+      pure (cross_entropy_post b c rp
               (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t b)
               res)
 

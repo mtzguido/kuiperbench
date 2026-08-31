@@ -1,11 +1,6 @@
 
 #include "Kuiper_KB_CrossEntropyLoss.h"
 
-float Kuiper_KB_CrossEntropyLoss_ce_recip_f32(uint32_t b)
-{
-    return 1.0f / (float) (int64_t) (uint64_t) b;
-}
-
 __global__
 /**
   hoisted when extracting ce_loss_fw_f32
@@ -76,9 +71,10 @@ __hoisted_ce_loss_fw_f32_2(uint32_t b, float *t_dev, float *out)
 }
 
 float Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
-                                                float inv_b, float *predictions,
+                                                float *predictions,
                                                 uint32_t *targets)
 {
+    float inv_b = 1.0f / (float) (int64_t) (uint64_t) b;
     float *scratch = (float *) KPR_GPU_ALLOC(sizeof(float), c);
     float *t_dev = (float *) KPR_GPU_ALLOC(sizeof(float), b);
     KRML_CHECK_SIZE(sizeof(float), b);

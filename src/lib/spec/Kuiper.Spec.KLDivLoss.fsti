@@ -7,13 +7,9 @@ module Kuiper.Spec.KLDivLoss
      F.kl_div(torch.log(predictions), targets, reduction='batchmean')
      = sum_i targets[i] * (log(targets[i]) - log(predictions[i])) / batch_size
 
-   The kernel returns the *unscaled* sum (the kernel cannot in general
-   know the batch size from the flat inputs).  The host divides by
-   [batch_size] after the kernel returns.
-
-   Because [rlog] is partial in [Kuiper.Real], we keep the elementwise
-   step at the floating-point level here and pin the kernel's result
-   to the [%~]-approximation of the f32 step's real-image sum. *)
+   The public kernel takes the positive batch size and returns the
+   batch mean.  Its inputs are related to positive real sequences, so
+   [log_approx] connects both floating logs to [Kuiper.Real.log]. *)
 
 open Kuiper.Common
 open Kuiper.Real
@@ -27,9 +23,26 @@ inline_for_extraction
 let kl_step (#t:Type0) {| scalar t, floating t |} (p tt : t) : t =
   mul tt (sub (flog tt) (flog p))
 
-let real_kl_sum
-  (#t:Type0) {| scalar t, real_like t, floating t |}
+let real_kl_step (p tt : real) : real =
+  if p >. 0.0R && tt >. 0.0R
+  then tt *. (log tt -. log p)
+  else 0.0R
+
+let positive_seq
   (n : nat)
-  (sp st : Seq.lseq t n)
-  : real
-  = rsum (to_real_seq (lseq_map2 (kl_step #t) sp st))
+  (s : Seq.lseq real n)
+  : prop =
+  forall (i:nat). i < n ==> Seq.index s i >. 0.0R
+
+let real_kl_sum
+  (n : nat)
+  (rp rt : Seq.lseq real n)
+  : real =
+  rsum (lseq_map2 real_kl_step rp rt)
+
+let real_kl
+  (n : nat)
+  (batches : pos)
+  (rp rt : Seq.lseq real n)
+  : real =
+  real_kl_sum n rp rt /. FStar.Real.of_int batches

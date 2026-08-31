@@ -12,6 +12,25 @@ module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+
+(* Pointwise multiplication transports approximation through the final
+   row-scaling pass. *)
+let frobenius_result_approx
+  (#t:Type0) {| scalar t, real_like t |}
+  (#n:nat)
+  (inv : t) (rinv : real)
+  (s : Seq.lseq t n) (rs : Seq.lseq real n)
+  : Lemma
+      (requires inv %~ rinv /\ s %~ rs)
+      (ensures frobenius_result inv s %~
+               KS.lseq_map (fun x -> x *. rinv) rs)
+  = let lhs = frobenius_result inv s in
+    let rhs = KS.lseq_map (fun x -> x *. rinv) rs in
+    let aux (i:nat{i < n}) : Lemma ((lhs @! i) %~ (rhs @! i)) =
+      a_mul (s @! i) inv (rs @! i) rinv
+    in
+    Classical.forall_intro aux
 
 (* Local lemmas about slice-of-blit used by the host loop. *)
 let blit_slice_left
@@ -166,6 +185,8 @@ let l2_loop_step_lemma
       vi < b /\
       Seq.slice sx_pre (vi * d) (b * d) ==
         Seq.slice sx (vi * d) (b * d) /\
+      frobenius_sumsq_r
+        (to_real_seq (Seq.slice sx (vi * d) (vi * d + d))) >. 0.0R /\
       (exists (inv : f32) (sumsq : f32).
          sumsq %~ frobenius_sumsq_r
                     (to_real_seq
@@ -190,6 +211,31 @@ let l2_loop_step_lemma
     Seq.lemma_eq_intro
       (Seq.slice sx_pre (vi * d) (vi * d + d))
       (Seq.slice sx     (vi * d) (vi * d + d));
+    let row : Seq.lseq f32 d =
+      Seq.slice sx (vi * d) (vi * d + d) in
+    let rrow : Seq.lseq real d = to_real_seq row in
+    let rss = frobenius_sumsq_r rrow in
+    let aux_impl (inv sumsq : f32)
+      : Lemma
+        (requires
+          sumsq %~ rss /\
+          inv == rsqrt sumsq /\
+          sx_post ==
+            KS.seq_blit sx_pre (vi * d)
+              (frobenius_result #f32 inv #d
+                 (Seq.slice sx_pre (vi * d) (vi * d + d))) 0 d)
+        (ensures
+          Seq.slice sx_post ((vi + 1) * d) (b * d) ==
+            Seq.slice sx ((vi + 1) * d) (b * d) /\
+          row_l2_normalized sx sx_post (vi * d) d /\
+          (forall (r : nat). r * d + d <= vi * d ==>
+            Seq.slice sx_post (r * d) (r * d + d) ==
+            Seq.slice sx_pre  (r * d) (r * d + d)))
+      = l2_blit_step_lemma b d sx sx_pre sx_post vi inv sumsq;
+        SqrtApprox.rsqrt_approx sumsq rss;
+        to_real_seq_is_approx row;
+        frobenius_result_approx inv (FStar.Math.Sqrt.rsqrt rss) row rrow
+    in
     let aux (inv sumsq : f32)
       : Lemma
         ((sumsq %~ frobenius_sumsq_r
@@ -203,18 +249,12 @@ let l2_loop_step_lemma
          ==>
          (Seq.slice sx_post ((vi + 1) * d) (b * d) ==
             Seq.slice sx ((vi + 1) * d) (b * d) /\
-          sumsq %~ frobenius_sumsq_r
-                     (to_real_seq
-                       (Seq.slice sx (vi * d) (vi * d + d))) /\
-          inv == rsqrt sumsq /\
-          Seq.slice sx_post (vi * d) (vi * d + d) ==
-            frobenius_result #f32 inv #d
-              (Seq.slice sx (vi * d) (vi * d + d)) /\
+          row_l2_normalized sx sx_post (vi * d) d /\
           (forall (r : nat). r * d + d <= vi * d ==>
             Seq.slice sx_post (r * d) (r * d + d) ==
             Seq.slice sx_pre  (r * d) (r * d + d))))
       = Classical.move_requires
-          (l2_blit_step_lemma b d sx sx_pre sx_post vi inv) sumsq
+          (aux_impl inv) sumsq
     in
     Classical.forall_intro_2 aux
 #pop-options
@@ -310,6 +350,8 @@ let l2_loop_invariant_step
       (forall (r : nat). r < vi ==> row_l2_normalized sx sx_pre (r * d) d) /\
       Seq.slice sx_pre (vi * d) (b * d) ==
         Seq.slice sx (vi * d) (b * d) /\
+      frobenius_sumsq_r
+        (to_real_seq (Seq.slice sx (vi * d) (vi * d + d))) >. 0.0R /\
       (exists (inv : f32) (sumsq : f32).
          sumsq %~ frobenius_sumsq_r
                     (to_real_seq
@@ -524,7 +566,9 @@ fn l2norm
   (x : array1 f32 (l1_forward (b * d)) { is_global x })
   (#sx : chest1 f32 (b * d))
   preserves cpu
-  requires on gpu_loc (x |-> sx)
+  requires
+    on gpu_loc (x |-> sx) **
+    pure (l2norm_domain b d (chest1_to_seq sx))
   ensures
     (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **

@@ -9,6 +9,7 @@
 // matches the physical row-major (B, C, H, W) layout exactly.
 // Exactly 3 GPU kernel launches: reduce_batched, map_gpu, row_scale.
 #include <torch/extension.h>
+#include <cmath>
 #include "Kuiper_KB_RMSNorm.h"
 #include "Kuiper_KB_RMSNorm.cu"
 
@@ -31,9 +32,12 @@ torch::Tensor kuiper_rmsnorm_cuda(torch::Tensor X, double eps) {
                 && B * HW * C <= (int64_t)UINT32_MAX
                 && B * HW * C <= KUIPER_MAX_NTHR,
                 "kuiper_rmsnorm: shape out of range");
+    float eps_f = (float)eps;
+    TORCH_CHECK(std::isfinite(eps_f) && eps_f > 0.0f,
+                "kuiper_rmsnorm: eps must remain finite and positive in float32");
     Kuiper_KB_RMSNorm_rmsnorm_fw_f32(
         (uint32_t)B, (uint32_t)HW, (uint32_t)C,
-        (float)eps,
+        eps_f,
         Xc.data_ptr<float>());
     return Xc;
 }

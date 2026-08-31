@@ -9,6 +9,8 @@ open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
+module KS = Kuiper.Seq.Common
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
 
 (* Pointwise approximation: [square x %~ sq_step_r r] whenever
    [x %~ r].  Direct consequence of [a_mul]. *)
@@ -42,6 +44,22 @@ let to_real_chest_to_seq (#et : Type0) {| scalar et, real_like et |} (#n : nat)
   : Lemma (chest1_to_seq (to_real_chest c) == to_real_seq (chest1_to_seq c))
   = assert (Seq.equal (chest1_to_seq (to_real_chest c)) (to_real_seq (chest1_to_seq c)))
 
+let frobenius_result_approx
+  (#t:Type0) {| scalar t, real_like t |}
+  (#n:nat)
+  (inv : t) (rinv : real)
+  (s : Seq.lseq t n) (rs : Seq.lseq real n)
+  : Lemma
+      (requires inv %~ rinv /\ s %~ rs)
+      (ensures frobenius_result inv s %~
+               KS.lseq_map (fun x -> x *. rinv) rs)
+  = let lhs = frobenius_result inv s in
+    let rhs = KS.lseq_map (fun x -> x *. rinv) rs in
+    let aux (i:nat{i < n}) : Lemma ((lhs @! i) %~ (rhs @! i)) =
+      a_mul (s @! i) inv (rs @! i) rinv
+    in
+    Classical.forall_intro aux
+
 (* Frobenius normalisation, layout-fixed to [l1_forward] for
    extraction.  Composes [HRed.reduce] (with a square pre-map) and
    [Map.map_gpu] (with a scalar-multiply step). *)
@@ -51,13 +69,13 @@ fn frobenius
   (a : array1 f32 (l1_forward lena) { is_global a })
   (#va : chest1 f32 lena)
   preserves cpu
-  requires on gpu_loc (a |-> va)
+  requires
+    on gpu_loc (a |-> va) **
+    pure (frobenius_sumsq_r (to_real_seq (chest1_to_seq va)) >. 0.0R)
   ensures
     exists* (va' : chest1 f32 lena).
       on gpu_loc (a |-> va') **
-      pure (exists (sumsq : f32).
-        chest1_to_seq va' == frobenius_result (rsqrt sumsq) (chest1_to_seq va) /\
-        sumsq %~ frobenius_sumsq_r (to_real_seq (chest1_to_seq va)))
+      pure (frobenius_post (chest1_to_seq va) (chest1_to_seq va'))
 {
   (* Establish the pointwise-square approximation fact in the
      ambient context so HRed.reduce's precondition discharges. *)
@@ -81,6 +99,13 @@ fn frobenius
   chest_map_to_seq (smul_step inv_norm) (reveal va);
   chest_map_to_seq sq_step_r (reveal vr);
   to_real_chest_to_seq (reveal va);
+  let rss = frobenius_sumsq_r (to_real_seq (chest1_to_seq (reveal va)));
+  assert pure (sumsq %~ rss);
+  SqrtApprox.rsqrt_approx sumsq rss;
+  to_real_seq_is_approx (chest1_to_seq (reveal va));
+  frobenius_result_approx inv_norm (FStar.Math.Sqrt.rsqrt rss)
+    (chest1_to_seq (reveal va))
+    (to_real_seq (chest1_to_seq (reveal va)));
   ()
 }
 

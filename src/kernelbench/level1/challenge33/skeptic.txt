@@ -10,14 +10,13 @@ Spec faithfulness
 -----------------
 The verified entry point [batchnorm_fw_f32] establishes
 [batchnorm_post] from Kuiper.Spec.BatchNorm: for every channel ci, the
-output row equals [bn_row_result inv neg_mean_inv γ[ci] β[ci] row]
-where (inv, neg_mean_inv) are existentially-bound floating witnesses
-approximating 1/sqrt((1/(N·H·W))Σx² - ((1/(N·H·W))Σx)² + eps) and
--mean*inv.  Per-channel sum / sum-of-squares are bound via the [%~]
-approximation relation (same MeanVarNorm pattern).  Variance is
-biased (denom = N·H·W), matching nn.BatchNorm2d's default training
-forward.  γ, β default to 1/0 in PyTorch so the harness comparison
-under default tolerance is exact.
+output row [%~]-approximates [real_bn_row_result] applied directly to
+real-valued input, gamma, beta, and epsilon ghosts.  That result explicitly
+computes the real sum, sum-of-squares, biased variance, inverse square root,
+and affine output.  None of those deterministic statistics is existentially
+quantified.  The reciprocal 1/(N·H·W) is computed inside the verified entry
+point and proved to approximate the corresponding real reciprocal.  The
+biased denominator matches nn.BatchNorm2d's default training forward.
 
 Two-affine architecture
 -----------------------
@@ -34,15 +33,19 @@ Inherited debt
 --------------
 Same map_gpu2 / kernel_desc legacy [magic ()] in
 Kuiper.Kernel.{Map,HReduce,Affine,...} sendability fields as every
-other in-tree plain-[kernel_desc] kernel.  BatchNorm.fst itself adds
-zero new [magic ()] / [admit ()] / [assume pure].
+other in-tree plain-[kernel_desc] kernel.  The real proof also relies on the
+temporary [Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] assumption proposed for
+upstream Kuiper.  BatchNorm.fst itself adds no [magic ()], [admit ()], or
+[assume pure].
 
 Edge cases
 ----------
 - Constant channel: var = 0; var_eps = eps; inv = rsqrt(eps).  Finite
   for any eps > 0.  Output = β[ci].  Matches PyTorch.
-- eps == 0 + constant channel: inv = +inf, output = NaN.  Spec still
-  satisfied (existential inv is whatever rsqrt yields).
+- The real-valued contract requires var + eps > 0 for every channel, exactly
+  the domain of [FStar.Math.Sqrt.rsqrt].  In particular, eps == 0 with a
+  constant channel is outside the real specification instead of being
+  vacuously accepted through an unconstrained floating witness.
 - N = 0 / C = 0 / H·W = 0: ruled out at the type level via [szp]
   preconditions on c, hw, nhw and a positive-product bridge check.
 - No running stats: this is training-mode forward only; running mean /

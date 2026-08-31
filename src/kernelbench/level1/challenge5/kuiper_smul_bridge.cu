@@ -10,9 +10,13 @@
 #include "Kuiper_KB_ScalarMul.cu"
 
 torch::Tensor kuiper_smul_cuda(torch::Tensor A, double s) {
+    TORCH_CHECK(A.is_cuda() && A.scalar_type() == torch::kFloat32,
+                "kuiper #5: expected a float32 CUDA tensor");
     auto A_contig = A.contiguous();
     auto C = torch::empty_like(A_contig);
     int64_t numel = A_contig.numel();
+    TORCH_CHECK(numel > 0 && numel <= (int64_t)2097152 * 1024,
+                "kuiper #5: element count exceeds the verified kernel bound");
 
     Kuiper_KB_ScalarMul_smul_out_f32(
         (float)s, (uint32_t)numel,

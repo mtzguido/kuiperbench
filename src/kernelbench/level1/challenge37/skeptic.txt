@@ -2,20 +2,13 @@ Skeptic review — KB Frobenius (#37) functional spec
 ====================================================
 
 (a) Does the spec correspond to mathematical Frobenius normalisation?
-YES. The post in Kuiper.KB.Frobenius.fsti existentially binds (inv,
-sumsq) with three constraints:
-  * s' == frobenius_result inv s  -> result is *uniform* scaling of
-    input by a single scalar inv (lseq_map (smul_step inv) s);
-  * sumsq %~ frobenius_sumsq_r (to_real_seq s) -> sumsq approximates
-    the real-valued sum of squares of the input;
-  * inv == F32.rsqrt sumsq -> the scaling factor is exactly the f32
-    reciprocal-sqrt of that approximate sum of squares.
-Together these pin both the *shape* (uniform per-element scale) and
-the *value* (the scale approximates 1/||x||_F up to floating-point
-rounding in both the reduction and rsqrt). Not a vacuous existential.
+YES. The post directly states that the output approximates the
+real-valued Frobenius normalization of the input.  The floating sum and
+reciprocal square root remain proof-local; there is no pure existential.
 
-(b) Is the proof genuine? YES. grep -n "assume\|admit\|magic" turns up
-nothing in either Kuiper.Spec.Frobenius.fst or Kuiper.KB.Frobenius.fst.
+(b) Is the proof genuine? YES. The challenge contains no local admit or
+magic. It uses the documented temporary `rsqrt_approx` compatibility
+assumption pending the corresponding upstream Kuiper law.
 The proof chain is real: HReduce.reduce's postcondition gives
 res %~ rsum (seq_map pre_map_r vr); we instantiate pre_map = sq_step,
 pre_map_r = sq_step_r and discharge sq_step %~ sq_step_r by lifting
@@ -26,11 +19,8 @@ unfolding. No suspicious helper lemmas; frobenius_result_length is a
 
 (c) Edge cases. n=0 is excluded by lena : szp (positive-sized).
 All-zero input: F32.rsqrt 0 = +inf in IEEE-754, so the result is
-NaN-filled (0*inf). The spec is still satisfied: the existentials
-take inv = F32.rsqrt 0 and sumsq = 0; sumsq %~ 0 holds (zero is the
-sum of zero squares); inv == rsqrt sumsq is trivial. The .fsti
-docstring documents this and matches the PyTorch reference, which
-also returns NaNs.
+NaN-filled (0*inf), which has no finite-real interpretation.  The direct
+real contract therefore requires a positive real sum of squares.
 
 (d) Input shape. KernelBench #37 permits an arbitrary-dimension input;
 the reference is torch.norm(x), which reduces over every element. We
@@ -38,6 +28,4 @@ model the input as a flat Array1 of lena = x.numel() elements. This is
 exact, not a restriction: the Frobenius norm sums squares over ALL
 elements irrespective of logical shape, so flattening a contiguous
 tensor computes precisely the same norm. The fsti docstring documents
-this. (The spec now inlines inv == rsqrt sumsq directly in the
-existential rather than binding a separate `inv`; the argument in (a)
-is unchanged.)
+this.

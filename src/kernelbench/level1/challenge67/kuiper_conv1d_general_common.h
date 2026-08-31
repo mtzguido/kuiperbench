@@ -54,6 +54,11 @@ static torch::Tensor kuiper_conv1d_general_cuda(
     TORCH_CHECK(Cin == WCin, "kuiper_conv1d_general: Cin mismatch");
     TORCH_CHECK(B > 0 && Cin > 0 && Lin > 0 && Cout > 0 && Kk > 0,
                 "kuiper_conv1d_general: shapes must be positive");
+    TORCH_CHECK(Lin <= (int64_t)UINT32_MAX && Kk <= (int64_t)UINT32_MAX &&
+                stride <= (int64_t)UINT32_MAX && pad <= (int64_t)UINT32_MAX &&
+                dilation <= (int64_t)UINT32_MAX &&
+                (Kk == 1 || dilation <= ((int64_t)UINT32_MAX - 1) / (Kk - 1)),
+                "kuiper_conv1d_general: output-size helper arguments out of range");
 
     // Padded input must be at least as large as the dilated (effective)
     // kernel span.  This discharges the `(k-1)*dilation + 1 <= n + 2*pad`

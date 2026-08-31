@@ -1,11 +1,6 @@
 
 #include "Kuiper_KB_KLDivLoss.h"
 
-float Kuiper_KB_KLDivLoss_kl_div_mean_f32(float s, uint32_t b)
-{
-    return s / (float) (int64_t) (uint64_t) b;
-}
-
 __global__
 /**
   hoisted when extracting kl_div_fw_f32
@@ -47,8 +42,8 @@ __hoisted_kl_div_fw_f32_1(uint32_t n, float *predictions, float *out)
         *out = *sa;
 }
 
-float Kuiper_KB_KLDivLoss_kl_div_fw_f32(uint32_t n, float *predictions,
-                                        float *targets)
+float Kuiper_KB_KLDivLoss_kl_div_fw_f32(uint32_t n, uint32_t batches,
+                                        float *predictions, float *targets)
 {
     cudaStream_t s0 = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_kl_div_fw_f32_0,
@@ -66,5 +61,5 @@ float Kuiper_KB_KLDivLoss_kl_div_fw_f32(uint32_t n, float *predictions,
     float hout = 0.0f;
     MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
     MUST(cudaFree(out));
-    return hout;
+    return hout / (float) (int64_t) (uint64_t) batches;
 }

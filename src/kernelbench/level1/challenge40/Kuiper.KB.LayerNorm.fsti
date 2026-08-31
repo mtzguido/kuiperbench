@@ -18,10 +18,9 @@ module Kuiper.KB.LayerNorm
    Per-row uses the device-to-device offset memcpy primitive to copy a
    row in/out of a fixed-size scratch buffer.  γ and β are held with
    fractional permission throughout (read-only across the row loop).
-   No assume / admit / new magic: the only [magic ()] reaches in via
-   [Kuiper.Kernel.Map.map_gpu2]'s [kpre/kpost_sendable], inheriting the
-   tree-wide debt every plain-[kernel_desc] kernel carries (documented
-   in the module's skeptic). *)
+   The direct real proof uses the temporary [rsqrt_approx] compatibility
+   assumption documented in the repository patch.  The existing
+   [map_gpu2] sendability debt is documented in the module's skeptic. *)
 
 #lang-pulse
 open Kuiper
@@ -55,10 +54,11 @@ fn layernorm_fw_f32
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sb)
   requires
-    on gpu_loc (x |-> sx)
+    on gpu_loc (x |-> sx) **
+    pure (layernorm_domain b n eps (chest1_to_seq sx))
   ensures
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
-       pure (layernorm_post b n eps (ln_inv_n n)
+       pure (layernorm_post b n eps
                (chest1_to_seq sg) (chest1_to_seq sb)
                (chest1_to_seq sx) (chest1_to_seq sx')))

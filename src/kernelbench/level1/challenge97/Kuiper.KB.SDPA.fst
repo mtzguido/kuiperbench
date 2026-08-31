@@ -4,7 +4,7 @@ module Kuiper.KB.SDPA
 
    KernelBench L1 #97 — Scaled Dot-Product Attention.
 
-     out = softmax(scale * (Q @ K^T)) @ V
+     out = softmax((Q @ K^T) / sqrt(D)) @ V
 
    This module is a verified ORCHESTRATOR: it chains four already-verified
    Kuiper primitives over the SAME GPU buffers (no fused kernel, no data
@@ -22,7 +22,8 @@ module Kuiper.KB.SDPA
    the analogues of the Array3<->Array2 reshapes in Kuiper.KB.MatmulND, plus a
    new Array3<->Array1 reshape for the scalar-multiply.
 
-   Zero assume * zero magic * zero admit. *)
+   The direct real scale proof uses the temporary [rsqrt_approx]
+   compatibility assumption documented in the repository patch. *)
 
 #lang-pulse
 open Kuiper
@@ -34,17 +35,20 @@ module SZ = Kuiper.SizeT
 module RS = Kuiper.Kernel.RowSoftmax
 module RSI = Klas.RowSoftmax
 module SMul = Kuiper.KB.ScalarMul
+module MS = Kuiper.Spec.GEMM
+module MU = Kuiper.Kernel.GEMM.Util
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RealSqrt = FStar.Math.Sqrt
 open Kuiper.KB.BatchedGEMM { batched_matmul, batched_gemm_f32 }
 open Kuiper.Injection
 open Kuiper.Shape
 open Kuiper.Bijection
 
-(* Verified, extractable attention scale 1/sqrt(d) as f32 (extracts to
-   1.0f / sqrtf((float)(int64_t)(uint64_t)d)), so the scale is computed
-   inside the verification boundary instead of in unverified C. *)
+(* Verified attention scale, inlined into the public entry point. *)
+inline_for_extraction noextract
 let sdpa_scale_f32 (d : szp) : f32 =
-  div one (sqrt (of_int (FStar.Int.Cast.uint64_to_int64
-                           (FStar.SizeT.sizet_to_uint64 d))))
+  rsqrt (of_int (FStar.Int.Cast.uint64_to_int64
+                   (FStar.SizeT.sizet_to_uint64 d)))
 
 (* ----------------------------------------------------------------------- *)
 (* Reshape glue: Array3 (n,m,k) <-> Array2 (n*m,k).  Direct copies of the   *)
@@ -332,25 +336,23 @@ let smul_reshape_eq
    1-D softmax of these equal rows is equal.  Pure [Seq] extensionality plus
    [content_ok]. *)
 let row_corr
-  (#bh #s : nat) (p:nat) (_:squash (p == bh * s))
-  (scaled : chest3 f32 bh s s)
+  (#et:Type) (#bh #s : nat) (p:nat) (_:squash (p == bh * s))
+  (scaled : chest3 et bh s s)
   (pp : natlt bh) (ii : natlt s)
   : Lemma
     (EM.ematrix_row
-       (EM.to_real_matrix
-          (from_seq (l2_row_major p s)
-             (to_seq (l3_batched_row_major bh s s) scaled)))
+       (from_seq (l2_row_major p s)
+          (to_seq (l3_batched_row_major bh s s) scaled))
        (pp * s + ii)
      == EM.ematrix_row
-          (slice_page (EM.to_real_matrix scaled) pp)
+          (slice_page scaled pp)
           ii)
   = let flat = from_seq (l2_row_major p s)
                  (to_seq (l3_batched_row_major bh s s) scaled) in
-    let lhs = EM.ematrix_row (EM.to_real_matrix flat) (pp * s + ii) in
-    let rhs = EM.ematrix_row
-                (slice_page (EM.to_real_matrix scaled) pp) ii in
+    let lhs = EM.ematrix_row flat (pp * s + ii) in
+    let rhs = EM.ematrix_row (slice_page scaled pp) ii in
     let aux (j:natlt s) : Lemma (Seq.index lhs j == Seq.index rhs j) =
-      content_ok #f32 #bh #s #s p () scaled pp ii j
+      content_ok #et #bh #s #s p () scaled pp ii j
     in
     Classical.forall_intro aux;
     Seq.lemma_eq_intro lhs rhs
@@ -409,39 +411,102 @@ let lemma_approximates_intro3
     with (let (i, (j, (k, ()))) = idx in
           assert (acc3 m1 i j k %~ acc3 m2 i j k))
 
+let sdpa_scale_approx (d : szp)
+  : Lemma (sdpa_scale_f32 d %~ real_sdpa_scale d)
+  = let d64 : Int64.t = FStar.Int.Cast.uint64_to_int64
+      (FStar.SizeT.sizet_to_uint64 d) in
+    assert (Int64.v d64 == SZ.v d);
+    let df : f32 = of_int d64 in
+    of_int_approx #f32 d64;
+    assert (df %~ FStar.Real.of_int d);
+    SqrtApprox.rsqrt_approx df (FStar.Real.of_int d)
+
+let batched_matmul_approx
+  (#batch #rows #shared #cols:nat)
+  (eA : chest3 f32 batch rows shared)
+  (eB : chest3 f32 batch shared cols)
+  (rA : chest3 real batch rows shared)
+  (rB : chest3 real batch shared cols)
+  : Lemma
+      (requires eA %~ rA /\ eB %~ rB)
+      (ensures batched_matmul eA eB %~ batched_matmul rA rB)
+  = let eC : chest3 f32 batch rows cols = mk3 (fun _ _ _ -> zero) in
+    let rC : chest3 real batch rows cols = to_real_chest eC in
+    lemma_to_real_chest_approximates eC;
+    assert (approx2 (MS.comb2 #f32) (MS.comb2 #real));
+    MU.bmmcomb_approx_real (MS.comb2 #f32) (MS.comb2 #real)
+      eA eB eC rA rB rC;
+    MS.bmatmul_is_bgemm eC eA eB;
+    MS.bmatmul_is_bgemm rC rA rB
+
+let mscale_approx
+  (#d0 #d1 #d2:nat)
+  (c : f32) (rc : real)
+  (m : chest3 f32 d0 d1 d2) (rm : chest3 real d0 d1 d2)
+  : Lemma
+      (requires c %~ rc /\ m %~ rm)
+      (ensures mscale c m %~ mscale rc rm)
+  = let aux (i:natlt d0) (j:natlt d1) (k:natlt d2)
+      : Lemma (acc3 (mscale c m) i j k %~ acc3 (mscale rc rm) i j k)
+      = a_mul c (acc3 m i j k) rc (acc3 rm i j k)
+    in
+    Classical.forall_intro_3 aux;
+    lemma_approximates_intro3 (mscale c m) (mscale rc rm)
+
+let reshape3to2_approx
+  (#n #m #k:nat) (p:nat) (_:squash (p == n * m))
+  (e : chest3 f32 n m k) (r : chest3 real n m k)
+  : Lemma
+      (requires e %~ r)
+      (ensures
+        from_seq (l2_row_major p k) (to_seq (l3_batched_row_major n m k) e)
+        %~
+        from_seq (l2_row_major p k) (to_seq (l3_batched_row_major n m k) r))
+  = let e2 = from_seq (l2_row_major p k)
+      (to_seq (l3_batched_row_major n m k) e) in
+    let r2 = from_seq (l2_row_major p k)
+      (to_seq (l3_batched_row_major n m k) r) in
+    let aux (q:natlt p) (j:natlt k)
+      : Lemma (acc2 e2 q j %~ acc2 r2 q j)
+      = let i : natlt n = q / m in
+        let ii : natlt m = q % m in
+        content_ok #f32 #n #m #k p () e i ii j;
+        content_ok #real #n #m #k p () r i ii j
+    in
+    Classical.forall_intro_2 aux;
+    EM.lemma_approximates_intro e2 r2
+
 (* The softmax correspondence: if [sa'] (the Array2 result) approximates the
-   per-row real softmax of [to_real flat], and [probs] re-interprets [sa'] as
+   per-row real softmax of a flattened real tensor, and [probs] re-interprets [sa'] as
    the (bh,s,s) tensor (flat3to2 probs == sa'), then [probs] approximates the
    page-wise real softmax of [scaled]. *)
 #push-options "--fuel 6 --ifuel 4"
 let softmax_corr
   (#bh : nat) (#s : nat{s > 0}) (p:nat) (_:squash (p == bh * s))
-  (scaled : chest3 f32 bh s s)
+  (rscaled : chest3 real bh s s)
   (sa' : chest2 f32 p s)
   (probs : chest3 f32 bh s s)
   (_ : squash (
      sa' %~ RS.row_softmax_real
-              (EM.to_real_matrix
-                 (from_seq (l2_row_major p s)
-                    (to_seq (l3_batched_row_major bh s s) scaled)))))
+              (from_seq (l2_row_major p s)
+                 (to_seq (l3_batched_row_major bh s s) rscaled))))
   (_ : squash (
      from_seq (l2_row_major p s)
         (to_seq (l3_batched_row_major bh s s) probs) == sa'))
   : Lemma
     (probs %~
-       (softmax_pages (EM.to_real_matrix scaled)))
+       (softmax_pages rscaled))
   = let l2 = l2_row_major p s in
     let l3 = l3_batched_row_major bh s s in
-    let flat = from_seq l2 (to_seq l3 scaled) in
-    let ra = EM.to_real_matrix flat in
-    let rm = EM.to_real_matrix scaled in
+    let ra = from_seq l2 (to_seq l3 rscaled) in
+    let rm = rscaled in
     let aux (pp:natlt bh) (ii:natlt s) (j:natlt s)
       : Lemma (acc3 probs pp ii j
                  %~ acc3 (softmax_pages rm) pp ii j)
       = (* acc3 probs pp ii j == acc2 (flat3to2 probs) (pp*s+ii) j == acc2 sa' (pp*s+ii) j *)
         content_ok #f32 #bh #s #s p () probs pp ii j;
         (* row_corr: ra's row (pp*s+ii) == rm-page(pp)'s row ii (as lseq) *)
-        row_corr #bh #s p () scaled pp ii;
+        row_corr #real #bh #s p () rscaled pp ii;
         (* lift to chest1 rows, so softmax_real of the equal rows agree, which is
            exactly acc2 (row_softmax_real ra) (pp*s+ii) j == acc3 (softmax_pages rm) pp ii j *)
         chest2_row_cong ra (slice_page rm pp) (pp*s+ii) ii
@@ -458,7 +523,6 @@ let softmax_corr
 inline_for_extraction noextract
 fn sdpa
   (bh s d : szp)
-  (scale : f32)
   (gQ  : array3 f32 (l3_batched_row_major bh s d) { is_global gQ })
   (gKT : array3 f32 (l3_batched_row_major bh d s) { is_global gKT })
   (gV  : array3 f32 (l3_batched_row_major bh s d) { is_global gV })
@@ -469,10 +533,14 @@ fn sdpa
   (#sV  : chest3 f32 bh s d)
   (#sScores0 : chest3 f32 bh s s)
   (#sOut0 : chest3 f32 bh s d)
+  (rQ : erased (chest3 real bh s d))
+  (rKT : erased (chest3 real bh d s))
+  (rV : erased (chest3 real bh s d))
   (#fQ #fKT #fV : perm)
   preserves
     cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV)
+    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
+    pure (sQ %~ rQ /\ sKT %~ rKT /\ sV %~ rV)
   requires
     on gpu_loc (gScores |-> sScores0) **
     on gpu_loc (gOut |-> sOut0) **
@@ -490,14 +558,17 @@ fn sdpa
     (exists* (probs : chest3 f32 bh s s) (eOut : chest3 f32 bh s d).
       on gpu_loc (gScores |-> probs) **
       on gpu_loc (gOut |-> eOut) **
-      pure (probs %~
-              (softmax_pages
-                 (EM.to_real_matrix
-                    (mscale scale (batched_matmul sQ sKT))))) **
-      pure (eOut == batched_matmul probs sV))
+      pure (eOut %~ real_sdpa rQ rKT rV))
 {
+  let scale = sdpa_scale_f32 d;
+  sdpa_scale_approx d;
+  let rscores : erased (chest3 real bh s s) =
+    hide (batched_matmul rQ rKT);
+  let rscaled : erased (chest3 real bh s s) =
+    hide (mscale (real_sdpa_scale d) (reveal rscores));
   (* ---- Step 1: gScores := Q @ K^T  (exact float matmul) ---- *)
   batched_gemm_f32 bh s d s gQ gKT gScores;
+  batched_matmul_approx (reveal sQ) (reveal sKT) rQ rKT;
   (* on gpu_loc (gScores |-> batched_matmul sQ sKT) *)
 
   (* Machine products (fit by the preconditions: bh*s <= max_blocks and
@@ -517,6 +588,8 @@ fn sdpa
   (* view |-> lseq_map (mul scale) (from1 (to3 (batched_matmul sQ sKT))) *)
 
   smul_reshape_eq scale #bh #s #s p1 () (batched_matmul sQ sKT);
+  mscale_approx scale (real_sdpa_scale d)
+    (batched_matmul (reveal sQ) (reveal sKT)) (reveal rscores);
   map_loc gpu_loc (fun () ->
     reshape1to3_eq p1 gScores
       #(mscale scale (batched_matmul sQ sKT))
@@ -530,12 +603,14 @@ fn sdpa
   map_loc gpu_loc (fun () -> reshape3to2 p2 gScores);
   (* gScores re-interpreted as (bh*s, s) Array2 view over the same buffer. *)
 
+  reshape3to2_approx #bh #s #s p2 ()
+    (mscale scale (batched_matmul (reveal sQ) (reveal sKT)))
+    (reveal rscaled);
+
   RSI.row_softmax_rm_f32 bhs s max_threads
     (from_array (l2_row_major p2 s) (core gScores))
-    (EM.to_real_matrix
-       (from_seq (l2_row_major p2 s)
-          (to_seq (l3_batched_row_major bh s s)
-             (mscale scale (batched_matmul sQ sKT)))));
+    (from_seq (l2_row_major p2 s)
+       (to_seq (l3_batched_row_major bh s s) (reveal rscaled)));
   with sa'. assert on gpu_loc
     (from_array (l2_row_major p2 s) (core gScores) |-> sa');
   (* sa' %~ row_softmax_real (to_real (flat scaled scores)) *)
@@ -548,13 +623,15 @@ fn sdpa
      so flat3to2 probs == sa'. *)
   from_to2 (l2_row_major p2 s) sa';
   softmax_corr #bh #s p2 ()
-    (mscale scale (batched_matmul sQ sKT)) sa' probs () ();
+    (reveal rscaled) sa' probs () ();
   map_loc gpu_loc (fun () -> reshape2to3_eq p2 gScores #probs #_ #sa');
   (* on gpu_loc (gScores |-> probs)
      ** probs %~ softmax_pages (to_real_matrix (mscale scale (batched_matmul sQ sKT))) *)
 
   (* ---- Step 4: gOut := probs @ V  (exact float matmul) ---- *)
   batched_gemm_f32 bh s s d gScores gV gOut;
+  batched_matmul_approx probs (reveal sV)
+    (softmax_pages (reveal rscaled)) rV;
   (* on gpu_loc (gOut |-> batched_matmul probs sV) *)
 
   ()

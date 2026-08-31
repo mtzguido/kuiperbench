@@ -12,19 +12,18 @@ module Kuiper.Spec.Pool2D
 
    This module is layered strictly on top of [Kuiper.Spec.Pool1D]:
 
-   - [maxpool2d_post] / [maxpool2d_post_via_intermediate]: the
-     2-D max-pool postcondition is "exists an intermediate buffer
-     of width W_out × height H such that input → intermediate is
-     a 1-D max-pool along W, and intermediate → output is a 1-D
-     max-pool along H".  Each stage is captured by a slightly
-     generalised per-axis predicate, [row_max_pooled_along_w] and
-     [col_max_pooled_along_h], that lifts [row_max_pooled_1d] to
-     the 2-D layout.
+   - [maxpool2d_post] pins each output directly to a deterministic
+     nested [fmax] fold of the input: first along W, then along H.
+     The per-axis predicates [row_max_pooled_along_w] and
+     [col_max_pooled_along_h] remain available for proofs of a
+     separable implementation, but the public contract does not
+     existentially hide its intermediate tensor.
 
-   - [avgpool2d_post]: same shape with the avg-pool reductions,
-     scaled separately by [inv_kw] and [inv_kh] (their product is
-     the 2-D divisor 1/(K_h*K_w)).  Both stages use the [%~]
-     approximate post on the FP partial sum.
+   - [avgpool2d_post] directly relates each output to the nested
+     real window sum of the input, scaled separately by [inv_kw]
+     and [inv_kh] (their product is the 2-D divisor 1/(K_h*K_w)).
+     The result is related to this input-determined real value by
+     [%~], with no existential floating-point intermediate.
 
    The view on the underlying [Seq.lseq t (bc * h * w)] is
    row-major: index [r * w + c] within the (b*c)-th plane is the
@@ -35,7 +34,7 @@ module Kuiper.Spec.Pool2D
    ---
 
    *Equivalence to a single rectangle reduction.*  For both
-   max-pool and avg-pool the compositional spec is equal to the
+   max-pool and avg-pool the nested spec is equal to the
    "natural" 2-D rectangle spec that reduces over a [K_h * K_w]
    window in one shot:
 
@@ -148,74 +147,54 @@ let col_avg_pooled_along_h
   : prop =
   h_out == pool_out_len_1d h kh sh ph dh /\
   (forall (jh : nat) (cc : nat). jh < h_out /\ cc < w_out ==>
-     (let (col : Seq.lseq t h) =
+      (let (col : Seq.lseq t h) =
         Seq.init_ghost h (fun rr ->
           Seq.index sx_mid (off_mid + rr * w_out + cc)) in
-      (exists (sm : t).
-         sm %~ avg_window_sum_r col kh sh ph dh jh /\
-         Seq.index sx_out (off_out + jh * w_out + cc)
-           == mul sm inv_kh)))
+      Seq.index sx_out (off_out + jh * w_out + cc) %~
+        (avg_window_sum_r col kh sh ph dh jh *. to_real inv_kh)))
 
-(* ----- Whole-tensor 2-D specs (compositional) ---------------------- *)
+(* ----- Direct nested 2-D window values ----------------------------- *)
 
-(* The 2-D max-pool postcondition: there exists an intermediate
-   buffer of shape (bc, h, w_out) such that input → intermediate
-   is a per-row 1-D max-pool along W, and intermediate → output
-   is a per-column 1-D max-pool along H. *)
-let maxpool2d_post
+(* Deterministic width-then-height [fmax] fold for one output slot.
+   [None] means that the whole 2-D window is outside the input. *)
+let rec max_window_2d_aux
   (#t:Type0) {| scalar t |} {| floating t |}
-  (bc h w : nat)
+  (#hw:nat) (plane : Seq.lseq t hw)
+  (h w : nat{h * w == hw})
   (kh kw sh sw ph pw dh dw : nat)
-  (sx  : Seq.lseq t (bc * (h * w)))
-  (sx' : Seq.lseq t (bc * (pool_out_h_2d h kh sh ph dh
-                           * pool_out_w_2d w kw sw pw dw)))
-  : prop =
-  let h_out : nat = pool_out_h_2d h kh sh ph dh in
-  let w_out : nat = pool_out_w_2d w kw sw pw dw in
-  exists (tmp : Seq.lseq t (bc * (h * w_out))).
-    (forall (b : nat). b < bc ==>
-       (b * (h * w)     + h * w     <= bc * (h * w)     /\
-        b * (h * w_out) + h * w_out <= bc * (h * w_out) /\
-        b * (h_out * w_out) + h_out * w_out <= bc * (h_out * w_out) /\
-        row_max_pooled_along_w sx tmp h w w_out
-          (b * (h * w)) (b * (h * w_out)) kw sw pw dw /\
-        col_max_pooled_along_h tmp sx' h h_out w_out
-          (b * (h * w_out)) (b * (h_out * w_out)) kh sh ph dh))
+  (jh jw dih : nat) (cur : option t)
+  : GTot (option t)
+      (decreases (if dih >= kh then 0 else kh - dih)) =
+  if dih >= kh then cur
+  else
+    let cur' : option t =
+      if pool_in_bounds h sh ph dh jh dih then begin
+        let r : nat = pool_input_idx h sh ph dh jh dih in
+        let row_h : Seq.lseq t w =
+          Seq.slice plane (r * w) (r * w + w) in
+        match max_window row_h kw sw pw dw jw with
+        | None -> cur
+        | Some x ->
+            (match cur with
+             | None -> Some x
+             | Some c -> Some (fmax c x))
+      end else cur
+    in
+    max_window_2d_aux plane h w kh kw sh sw ph pw dh dw
+      jh jw (dih + 1) cur'
 
-(* The 2-D avg-pool postcondition.  The two scaling constants are
-   passed separately; the caller is responsible for ensuring
-   [inv_kh] approximates [1/K_h] and [inv_kw] approximates
-   [1/K_w] so that their product is the 2-D divisor [1/(K_h K_w)]. *)
-let avgpool2d_post
-  (#t:Type0) {| scalar t |} {| real_like t |} {| floating t |}
-  (bc h w : nat)
+let max_window_2d
+  (#t:Type0) {| scalar t |} {| floating t |}
+  (#hw:nat) (plane : Seq.lseq t hw)
+  (h w : nat{h * w == hw})
   (kh kw sh sw ph pw dh dw : nat)
-  (inv_kh inv_kw : t)
-  (sx  : Seq.lseq t (bc * (h * w)))
-  (sx' : Seq.lseq t (bc * (pool_out_h_2d h kh sh ph dh
-                           * pool_out_w_2d w kw sw pw dw)))
-  : prop =
-  let h_out : nat = pool_out_h_2d h kh sh ph dh in
-  let w_out : nat = pool_out_w_2d w kw sw pw dw in
-  exists (tmp : Seq.lseq t (bc * (h * w_out))).
-    (forall (b : nat). b < bc ==>
-       (b * (h * w)     + h * w     <= bc * (h * w)     /\
-        b * (h * w_out) + h * w_out <= bc * (h * w_out) /\
-        b * (h_out * w_out) + h_out * w_out <= bc * (h_out * w_out) /\
-        row_avg_pooled_along_w sx tmp h w w_out
-          (b * (h * w)) (b * (h * w_out)) kw sw pw dw inv_kw /\
-        col_avg_pooled_along_h tmp sx' h h_out w_out
-          (b * (h * w_out)) (b * (h_out * w_out)) kh sh ph dh inv_kh))
-
-(* ----- Separability identity for the avg real-valued window sum ---- *)
+  (jh jw : nat)
+  : GTot (option t) =
+  max_window_2d_aux plane h w kh kw sh sw ph pw dh dw
+    jh jw 0 None
 
 (* Iterated 1-D form of the 2-D real-valued window sum: sum
-   along the H axis of the per-row 1-D real window sums.  This
-   matches the value the compositional kernel produces when it
-   accumulates partial sums first along W, then sums those
-   partial sums along H over reals.  Used as an intermediate
-   form in the [avgpool2d_post] correctness proof of a
-   compositional kernel. *)
+   along the H axis of the per-row 1-D real window sums. *)
 let avg_window_sum_2d_via_1d
   (#t:Type0) {| scalar t |} {| real_like t |}
   (#hw : nat) (plane : Seq.lseq t hw)
@@ -229,6 +208,65 @@ let avg_window_sum_2d_via_1d
         let row_h : Seq.lseq t w = Seq.slice plane (r * w) (r * w + w) in
         avg_window_sum_r row_h kw sw pw dw jw
       else 0.0R))
+
+(* ----- Whole-tensor 2-D specs ------------------------------------- *)
+
+(* Each max-pool output is exactly the deterministic nested fold of
+   the corresponding input plane. *)
+let maxpool2d_post
+  (#t:Type0) {| scalar t |} {| floating t |}
+  (bc h w : nat)
+  (kh kw sh sw ph pw dh dw : nat)
+  (sx  : Seq.lseq t (bc * (h * w)))
+  (sx' : Seq.lseq t (bc * (pool_out_h_2d h kh sh ph dh
+                           * pool_out_w_2d w kw sw pw dw)))
+  : prop =
+  let h_out : nat = pool_out_h_2d h kh sh ph dh in
+  let w_out : nat = pool_out_w_2d w kw sw pw dw in
+  forall (b : nat). b < bc ==>
+    (b * (h * w) + h * w <= bc * (h * w) /\
+     b * (h_out * w_out) + h_out * w_out <= bc * (h_out * w_out) /\
+     (let plane : Seq.lseq t (h * w) =
+        Seq.slice sx (b * (h * w)) (b * (h * w) + h * w) in
+      let plane_out : Seq.lseq t (h_out * w_out) =
+        Seq.slice sx' (b * (h_out * w_out))
+          (b * (h_out * w_out) + h_out * w_out) in
+      forall (jh : nat) (jw : nat). jh < h_out /\ jw < w_out ==>
+        (Some? (max_window_2d plane h w kh kw sh sw ph pw dh dw jh jw) /\
+         Seq.index plane_out (jh * w_out + jw) ==
+           Some?.v (max_window_2d plane h w
+             kh kw sh sw ph pw dh dw jh jw))))
+
+(* The 2-D avg-pool postcondition.  The two scaling constants are
+   passed separately; the caller is responsible for ensuring
+   [inv_kh] approximates [1/K_h] and [inv_kw] approximates
+   [1/K_w] so that their product is the 2-D divisor [1/(K_h K_w)].
+   Each output is directly tied to the nested real sum of its input
+   plane rather than to an existential FP intermediate. *)
+let avgpool2d_post
+  (#t:Type0) {| scalar t |} {| real_like t |} {| floating t |}
+  (bc h w : nat)
+  (kh kw sh sw ph pw dh dw : nat)
+  (inv_kh inv_kw : t)
+  (sx  : Seq.lseq t (bc * (h * w)))
+  (sx' : Seq.lseq t (bc * (pool_out_h_2d h kh sh ph dh
+                           * pool_out_w_2d w kw sw pw dw)))
+  : prop =
+  let h_out : nat = pool_out_h_2d h kh sh ph dh in
+  let w_out : nat = pool_out_w_2d w kw sw pw dw in
+  forall (b : nat). b < bc ==>
+    (b * (h * w) + h * w <= bc * (h * w) /\
+     b * (h_out * w_out) + h_out * w_out <= bc * (h_out * w_out) /\
+     (let plane : Seq.lseq t (h * w) =
+        Seq.slice sx (b * (h * w)) (b * (h * w) + h * w) in
+      let plane_out : Seq.lseq t (h_out * w_out) =
+        Seq.slice sx' (b * (h_out * w_out))
+          (b * (h_out * w_out) + h_out * w_out) in
+      forall (jh : nat) (jw : nat). jh < h_out /\ jw < w_out ==>
+        Seq.index plane_out (jh * w_out + jw) %~
+          ((avg_window_sum_2d_via_1d plane h w
+              kh kw sh sw ph pw dh dw jh jw *. to_real inv_kw)
+           *. to_real inv_kh)))
 
 (* ----- Length lemmas exposed via .fsti ----------------------------- *)
 

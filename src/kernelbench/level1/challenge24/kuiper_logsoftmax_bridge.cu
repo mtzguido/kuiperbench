@@ -21,6 +21,10 @@ torch::Tensor kuiper_log_softmax_cuda(torch::Tensor X) {
     auto Y = X.contiguous().clone();
     uint32_t B = (uint32_t)Y.size(0);
     uint32_t D = (uint32_t)Y.size(1);
+    TORCH_CHECK(B <= 2097152,
+                "kuiper_log_softmax: row count exceeds the verified launch bound");
+    TORCH_CHECK((int64_t)B <= ((int64_t)2097152 * 1024) / D,
+                "kuiper_log_softmax: element count exceeds the verified launch bound");
 
     if (Y.scalar_type() == torch::kFloat32) {
         Klas_RowLogSoftmax_row_log_softmax_rm_f32(B, D, Y.data_ptr<float>());

@@ -6,7 +6,8 @@ module Kuiper.KB.RMSNorm
    Launch 2: map_gpu inv_rms_fn      → sum_sq[i]  = rsqrt(sum_sq[i]/C+ε)
    Launch 3: row_scale sum_sq x      → x[i,c] ← x[i,c] * sum_sq[i]
 
-   No assume / magic / admit. *)
+   The direct real proof uses the temporary [rsqrt_approx]
+   compatibility assumption documented in the repository patch. *)
 
 #lang-pulse
 open Kuiper
@@ -14,12 +15,14 @@ open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Tensor.Layout.BCMPages
 open Kuiper.Spec.RMSNorm
+open Kuiper.Spec.Frobenius
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
 module RowScale = Kuiper.Kernel.RowScale
 module KS = Kuiper.Seq.Common
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
 
 (* post_map for inv-rms.  The pre_map for the reduction itself is
    [Kuiper.Spec.RMSNorm.sq_step], reused so that the spec lemmas
@@ -34,19 +37,20 @@ let inv_rms_fn (eps inv_c : f32) (s : f32) : f32 =
      s_row_scale (lseq_map (inv_rms_fn eps inv_c)
                             (seq_reduce_rows sq_step sx))
                  sx
-   The witness for [row_rmsnormalized] at row [r] is then
-     sumsq_r = row_reduce_partial sq_step sx r c
-     inv_r   = inv_rms_fn eps inv_c sumsq_r
-   The [sumsq_r %~ frobenius_sumsq_r ...] obligation reduces to
-   [row_reduce_partial_sq_approx]. *)
+   The proof relates the reduction and reciprocal-square-root intermediates
+   to their real counterparts before proving the direct per-cell post. *)
 #push-options ""
 let rmsnorm_row_aux
-  (bhw_n c_n : nat)
+  (bhw_n : nat) (c_n : pos)
   (eps inv_c : f32)
   (sx : chest2 f32 bhw_n c_n)
   (r : nat)
-  : Lemma (requires r < bhw_n)
-          (ensures  row_rmsnormalized eps inv_c sx
+  : Lemma
+          (requires
+            r < bhw_n /\
+            to_real eps >. 0.0R /\
+            inv_c %~ (1.0R /. FStar.Real.of_int c_n))
+          (ensures  row_rmsnormalized eps sx
                       (Kuiper.Kernel.RowScale.s_row_scale
                          (chest_map (inv_rms_fn eps inv_c)
                             (seq_to_chest1 (HRed.seq_reduce_rows (sq_step #f32) sx)))
@@ -59,20 +63,44 @@ let rmsnorm_row_aux
     let sumsq : f32 = HRed.row_reduce_partial (sq_step #f32) sx r c_n in
     (* acc1 sfac r reduces through chest_map / seq_to_chest1 / init_ghost
        to [inv_rms_fn eps inv_c (row_reduce_partial sq_step sx r c_n)]. *)
-    assert (acc1 sfac r == inv_rms_fn eps inv_c sumsq)
+    assert (acc1 sfac r == inv_rms_fn eps inv_c sumsq);
+    let row = to_real_seq (EM.ematrix_row sx r) in
+    let rss = frobenius_sumsq_r row in
+    let rarg = rms_arg_r #c_n (to_real eps) row in
+    a_mul sumsq inv_c rss (1.0R /. FStar.Real.of_int c_n);
+    to_real_ok eps;
+    a_add (mul sumsq inv_c) eps
+      (rss *. (1.0R /. FStar.Real.of_int c_n)) (to_real eps);
+    frobenius_sumsq_nonnegative row;
+    assert (rss *. (1.0R /. FStar.Real.of_int c_n) ==
+            rss /. FStar.Real.of_int c_n);
+    assert (rarg >. 0.0R);
+    SqrtApprox.rsqrt_approx (add (mul sumsq inv_c) eps) rarg;
+    let rinv = FStar.Math.Sqrt.rsqrt rarg in
+    let out = Kuiper.Kernel.RowScale.s_row_scale sfac sx in
+    let aux (j:nat{j<c_n}) : Lemma
+      (acc2 out r j %~ ((row @! j) *. rinv)) =
+      to_real_ok (acc2 sx r j);
+      a_mul (acc2 sx r j) (acc1 sfac r) (row @! j) rinv
+    in
+    Classical.forall_intro aux
 #pop-options
 
 let rmsnorm_post_aux
-  (bhw_n c_n : nat)
+  (bhw_n : nat) (c_n : pos)
   (eps inv_c : f32)
   (sx : chest2 f32 bhw_n c_n)
-  : Lemma (rmsnorm_post bhw_n c_n eps inv_c sx
+  : Lemma
+      (requires
+        to_real eps >. 0.0R /\
+        inv_c %~ (1.0R /. FStar.Real.of_int c_n))
+      (ensures rmsnorm_post bhw_n c_n eps sx
              (Kuiper.Kernel.RowScale.s_row_scale
                 (chest_map (inv_rms_fn eps inv_c)
                    (seq_to_chest1 (HRed.seq_reduce_rows (sq_step #f32) sx)))
                 sx))
   = let aux (r : nat { r < bhw_n }) : Lemma
-      (row_rmsnormalized eps inv_c sx
+      (row_rmsnormalized eps sx
         (Kuiper.Kernel.RowScale.s_row_scale
           (chest_map (inv_rms_fn eps inv_c)
             (seq_to_chest1 (HRed.seq_reduce_rows (sq_step #f32) sx)))
@@ -97,12 +125,14 @@ fn rmsnorm_fw_f32_impl
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b * SZ.v hw > 0 /\
-      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
+      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads /\
+      to_real eps >. 0.0R /\
+      inv_c %~ (1.0R /. FStar.Real.of_int (SZ.v c))
     )
   ensures
     exists* (sx' : chest2 f32 (SZ.v b * SZ.v hw) c).
       on gpu_loc (x |-> sx') **
-      pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps inv_c sx sx')
+      pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps sx sx')
 {
   (* bhw = B * HW; strictly positive since b > 0 and hw > 0 *)
   let bhw : szp = b *^ hw;
@@ -148,14 +178,22 @@ fn rmsnorm_fw
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b * SZ.v hw > 0 /\
-      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
+      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads /\
+      to_real eps >. 0.0R
     )
   ensures
     exists* (sx' : chest2 f32 (SZ.v b * SZ.v hw) c).
       on gpu_loc (x |-> sx') **
-      pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx')
+      pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps sx sx')
 {
   let inv_c : f32 = rms_inv_c c;
+  let c_i64 = FStar.Int.Cast.uint64_to_int64
+    (FStar.SizeT.sizet_to_uint64 c);
+  assert pure (FStar.Int64.v c_i64 == SZ.v c);
+  of_int_approx #f32 c_i64;
+  div_approx (one #f32) (of_int #f32 c_i64)
+    1.0R (FStar.Real.of_int (SZ.v c));
+  assert pure (inv_c %~ (1.0R /. FStar.Real.of_int (SZ.v c)));
   rmsnorm_fw_f32_impl b hw c eps inv_c x;
 }
 

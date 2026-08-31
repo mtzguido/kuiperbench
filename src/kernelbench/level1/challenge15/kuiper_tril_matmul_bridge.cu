@@ -24,9 +24,8 @@ torch::Tensor kuiper_tril_matmul_cuda(torch::Tensor A, torch::Tensor B) {
     int64_t n = Ac.size(0);
     TORCH_CHECK(Ac.size(1) == n && Bc.size(0) == n && Bc.size(1) == n,
                 "kuiper_tril_matmul: A and B must be square and equal-shaped (N, N)");
-    TORCH_CHECK(n > 0 && n <= (int64_t)UINT32_MAX
-                && n * n <= (int64_t)UINT32_MAX
-                && n * n <= KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS,
+    TORCH_CHECK(n > 0 && n <= (int64_t)UINT32_MAX / n
+                && n <= (KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS) / n,
                 "kuiper_tril_matmul: shape out of range for the verified kernel ABI");
 
     auto Y = torch::empty({n * n}, Ac.options());

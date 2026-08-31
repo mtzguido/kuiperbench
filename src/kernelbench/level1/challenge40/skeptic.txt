@@ -1,62 +1,46 @@
 SKEPTIC — KernelBench L1 #40 LayerNorm
 ======================================
 
-Scope
------
-Kuiper.KB.LayerNorm and the new helper Kuiper.Kernel.Map.map_gpu2.
-
 Spec faithfulness
 -----------------
-The verified entry point [layernorm_fw_f32] establishes [layernorm_post]
-from Kuiper.Spec.LayerNorm: for every batch row r, the output row equals
-[ln_row_result inv neg_mean_inv γ β row], where (inv, neg_mean_inv) are
-existentially-bound floating-point witnesses approximating
-1/sqrt((1/n)Σx² - ((1/n)Σx)² + eps) and -mean*inv respectively.  Per-row
-sum and sum-of-squares are bound only via the [%~] approximation
-relation, mirroring MeanVarNorm.  The bridge passes inv_n = 1/n and eps
-verbatim from PyTorch (default 1e-5), and γ/β default to ones/zeros via
-nn.LayerNorm so the harness comparison is exact under PyTorch tolerance.
+The verified entry point establishes a direct real-valued contract.  For
+every batch row, [layernorm_post] relates each concrete output via [%~] to
+
+  mean = (1/n) Σ x[j]
+  var  = (1/n) Σ x[j]^2 - mean^2
+  y[j] = ((x[j] - mean) / sqrt(var + eps)) * gamma[j] + beta[j].
+
+There are no numerical existentials in the public row or tensor
+postcondition.  Float reductions and affine intermediates remain proof-local.
+The entry point computes 1/n internally and proves its real approximation;
+the bridge does not supply it.
+
+The public [layernorm_domain] precondition requires every real
+[var + eps] to be positive.  On that domain, the temporary
+[Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] assumption connects the float
+[rsqrt] operation to [FStar.Math.Sqrt.rsqrt].  This compatibility law is
+proposed for upstream Kuiper and is the numerical proof's explicit local
+trust debt.
+
+Proof shape
+-----------
+Two verified reductions obtain the row's sum and sum of squares.  Scalar
+approximation laws derive the real normalization, and the pointwise proof
+also anchors gamma and beta through [to_real_seq].  The host loop preserves
+completed output rows and the untouched input suffix.
 
 Inherited debt
 --------------
-[Kuiper.Kernel.Map.map_gpu2] — the new 2-array elementwise primitive —
-uses [magic ()] in its [kernel_desc] [kpre_sendable]/[kpost_sendable]
-fields (Map.fst lines ≈170-171).  This is the same legacy pattern every
-plain-[kernel_desc] kernel in tree carries (HReduce, HReduce.Block,
-RowScale).  The setup/teardown ghost code is real (forevery_zip /
-share_n / explode / implode), so the only debt here is sendability of
-compound per-thread slprops.
-
-LayerNorm itself adds zero new [magic ()] / [admit ()] / [assume pure].
-The orchestrator copies the MeanVarNorm host-loop pattern verbatim and
-extends each row body with two extra [map_gpu2] calls (mul γ; add β)
-whose composition is bridged to [ln_row_result] by a one-page Seq.equal
-lemma [ln_row_result_via_affine_lemma] in LayerNorm.fst.
+[Kuiper.Kernel.Map.map_gpu2] uses [magic ()] for its kernel descriptor's
+sendability fields, following the existing plain-kernel pattern.  The
+LayerNorm-specific numerical proof adds no further magic or admit, but it
+does depend on the local rsqrt compatibility assumption described above.
 
 Edge cases
 ----------
-- Constant row: var = 0; var_eps = eps; inv = rsqrt(eps).  Finite for
-  any eps > 0.  Output row = (0)*γ + β = β.  Matches PyTorch.
-- eps == 0 + constant row: inv = +inf, output = NaN.  The spec is still
-  satisfied (the existentially-bound inv is whatever rsqrt yields).
-- B = 0: the [szp] precondition rules this out at the type level.
-- n = 0: ditto via [szp].
-- Large n: must satisfy n + 1024 ≤ 2³² (HReduce inner-block buffer)
-  AND B*n ≤ 2³¹ (max_blocks * max_threads).  Bridge enforces both.
-
-Performance
------------
-6 GPU launches per row × B rows.  For the KB harness (B=16,
-n=64*256*256 ≈ 4 Mi) this is 96 launches and runs end-to-end in well
-under a second.  A future fused per-row block kernel (single launch
-amortising the reductions and γ/β broadcast) would cut this by ~10×;
-not done because it requires either a col-broadcast 2D primitive or
-shared-memory reduction infrastructure that doesn't yet compose with
-RowScale-shaped helpers.
-
-Follow-ups
-----------
-- Generalise [map_gpu2] sendability discharge to remove the magic().
-- Write a fused per-row block kernel for higher throughput.
-- BatchNorm (#33) is its sibling problem: same pipeline up to the
-  per-channel layout (BCMChannels) — see challenge33/STATUS.txt.
+- [b] and [n] are positive by [szp].
+- A constant row with positive eps is in-domain and produces beta in real
+  semantics before floating approximation.
+- A row with non-positive real [var + eps] is outside the theorem's domain;
+  the prior claim that an unconstrained existential covered rsqrt(0) has
+  intentionally been removed.

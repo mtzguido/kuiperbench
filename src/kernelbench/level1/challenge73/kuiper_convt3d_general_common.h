@@ -77,18 +77,31 @@ static torch::Tensor kuiper_convt3d_general_cuda(
     TORCH_CHECK(B > 0 && Cin > 0 && Din > 0 && Hin > 0 && Win > 0 &&
                 Cout > 0 && Kd > 0 && Kh > 0 && Kw > 0,
                 "kuiper_convt3d_general: shapes must be positive");
+    auto helper_arg_fits = [](int64_t v) {
+        return v >= 0 && v <= (int64_t)UINT32_MAX;
+    };
+    TORCH_CHECK(helper_arg_fits(Din) && helper_arg_fits(Hin) && helper_arg_fits(Win) &&
+                helper_arg_fits(Kd) && helper_arg_fits(Kh) && helper_arg_fits(Kw) &&
+                helper_arg_fits(stride_d) && helper_arg_fits(stride_h) && helper_arg_fits(stride_w) &&
+                helper_arg_fits(pad_d) && helper_arg_fits(pad_h) && helper_arg_fits(pad_w) &&
+                helper_arg_fits(out_pad_d) && helper_arg_fits(out_pad_h) && helper_arg_fits(out_pad_w) &&
+                helper_arg_fits(dil_d) && helper_arg_fits(dil_h) && helper_arg_fits(dil_w),
+                "kuiper_convt3d_general: output-size helper arguments out of range");
 
     // VERIFIED ConvTranspose3D output-size formula (extracted from
     // Kuiper.KB.ConvT3DGeneral), per axis:
     //   L_out = (L_in - 1)*S - 2*P + D*(K - 1) + output_padding + 1.
-    // The non-negative part [pos] is computed in int64 ONLY as an
+    // The non-negative part [pos] is computed in a wide integer as an
     // underflow/overflow guard (NOT the output value): [pos > 2*P]
     // discharges the verified helper's [2*P <= pos] precondition and
     // [pos <= UINT32_MAX] discharges its [SZ.fits] precondition.  The actual
     // output dimensions are produced by the verified helper.
-    int64_t pos_d = (Din - 1) * stride_d + dil_d * (Kd - 1) + out_pad_d + 1;
-    int64_t pos_h = (Hin - 1) * stride_h + dil_h * (Kh - 1) + out_pad_h + 1;
-    int64_t pos_w = (Win - 1) * stride_w + dil_w * (Kw - 1) + out_pad_w + 1;
+    __int128 pos_d = (__int128)(Din - 1) * stride_d +
+                     (__int128)dil_d * (Kd - 1) + out_pad_d + 1;
+    __int128 pos_h = (__int128)(Hin - 1) * stride_h +
+                     (__int128)dil_h * (Kh - 1) + out_pad_h + 1;
+    __int128 pos_w = (__int128)(Win - 1) * stride_w +
+                     (__int128)dil_w * (Kw - 1) + out_pad_w + 1;
     TORCH_CHECK(pos_d > 2 * pad_d && pos_h > 2 * pad_h && pos_w > 2 * pad_w,
                 "kuiper_convt3d_general: zero-sized output");
     TORCH_CHECK(pos_d <= (int64_t)UINT32_MAX && pos_h <= (int64_t)UINT32_MAX &&

@@ -74,7 +74,7 @@ torch::Tensor kuiper_avgpool1d_cuda(torch::Tensor X,
     // [padded = L+2P].
     int64_t kspan  = dilation * (kernel_size - 1) + 1;
     int64_t padded = L + 2 * padding;
-    TORCH_CHECK(B > 0 && C > 0
+    TORCH_CHECK(B > 0 && C > 0 && L > 0
                 && BC > 0 && BC <= (int64_t)UINT32_MAX
                 && L <= (int64_t)UINT32_MAX
                 && kspan <= (int64_t)UINT32_MAX

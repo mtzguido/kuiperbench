@@ -7,9 +7,10 @@ module Kuiper.Spec.CrossEntropyLoss
      loss = mean_b ( -log_softmax(predictions[b])[targets[b]] )
           = mean_b ( logsumexp(predictions[b]) - predictions[b, targets[b]] )
 
-   This spec is *used* (imported by Kuiper.KB.CrossEntropyLoss) and is
-   a genuine function of ALL inputs: the flat (B*C) predictions buffer
-   [sp] and the length-B target index sequence [st].
+   The public postcondition is directly real-valued.  For a real logits
+   sequence [rp] approximated by the f32 predictions, it states that the
+   result approximates the mean of the mathematical real log-softmax
+   losses selected by the (exact integer) targets.
 
    The per-row term is pinned to the verified
    [Kuiper.Kernel.LogSoftmax.log_softmax_real] path that the kernel
@@ -33,41 +34,55 @@ module Seq = FStar.Seq
 module SZ = Kuiper.SizeT
 unfold let f32 = Kuiper.Float32.t
 
-(* Row [r] (a contiguous block of [c] f32s) of a flat [n]-element
+(* Row [r] (a contiguous block of [c] reals) of a flat [n]-element
    row-major (B*C) predictions buffer.  Defensive guard keeps it
    total; for every valid [r] (i.e. [r * c + c <= n]) it returns the
    genuine row slice. *)
-let crow (#n:nat) (s : Seq.lseq f32 n) (c:nat) (r:nat) : Seq.lseq f32 c =
-  if r * c + c <= n then Seq.slice s (r * c) (r * c + c) else Seq.create c zero
+let crow (#n:nat) (s : Seq.lseq real n) (c:nat) (r:nat) : Seq.lseq real c =
+  if r * c + c <= n then Seq.slice s (r * c) (r * c + c) else Seq.create c 0.0R
 
 (* Per-row cross-entropy term in REAL arithmetic, total in [t] via a
    defensive clamp:
      ce_term_r c sp r t  =  - (log_softmax(crow sp c r))[t]. *)
-let ce_term_r (c:pos) (#n:nat) (sp : Seq.lseq f32 n) (r:nat) (t:nat) : real =
-  let rr = to_real_seq (crow sp c r) in
-  if Seq.length rr > 0 && t < Seq.length rr
-  then 0.0R -. (acc1 (log_softmax_real (seq_to_chest1 (rr <: Seq.lseq real (Seq.length rr)))) t)
+let ce_term_r (c:pos) (#n:nat) (rp : Seq.lseq real n) (r:nat) (t:nat) : real =
+  let rr = crow rp c r in
+  if t < c
+  then 0.0R -. (acc1 (log_softmax_real (seq_to_chest1 rr)) t)
   else 0.0R
 
-(* Postcondition: the returned scalar [res] is the mean cross-entropy
-   loss of the inputs.  The per-batch loss vector is existentially
-   bound (the device-side log-softmax + tree-reduce are not
-   bit-exactly determined) but *pinned* to the genuine inputs:
+let real_cross_entropy_terms
+  (batches : pos)
+  (num_classes : pos)
+  (rp : Seq.lseq real (batches * num_classes))
+  (st : Seq.lseq SZ.t batches)
+  : Seq.lseq real batches =
+  Seq.init batches (fun r -> ce_term_r num_classes rp r (SZ.v (st @! r)))
 
-     * [per_batch[r]] approximates (via [%~]) the real per-row CE term
-       [ce_term_r] of row [r] of [sp] at its target class [st[r]];
-     * [s] approximates the real sum of the per-batch losses;
-     * [res == mul s inv_b]   (multiply by the verified 1/B). *)
+let real_cross_entropy
+  (batches : pos)
+  (num_classes : pos)
+  (rp : Seq.lseq real (batches * num_classes))
+  (st : Seq.lseq SZ.t batches)
+  : real =
+  rsum (real_cross_entropy_terms batches num_classes rp st)
+    /. FStar.Real.of_int batches
+
+val real_cross_entropy_mul
+  (batches : pos)
+  (num_classes : pos)
+  (rp : Seq.lseq real (batches * num_classes))
+  (st : Seq.lseq SZ.t batches)
+  : Lemma
+      (real_cross_entropy batches num_classes rp st ==
+       rsum (real_cross_entropy_terms batches num_classes rp st) *.
+         (1.0R /. FStar.Real.of_int batches))
+
+(* No floating-point intermediate is existentially chosen here. *)
 let cross_entropy_post
   (batches : pos)
   (num_classes : pos)
-  (inv_b : f32)
-  (sp : Seq.lseq f32 (batches * num_classes))
+  (rp : Seq.lseq real (batches * num_classes))
   (st : Seq.lseq SZ.t batches)
   (res : f32)
   : prop =
-  exists (per_batch : Seq.lseq f32 batches) (s : f32).
-    (forall (r : nat). r < batches ==>
-       (per_batch @! r) %~ ce_term_r num_classes sp r (st @! r)) /\
-    s %~ rsum (to_real_seq per_batch) /\
-    res == mul s inv_b
+  res %~ real_cross_entropy batches num_classes rp st

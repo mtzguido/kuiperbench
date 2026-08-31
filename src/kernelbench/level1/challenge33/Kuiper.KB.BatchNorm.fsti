@@ -23,8 +23,11 @@ module Kuiper.KB.BatchNorm
                                       then (γ_ci, β_ci))
      - Kuiper.Array1.arr_read_1      (host read of γ[ci], β[ci])
 
-   No new [magic ()] / [admit ()] / [assume pure].  The only [magic ()]
-   inherited is via [Kuiper.Kernel.Map.map_gpu]'s
+   The real-valued proof uses the temporary
+   [Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] assumption, whose upstream
+   Kuiper patch is tracked in [patches/kuiper-sqrt-approx.patch].  There is
+   no challenge-local [magic ()], [admit ()], or [assume pure].  The [magic]
+   inherited via [Kuiper.Kernel.Map.map_gpu]'s
    [kpre_sendable]/[kpost_sendable] (tree-wide debt for plain
    kernel_desc kernels). *)
 
@@ -63,14 +66,24 @@ fn batchnorm_fw_f32
   (#fg #fb : perm)
   (#sx : chest2 f32 c (n * SZ.v hw))
   (#sg #sb : chest1 f32 c)
+  (reps : erased real)
+  (rx : erased (v : chest2 real c (n * SZ.v hw) {
+    batchnorm_domain c (n * SZ.v hw) (reveal reps)
+      (bn_inv_n_r (SZ.v nhw)) v }))
+  (rg rb : erased (lseq real c))
   preserves
     cpu **
     on gpu_loc (gamma |-> Frac fg sg) **
-    on gpu_loc (beta  |-> Frac fb sb)
+    on gpu_loc (beta  |-> Frac fb sb) **
+    pure (eps %~ reveal reps /\
+          sx %~ ((reveal rx) <: chest2 real c (n * SZ.v hw)) /\
+          sg %~ seq_to_chest1 (reveal rg) /\
+          sb %~ seq_to_chest1 (reveal rb))
   requires
     on gpu_loc (x |-> sx)
   ensures
     (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
        on gpu_loc (x |-> sx') **
-       pure (batchnorm_post c (n * SZ.v hw) eps (bn_inv_n nhw)
-               (chest1_to_seq sg) (chest1_to_seq sb) sx sx'))
+       pure (batchnorm_post c (n * SZ.v hw) (reveal reps)
+               (bn_inv_n_r (SZ.v nhw)) (reveal rg) (reveal rb)
+               (reveal rx) sx'))

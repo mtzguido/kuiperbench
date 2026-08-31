@@ -19,12 +19,8 @@ module Kuiper.KB.L1Norm
    of_int (int64 D)] (extracts to (float)(int64_t)(uint64_t)D), so no
    unverified floating-point arithmetic happens in the C bridge.
 
-   Functional postcondition (see [Kuiper.Spec.L1Norm]): each output
-   row [r] is a uniform scaling [mul scale_r] of the corresponding
-   input row, where [scale_r == div (l1_dim_f d) sum_abs_r] and
-   [sum_abs_r] approximates the row's real-valued L1 norm.  Both are
-   existentially bound per row because the device-side reduction only
-   approximates the real sum and [div] is opaque to the spec.
+   Functional postcondition (see [Kuiper.Spec.L1Norm]): every output
+   cell directly approximates the real L1-normalized input cell.
 
    Edge case (all-zero row): see Kuiper.Spec.L1Norm.  Matches the
    PyTorch reference (NaNs out).
@@ -57,9 +53,10 @@ fn l1norm_fw_f32
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b > 0 /\
-      SZ.v b * SZ.v d <= max_blocks * max_threads
+      SZ.v b * SZ.v d <= max_blocks * max_threads /\
+      l1norm_domain sx
     )
   ensures
     (exists* (sx' : chest2 f32 b d).
        on gpu_loc (x |-> sx') **
-       pure (l1norm_post b d (l1_dim_f d) sx sx'))
+       pure (l1norm_post b d sx sx'))

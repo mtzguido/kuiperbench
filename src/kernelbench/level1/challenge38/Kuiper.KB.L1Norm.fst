@@ -32,19 +32,19 @@ let l1_scale_fn (dim_f : f32) (s : f32) : f32 = div dim_f s
      s_row_scale (lseq_map (l1_scale_fn dim_f)
                             (seq_reduce_rows fabs sx))
                  sx
-   The witness for [row_l1_normalized] at row [r] is then
-     sum_abs_r = row_reduce_partial fabs sx r d
-     scale_r   = div dim_f sum_abs_r
-   The [sum_abs_r %~ l1_sum_r ...] obligation reduces to
-   [row_reduce_partial_fabs_approx]. *)
+   The proof relates the reduction and division intermediates to the
+   direct real per-cell postcondition. *)
 #push-options ""
 let l1norm_row_aux
-  (b_n d_n : nat)
+  (b_n : nat) (d_n : pos)
   (dim_f : f32)
   (sx : chest2 f32 b_n d_n)
   (r : nat)
-  : Lemma (requires r < b_n)
-          (ensures  row_l1_normalized dim_f sx
+  : Lemma
+          (requires
+            r < b_n /\ l1norm_domain sx /\
+            dim_f %~ FStar.Real.of_int d_n)
+          (ensures  row_l1_normalized sx
                       (Kuiper.Kernel.RowScale.s_row_scale
                          (chest_map (l1_scale_fn dim_f)
                             (seq_to_chest1 (HRed.seq_reduce_rows (fabs #f32) sx)))
@@ -57,20 +57,34 @@ let l1norm_row_aux
     let sum_abs : f32 = HRed.row_reduce_partial (fabs #f32) sx r d_n in
     (* acc1 sfac r reduces through chest_map / seq_to_chest1 / init_ghost
        to [div dim_f (row_reduce_partial fabs sx r d_n)]. *)
-    assert (acc1 sfac r == div dim_f sum_abs)
+    assert (acc1 sfac r == div dim_f sum_abs);
+    let row = EM.ematrix_row sx r in
+    let rsum = l1_sum_r row in
+    div_approx dim_f sum_abs (FStar.Real.of_int d_n) rsum;
+    let rscale = l1_scale_r #d_n row in
+    let out = Kuiper.Kernel.RowScale.s_row_scale sfac sx in
+    let aux (j:nat{j<d_n}) : Lemma
+      (acc2 out r j %~ (to_real (acc2 sx r j) *. rscale)) =
+      to_real_ok (acc2 sx r j);
+      a_mul (acc2 sx r j) (acc1 sfac r)
+        (to_real (acc2 sx r j)) rscale
+    in
+    Classical.forall_intro aux
 #pop-options
 
 let l1norm_post_aux
-  (b_n d_n : nat)
+  (b_n : nat) (d_n : pos)
   (dim_f : f32)
   (sx : chest2 f32 b_n d_n)
-  : Lemma (l1norm_post b_n d_n dim_f sx
+  : Lemma
+      (requires l1norm_domain sx /\ dim_f %~ FStar.Real.of_int d_n)
+      (ensures l1norm_post b_n d_n sx
              (Kuiper.Kernel.RowScale.s_row_scale
                 (chest_map (l1_scale_fn dim_f)
                    (seq_to_chest1 (HRed.seq_reduce_rows (fabs #f32) sx)))
                 sx))
   = let aux (r : nat { r < b_n }) : Lemma
-      (row_l1_normalized dim_f sx
+      (row_l1_normalized sx
         (Kuiper.Kernel.RowScale.s_row_scale
           (chest_map (l1_scale_fn dim_f)
             (seq_to_chest1 (HRed.seq_reduce_rows (fabs #f32) sx)))
@@ -93,12 +107,14 @@ fn l1norm_fw_f32_impl
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b > 0 /\
-      SZ.v b * SZ.v d <= max_blocks * max_threads
+      SZ.v b * SZ.v d <= max_blocks * max_threads /\
+      l1norm_domain sx /\
+      dim_f %~ FStar.Real.of_int (SZ.v d)
     )
   ensures
     exists* (sx' : chest2 f32 b d).
       on gpu_loc (x |-> sx') **
-      pure (l1norm_post b d dim_f sx sx')
+      pure (l1norm_post b d sx sx')
 {
   (* b <= b * d  since d >= 1 *)
   FStar.Math.Lemmas.lemma_mult_le_right d 1 b;
@@ -141,14 +157,20 @@ fn l1norm_fw
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b > 0 /\
-      SZ.v b * SZ.v d <= max_blocks * max_threads
+      SZ.v b * SZ.v d <= max_blocks * max_threads /\
+      l1norm_domain sx
     )
   ensures
     exists* (sx' : chest2 f32 b d).
       on gpu_loc (x |-> sx') **
-      pure (l1norm_post b d (l1_dim_f d) sx sx')
+      pure (l1norm_post b d sx sx')
 {
   let dim_f : f32 = l1_dim_f d;
+  let d_i64 = FStar.Int.Cast.uint64_to_int64
+    (FStar.SizeT.sizet_to_uint64 d);
+  assert pure (FStar.Int64.v d_i64 == SZ.v d);
+  of_int_approx #f32 d_i64;
+  assert pure (dim_f %~ FStar.Real.of_int (SZ.v d));
   l1norm_fw_f32_impl b d dim_f x;
 }
 

@@ -73,12 +73,10 @@ torch::Tensor kuiper_sdpa_cuda(torch::Tensor Q,
     TORCH_CHECK(cudaMalloc(&gOut, BH * S * D * sizeof(float)) == cudaSuccess,
                 "kuiper_sdpa: out alloc failed");
 
-    float scale = Kuiper_KB_SDPA_sdpa_scale_f32((uint32_t)D);
-
     // Single verified entry point:
-    //   out = softmax((Q · K^T) * scale) · V
+    //   out = softmax((Q · K^T) / sqrt(D)) · V
     Kuiper_KB_SDPA_sdpa_f32(
-        (uint32_t)BH, (uint32_t)S, (uint32_t)D, scale,
+        (uint32_t)BH, (uint32_t)S, (uint32_t)D,
         Q3.data_ptr<float>(), KT.data_ptr<float>(), V3.data_ptr<float>(),
         gScores, gOut);
 

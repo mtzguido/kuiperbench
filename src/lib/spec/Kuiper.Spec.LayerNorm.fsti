@@ -7,21 +7,18 @@ module Kuiper.Spec.LayerNorm
 
        sum_r   = Σ_j x[r,j]
        sumsq_r = Σ_j x[r,j]^2
-       mean_r  = sum_r * inv_n              -- inv_n ≈ 1/n
-       m2_r    = sumsq_r * inv_n
+       mean_r  = sum_r / n
+       m2_r    = sumsq_r / n
        var_r   = m2_r - mean_r^2
        inv_r   = 1 / sqrt(var_r + eps)
        y[r,j]  = (x[r,j] - mean_r) * inv_r * γ[j] + β[j]
 
-   The spec mirrors MeanVarNorm but adds the per-element column
-   broadcast of γ (scale) and β (shift), of length n.  The per-row
-   statistics (sum, sumsq, mean, m2, var, var_eps, inv) are
-   existentially bound exactly as in MeanVarNorm.
-
-   Edge cases match PyTorch:
-     - Constant row: var = 0, inv = rsqrt(eps); finite for eps > 0.
-     - eps = 0: rsqrt 0 = +inf, output = NaN.  Spec is satisfied:
-       the existentially-bound [inv] is whatever rsqrt produces.
+   The public contract directly approximates this real-valued operation;
+   floating intermediates used by the implementation are not exposed as
+   existential witnesses.  Its explicit domain requires each real
+   [variance + eps] to be positive, exactly the premise needed by the
+   temporary [Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] law proposed
+   for upstream Kuiper.
 *)
 
 open Kuiper.Real
@@ -30,6 +27,7 @@ open Kuiper.Floating.Base
 open Kuiper.Approximates
 open Kuiper.Spec.Frobenius
 module Seq = FStar.Seq
+module RealSqrt = FStar.Math.Sqrt
 
 (* Per-element body of LayerNorm given the per-row scalars
    (inv, neg_mean_inv) and per-column γ[j], β[j].
@@ -53,35 +51,59 @@ let ln_row_result
   Seq.init_ghost n (fun j ->
     ln_step inv neg_mean_inv (Seq.index gamma j) (Seq.index beta j) (Seq.index row j))
 
-(* Per-row predicate: row [r] of [sx'] is the LayerNorm-normalised
-   version of row [r] of [sx], existentially binding all the
-   floating-point per-row statistics. *)
+let ln_mean_r (#n:pos) (row:Seq.lseq real n) : real =
+  rsum row *. (1.0R /. FStar.Real.of_int n)
+
+let ln_m2_r (#n:pos) (row:Seq.lseq real n) : real =
+  frobenius_sumsq_r row *. (1.0R /. FStar.Real.of_int n)
+
+let ln_arg_r (#n:pos) (eps:real) (row:Seq.lseq real n) : real =
+  ln_m2_r #n row -. ln_mean_r #n row *. ln_mean_r #n row +. eps
+
+let ln_inv_r (#n:pos) (eps:real) (row:Seq.lseq real n) : real =
+  let a = ln_arg_r #n eps row in
+  if a >. 0.0R then RealSqrt.rsqrt a else 0.0R
+
+let ln_row_result_r
+  (#n:pos) (eps:real)
+  (gamma beta row:Seq.lseq real n) : Seq.lseq real n =
+  let mean = ln_mean_r #n row in
+  let inv = ln_inv_r #n eps row in
+  Seq.init n (fun j ->
+    let normalized = Seq.index row j *. inv +. (0.0R -. mean *. inv) in
+    normalized *. Seq.index gamma j +. Seq.index beta j)
+
+let row_layernorm_domain
+  (#t:Type0) {| scalar t, real_like t |}
+  (#bn:nat) (sx:Seq.lseq t bn)
+  (off:nat) (n:pos{off+n <= bn}) (eps:t) : prop =
+  ln_arg_r #n (to_real eps)
+    (to_real_seq (Seq.slice sx off (off+n))) >. 0.0R
+
+(* Direct real-valued per-row LayerNorm contract. *)
 let row_layer_normalized
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (#bn:nat) (#n:nat)
+  (#t:Type0) {| scalar t, real_like t |}
+  (#bn:nat) (#n:pos)
   (sx sx' : Seq.lseq t bn)
   (gamma beta : Seq.lseq t n)
   (off : nat{off + n <= bn})
-  (eps inv_n : t)
-  : prop =
-  exists (sum sumsq mean m2 var var_eps inv neg_mean_inv : t).
-    (let row : Seq.lseq t n = Seq.slice sx off (off + n) in
-     sum   %~ rsum (to_real_seq row) /\
-     sumsq %~ frobenius_sumsq_r (to_real_seq row) /\
-     mean         == mul sum   inv_n /\
-     m2           == mul sumsq inv_n /\
-     var          == sub m2 (mul mean mean) /\
-     var_eps      == add var eps /\
-     inv          == rsqrt var_eps /\
-     neg_mean_inv == sub Kuiper.Scalars.zero (mul mean inv) /\
-     Seq.slice sx' off (off + n) ==
-       ln_row_result inv neg_mean_inv gamma beta row)
+  (eps : t) : prop =
+  Seq.slice sx' off (off+n) %~
+    ln_row_result_r #n (to_real eps)
+      (to_real_seq gamma) (to_real_seq beta)
+      (to_real_seq (Seq.slice sx off (off+n)))
+
+let layernorm_domain
+  (#t:Type0) {| scalar t, real_like t |}
+  (b:nat) (n:pos) (eps:t) (sx:Seq.lseq t (b*n)) : prop =
+  forall (r:nat). r < b ==>
+    row_layernorm_domain sx (r*n) n eps
 
 (* Whole-tensor spec: every row is LayerNorm-normalised. *)
 let layernorm_post
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (b n : nat)
-  (eps inv_n : t)
+  (#t:Type0) {| scalar t, real_like t |}
+  (b : nat) (n:pos)
+  (eps : t)
   (gamma beta : Seq.lseq t n)
   (sx sx' : Seq.lseq t (b * n))
   : prop =
@@ -89,4 +111,4 @@ let layernorm_post
     (let lo : nat = r * n in
      let hi : nat = lo + n in
      hi <= b * n /\
-     row_layer_normalized sx sx' gamma beta lo eps inv_n)
+     row_layer_normalized sx sx' gamma beta lo eps)

@@ -110,6 +110,8 @@ torch::Tensor kuiper_maxpool2d_cuda(torch::Tensor X,
     int64_t W = Xc.size(3);
     int64_t bc = B * C;
 
+    TORCH_CHECK(B > 0 && C > 0 && H > 0 && W > 0,
+                "kuiper_maxpool2d: input dimensions must be positive");
     check_full_raw(bc, H, W, kernel_size, stride, padding, dilation);
 
     // ── Single verified, transpose-free 2-D max pool. ────────────────

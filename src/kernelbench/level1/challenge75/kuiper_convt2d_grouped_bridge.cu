@@ -60,13 +60,25 @@ static torch::Tensor kuiper_convt2d_grouped_cuda(
     TORCH_CHECK(B > 0 && Cin > 0 && Hin > 0 && Win > 0 && Cout > 0
                 && Kh > 0 && Kw > 0,
                 "kuiper_convt2d_grouped: shapes must be positive");
+    auto helper_arg_fits = [](int64_t v) {
+        return v >= 0 && v <= (int64_t)UINT32_MAX;
+    };
+    TORCH_CHECK(helper_arg_fits(Hin) && helper_arg_fits(Win) &&
+                helper_arg_fits(Kh) && helper_arg_fits(Kw) &&
+                helper_arg_fits(stride_h) && helper_arg_fits(stride_w) &&
+                helper_arg_fits(pad_h) && helper_arg_fits(pad_w) &&
+                helper_arg_fits(out_pad_h) && helper_arg_fits(out_pad_w) &&
+                helper_arg_fits(dil_h) && helper_arg_fits(dil_w),
+                "kuiper_convt2d_grouped: output-size helper arguments out of range");
 
     // VERIFIED ConvTranspose2D output-size formula (extracted from
     // Kuiper.KB.ConvT2DGeneral), per axis.  [pos] is the non-negative part
     // used only as an underflow/overflow guard (NOT the output value); the
     // actual output dimensions come from the verified helper.
-    int64_t pos_h = (Hin - 1) * stride_h + dil_h * (Kh - 1) + out_pad_h + 1;
-    int64_t pos_w = (Win - 1) * stride_w + dil_w * (Kw - 1) + out_pad_w + 1;
+    __int128 pos_h = (__int128)(Hin - 1) * stride_h +
+                     (__int128)dil_h * (Kh - 1) + out_pad_h + 1;
+    __int128 pos_w = (__int128)(Win - 1) * stride_w +
+                     (__int128)dil_w * (Kw - 1) + out_pad_w + 1;
     TORCH_CHECK(pos_h > 2 * pad_h && pos_w > 2 * pad_w,
                 "kuiper_convt2d_grouped: zero-sized output");
     TORCH_CHECK(pos_h <= (int64_t)UINT32_MAX && pos_w <= (int64_t)UINT32_MAX,

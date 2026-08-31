@@ -9,9 +9,85 @@ open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.MeanVarNorm
 module SZ = Kuiper.SizeT
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+
+(* Proof-local description of the concrete floating intermediates.  The
+   public spec is [row_mean_var_normalized], which contains no numerical
+   existential. *)
+let row_mean_var_normalized
+  (#bd:nat) (sx sx' : Seq.lseq f32 bd)
+  (off d : nat{off + d <= bd}) (eps inv_d : f32) : prop =
+  exists (sum sum2 mean m2 var var_eps inv neg_mean_inv : f32).
+    (let row : Seq.lseq f32 d = Seq.slice sx off (off + d) in
+     sum  %~ rsum (to_real_seq row) /\
+     sum2 %~ frobenius_sumsq_r (to_real_seq row) /\
+     mean         == mul sum  inv_d /\
+     m2           == mul sum2 inv_d /\
+     var          == sub m2 (mul mean mean) /\
+     var_eps      == add var eps /\
+     inv          == rsqrt var_eps /\
+     neg_mean_inv == sub zero (mul mean inv) /\
+     Seq.slice sx' off (off + d) ==
+       affine_result #f32 inv neg_mean_inv #d row /\
+     (d > 0 ==>
+       Kuiper.Spec.MeanVarNorm.row_mean_var_normalized sx sx' off d eps))
+
+let mean_var_float_post
+  (b d:nat) (eps inv_d:f32)
+  (sx sx':Seq.lseq f32 (b*d)) : prop =
+  forall (r:nat). r < b ==>
+    r*d+d <= b*d /\ row_mean_var_normalized sx sx' (r*d) d eps inv_d
 module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
 module KS = Kuiper.Seq.Common
+
+let row_mean_var_real_from_witnesses
+  (#bd:nat) (d:pos)
+  (sx sx':Seq.lseq f32 bd) (off:nat{off+d <= bd})
+  (eps inv_d sum sum2 mean m2 var var_eps inv neg_mean_inv:f32)
+  : Lemma
+      (requires
+        sum %~ rsum (to_real_seq (Seq.slice sx off (off+d))) /\
+        sum2 %~ frobenius_sumsq_r (to_real_seq (Seq.slice sx off (off+d))) /\
+        inv_d %~ (1.0R /. FStar.Real.of_int d) /\
+        mean == mul sum inv_d /\ m2 == mul sum2 inv_d /\
+        var == sub m2 (mul mean mean) /\ var_eps == add var eps /\
+        inv == rsqrt var_eps /\ neg_mean_inv == sub zero (mul mean inv) /\
+        Seq.slice sx' off (off+d) ==
+          affine_result #f32 inv neg_mean_inv #d (Seq.slice sx off (off+d)) /\
+        row_mean_var_domain sx off d eps)
+      (ensures Kuiper.Spec.MeanVarNorm.row_mean_var_normalized sx sx' off d eps)
+  = let row = to_real_seq (Seq.slice sx off (off+d)) in
+    let rmean = mvn_mean_r #d row in
+    let rm2 = mvn_m2_r #d row in
+    let rarg = mvn_arg_r #d (to_real eps) row in
+    a_mul sum inv_d (rsum row) (1.0R /. FStar.Real.of_int d);
+    assert (mean %~ rmean);
+    a_mul sum2 inv_d (frobenius_sumsq_r row)
+      (1.0R /. FStar.Real.of_int d);
+    assert (m2 %~ rm2);
+    a_mul mean mean rmean rmean;
+    sub_approx m2 (mul mean mean) rm2 (rmean *. rmean);
+    to_real_ok eps;
+    a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
+    assert (var_eps %~ rarg);
+    SqrtApprox.rsqrt_approx var_eps rarg;
+    let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
+    assert (inv %~ rinv);
+    a_mul mean inv rmean rinv;
+    sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
+    assert (neg_mean_inv %~ (0.0R -. rmean *. rinv));
+    let aux (j:nat{j<d}) : Lemma
+      (Seq.index (Seq.slice sx' off (off+d)) j %~
+       Seq.index (mvn_row_result_r #d (to_real eps) row) j)
+      = let x = Seq.index (Seq.slice sx off (off+d)) j in
+        let rx = Seq.index row j in
+        to_real_ok x;
+        a_mul x inv rx rinv;
+        a_add (mul x inv) neg_mean_inv (rx *. rinv)
+          (0.0R -. rmean *. rinv)
+    in
+    Classical.forall_intro aux
 
 let seq_map_id_eq (#a:Type) (s : Seq.seq a)
   : Lemma (Seq.equal (KS.seq_map id s) s)
@@ -244,6 +320,21 @@ let rmnv_lift_input_via_suffix
     rmnv_lift_input d (vi * d) eps inv_d sx sx_alt sx_post
 #pop-options
 
+(* The domain only depends on the input row slice, so the loop's preserved
+   suffix transports it to the current mutable buffer. *)
+let row_mean_var_domain_via_suffix
+  (#bd:nat) (d:pos) (vi:nat)
+  (suffix_hi:nat{vi*d+d <= suffix_hi /\ suffix_hi <= bd})
+  (eps:f32) (sx sx_alt:Seq.lseq f32 bd)
+  : Lemma
+      (requires
+        row_mean_var_domain sx (vi*d) d eps /\
+        Seq.slice sx (vi*d) suffix_hi ==
+          Seq.slice sx_alt (vi*d) suffix_hi)
+      (ensures row_mean_var_domain sx_alt (vi*d) d eps)
+  = FStar.Seq.Properties.slice_slice sx (vi*d) suffix_hi 0 d;
+    FStar.Seq.Properties.slice_slice sx_alt (vi*d) suffix_hi 0 d
+
 let mv_prefix_le_lemma (d vi r : nat)
   : Lemma
     (requires r < vi)
@@ -453,7 +544,7 @@ let row_mean_var_normalized_lift_forall
 
 #push-options "--z3rlimit 30 --fuel 2 --ifuel 2"
 let row_mean_var_normalized_intro
-  (#bd : nat) (d : nat)
+  (#bd : nat) (d : pos)
   (sx sx' : Seq.lseq f32 bd)
   (off : nat { off + d <= bd })
   (eps inv_d : f32)
@@ -470,9 +561,12 @@ let row_mean_var_normalized_intro
         neg_mean_inv == sub zero (mul mean inv) /\
         Seq.slice sx' off (off + d) ==
           affine_result #f32 inv neg_mean_inv #d
-            (Seq.slice sx off (off + d)))
+            (Seq.slice sx off (off + d)) /\
+        inv_d %~ (1.0R /. FStar.Real.of_int d) /\
+        row_mean_var_domain sx off d eps)
       (ensures row_mean_var_normalized sx sx' off d eps inv_d)
-  = ()
+  = row_mean_var_real_from_witnesses d sx sx' off eps inv_d
+      sum sum2 mean m2 var var_eps inv neg_mean_inv
 #pop-options
 
 (* Single combined lemma that re-establishes the host loop invariant after
@@ -630,7 +724,9 @@ fn mean_var_norm_row
   (#sx : chest1 f32 (b * d))
   (#ss : chest1 f32 d)
   preserves cpu
-  requires on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
+  requires on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss) **
+    pure (inv_d %~ (1.0R /. FStar.Real.of_int (SZ.v d))) **
+    pure (row_mean_var_domain (chest1_to_seq sx) rv_off d eps)
   ensures
     (exists* (sx' : chest1 f32 (b * d)) (ss' : chest1 f32 d).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
@@ -749,11 +845,13 @@ fn mean_var_norm
   (x : array1 f32 (l1_forward (b * d)) { is_global x })
   (#sx : chest1 f32 (b * d))
   preserves cpu
-  requires on gpu_loc (x |-> sx)
+  requires on gpu_loc (x |-> sx) **
+    pure (inv_d %~ (1.0R /. FStar.Real.of_int (SZ.v d))) **
+    pure (mean_var_domain b d eps (chest1_to_seq sx))
   ensures
     (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
-       pure (mean_var_post b d eps inv_d (chest1_to_seq sx) (chest1_to_seq sx')))
+       pure (mean_var_float_post b d eps inv_d (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let scratch = alloc0 #f32 d (l1_forward d);
   let mut idx = 0sz;
@@ -780,10 +878,11 @@ fn mean_var_norm
     let i = !idx;
     let off : sz = SZ.(i *^ d);
     with sx_pre. assert (on gpu_loc (x |-> reveal sx_pre));
+    assert pure (SZ.v off == SZ.v i * SZ.v d);
+    row_mean_var_domain_via_suffix #(b*d) d i (b*d) eps
+      (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre));
     mean_var_norm_row b d off eps inv_d x scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
-    (* Expose the runtime row offset as mathematical multiplication. *)
-    assert pure (SZ.v off == SZ.v i * SZ.v d);
     (* Ground the nonlinear per-row fit bound [forall r<b. r*d+d <= b*d] so
        the requires-[forall]s of the step lemma (whose [row_mean_var_normalized
        sx sx_pre (r*d) d] applications each carry the [(r*d)+d <= bd] subtype
@@ -807,6 +906,23 @@ fn mean_var_norm
 }
 #pop-options
 
+let mvn_inv_d_approx (d:szp)
+  : Lemma (mvn_inv_d #f32 d %~ (1.0R /. FStar.Real.of_int (SZ.v d)))
+  = let d64 : Int64.t = FStar.Int.Cast.uint64_to_int64
+      (FStar.SizeT.sizet_to_uint64 d) in
+    assert (Int64.v d64 == SZ.v d);
+    of_int_approx #f32 d64;
+    div_approx (one #f32) (of_int #f32 d64)
+      1.0R (FStar.Real.of_int (SZ.v d))
+
+let mean_var_float_post_to_real
+  (b:nat) (d:pos) (eps inv_d:f32)
+  (sx sx':Seq.lseq f32 (b*d))
+  : Lemma
+      (requires mean_var_float_post b d eps inv_d sx sx')
+      (ensures mean_var_post b d eps sx sx')
+  = ()
+
 (* Public entry point: compute the per-row reciprocal [mvn_inv_d d]
    inside the verification boundary (extracts to 1.0f / (float)d), then
    delegate to [mean_var_norm].  The heavy proof above treats [inv_d]
@@ -820,14 +936,19 @@ fn mean_var_norm_fw
   (x : array1 f32 (l1_forward (b * d)) { is_global x })
   (#sx : chest1 f32 (b * d))
   preserves cpu
-  requires on gpu_loc (x |-> sx)
+  requires on gpu_loc (x |-> sx) **
+    pure (mean_var_domain b d eps (chest1_to_seq sx))
   ensures
     (exists* (sx' : chest1 f32 (b * d)).
        on gpu_loc (x |-> sx') **
-       pure (mean_var_post b d eps (mvn_inv_d d) (chest1_to_seq sx) (chest1_to_seq sx')))
+       pure (mean_var_post b d eps (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let inv_d : f32 = mvn_inv_d d;
+  mvn_inv_d_approx d;
   mean_var_norm b d eps inv_d x;
+  with sx'. assert (on gpu_loc (x |-> reveal sx'));
+  mean_var_float_post_to_real b d eps inv_d
+    (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx'));
 }
 
 let mean_var_norm_fw_f32 : mean_var_norm_fw_ty f32 = mean_var_norm_fw

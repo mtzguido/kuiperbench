@@ -6,15 +6,11 @@ normalisation? YES, modulo a documented real-arithmetic choice.  The
 PyTorch reference is y = x / mean(|x|, dim=1) = x * D / sum(|x|,
 dim=1).  The input is modelled as a chest2 t B D (the (B,D)
 row-major matrix, layout l2_row_major), NOT a flattened sequence.
-The post [l1norm_post b d dim_f sx sx'] expands to: for every row
-r < b there exist scale_r, sum_abs_r with
-  * sum_abs_r %~ l1_sum_r (ematrix_row sx r)
-        = rsum (to_real_seq (lseq_map fabs row)), and
-  * scale_r == div dim_f sum_abs_r, and
-  * forall j < d. macc sx' r j == mul scale_r (macc sx r j).
-So every output row is a uniform per-element scaling of the input row
-by scale_r, and scale_r approximates D / ||row||_1.  The
-postcondition is stated over matrix entries macc, not a flattening.
+The post [l1norm_post b d sx sx'] directly states, for every cell,
+that the floating output approximates the corresponding real input
+scaled by D / ||row||_1.  The reduction and division intermediates do
+not escape as existential witnesses.  The postcondition is stated over
+matrix entries, not a flattening.
 
 Caveat: we do NOT push fabs through to a real-arithmetic [rabs]
 because [Kuiper.Real] does not axiomatise a real abs.  Instead the
@@ -43,12 +39,10 @@ computed INSIDE the verification boundary (extracts to
 (float)(int64_t)(uint64_t)D).  No unverified float arithmetic in the
 C bridge (the bridge passes only B, D, ptr).
 
-(d) Edge cases.  b = 0: forall is vacuous.  d = 0: ruled out by the
-0 < SZ.v d refinement.  All-zero row: sum_abs == 0, scale = D/0 =
-+inf (IEEE-754), output is NaN-filled.  Spec is satisfied by the
-existential witnesses; matches PyTorch.  Per-row scale factors are
-existentially bound *per row* inside row_l1_normalized, so different
-rows can have unrelated scales.
+(d) Edge cases.  b = 0 and d = 0 are ruled out by their positive-size
+types.  An all-zero row yields IEEE infinity and NaNs,
+which have no finite-real interpretation; the direct contract therefore
+requires every real row L1 sum to be nonzero.
 
 (e) FAbs removed.  The trivial Kuiper.KB.FAbs wrapper (fabs_step =
 fabs, plus two unused fabs_fw kernels) is deleted: fabs is now passed

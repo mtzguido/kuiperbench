@@ -8,14 +8,11 @@ Kuiper.Spec.MeanReduceDim and Kuiper.KB.ReduceMean.
 Spec faithfulness
 -----------------
 The verified entry point [reduce_mean_fw_f32] establishes
-[meanreduce_post] from Kuiper.Spec.MeanReduceDim: for every output cell
-[r] of the (B*M)-row flattened view there exists a floating-point
-witness [sumr %~ rsum (to_real_seq (row r of the input))] such that
-[sout' @! r == mul sumr inv_d].
-
-The bridge passes [inv_d = 1.0f / (float)D] verbatim, matching
-PyTorch's reference [torch.mean(x, dim=1)] up to the standard fp
-tolerance the harness applies.
+[meanreduce_post] from Kuiper.Spec.MeanReduceDim: every output cell
+directly approximates the real sum of its input row divided by D.  No
+floating reduction witness appears in the public postcondition, and
+1/D is computed inside the verified entry point rather than passed by
+the bridge.
 
 The (B, D, M) input is viewed via the existing
 [Kuiper.Tensor.Layout.BCMPages] layout with parameters
@@ -36,15 +33,13 @@ Edge cases
 ----------
 - All-zero / all-equal input row: sum is exact, output is the exact
   PyTorch value.
-- Non-finite input (NaN/Inf): propagates; spec is still satisfied
-  because the existential is on a floating-point witness.
+- Non-finite behavior is governed by the project-wide approximation
+  relation; there is no unconstrained result witness.
 - D = 0: ruled out at the type level (szp).
-- Large shapes: bounded by B*M ≤ max_blocks (2²¹) AND D ≤ max_threads
-  (1024).  The KB harness reference shape (128, 4096, 4095) lies
-  comfortably inside these bounds (B*M ≈ 524k ≤ 2²¹, D = 4096 > 1024).
-  WAIT — D = 4096 > max_threads = 1024.  The bridge precondition
-  [D ≤ max_threads] is therefore FALSE for the harness shape, and the
-  bridge would TORCH_CHECK-fail.  See follow-ups below.
+- Large shapes: bounded by B*M ≤ max_blocks (2²¹), while the block
+  reducer uses 1024 strided threads and permits D > 1024.  The KB
+  harness shape (128, 4096, 4095) therefore lies inside the verified
+  envelope: B*M ≈ 524k and D = 4096.
 
 Performance
 -----------
@@ -52,13 +47,6 @@ Performance
 one element-wise scalar multiply over B*M cells.  Single launch
 amortises the reduction across all B*M rows.
 
-Follow-ups
-----------
-- The verified [reduce_batched_block] requires [nth ≤ max_threads],
-  and our wrapper hard-codes [nth = 1024sz] inside [reduce_sum_fw_f32].
-  To support the KB harness shape (D = 4096) the kernel would need
-  multi-pass tree-reduction (cooperative blocks) or a strided per-thread
-  prefix-sum.  This is the same restriction that #47 already carries.
-  See challenge47/skeptic.txt; the fix lives upstream in the HReduce
-  block primitive.
+Follow-up
+---------
 - Generalise to 4D / arbitrary leading-dim layouts.

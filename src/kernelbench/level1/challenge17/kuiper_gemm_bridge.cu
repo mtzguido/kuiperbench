@@ -22,10 +22,10 @@ torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B) {
     TORCH_CHECK(B_c.size(1) == K,
                 "shape mismatch: A is (", M, ",", K, "), B is (", N, ",", B_c.size(1), ")");
     TORCH_CHECK(M > 0 && N > 0 && K > 0
-                && M <= (int64_t)UINT32_MAX && N <= (int64_t)UINT32_MAX
-                && K <= (int64_t)UINT32_MAX
-                && M * K <= (int64_t)UINT32_MAX && K * N <= (int64_t)UINT32_MAX
-                && M * N <= (int64_t)2097152 * 1024,
+                && M <= (int64_t)UINT32_MAX / K
+                && N <= (int64_t)UINT32_MAX / K
+                && M <= (int64_t)UINT32_MAX / N
+                && M <= ((int64_t)2097152 * 1024) / N,
                 "kuiper #17: shape out of range for the verified kernel ABI");
 
     auto C = torch::zeros({M, N}, A_c.options());

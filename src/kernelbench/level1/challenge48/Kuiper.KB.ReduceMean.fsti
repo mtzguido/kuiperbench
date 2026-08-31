@@ -9,10 +9,9 @@ module Kuiper.KB.ReduceMean
      2. Scalar multiply: y[i] := y[i] * inv_d
         via Kuiper.KB.ScalarMul.smul_fw_f32
 
-   The PyTorch reference is [torch.mean(x, dim=1)] which equals
-   [torch.sum(x, dim=1) / D]; the bridge passes [inv_d = 1.0 / D]
-   so the post is [sout' @! r == mul inv_d sumr] for some
-   [sumr %~ rsum (real row)].
+   The PyTorch reference is [torch.mean(x, dim=1)].  The verified entry
+   computes [1/D] from [d] itself, and its post directly approximates
+   the real row mean; no floating-point reduction witness escapes.
 
    No assume / magic / admit. *)
 
@@ -26,18 +25,12 @@ open Kuiper.Spec.MeanReduceDim
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 
-(* Verified, extractable reciprocal 1/d as f32 (see .fst); the mean divisor is
-   computed inside the verification boundary. *)
-val reducemean_recip_f32 (d : szp) : f32
-
 fn reduce_mean_fw_f32
   (b : szp)
   (m : szp { SZ.fits (SZ.v b * SZ.v m) /\ SZ.v b * SZ.v m <= max_blocks })
-  (d : szp { SZ.v d <= max_threads /\
-             SZ.fits (SZ.v d + max_threads) /\
+  (d : szp { SZ.fits (SZ.v d + max_threads) /\
              SZ.fits (SZ.v m * SZ.v d) /\
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) })
-  (inv_d : f32)
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
   (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
@@ -50,4 +43,4 @@ fn reduce_mean_fw_f32
   ensures
     (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
        on gpu_loc (y |-> sy') **
-       pure (meanreduce_post (SZ.v b * SZ.v m) d inv_d sx (chest1_to_seq sy')))
+       pure (meanreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy')))

@@ -1,11 +1,11 @@
 // Bridge between extracted Kuiper GEMM and PyTorch.
-// Uses verified BlockTiling2D GEMM (128x128x32, 8x8).
-// Requires rows >= 128, cols >= 128, shared >= 32 (padding applied if needed).
+// Uses the verified Naive3 GEMM.  Naive2's exported rank-2 contract limits
+// rows*cols to max_blocks, which excludes KernelBench's 4096x4096 output.
 
 #include <torch/extension.h>
 
-#include "Klas_GEMM_Naive2.h"
-#include "Klas_GEMM_Naive2.cu"
+#include "Klas_GEMM_Naive3.h"
+#include "Klas_GEMM_Naive3.cu"
 
 torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B) {
     TORCH_CHECK(A.dim() == 2, "A must be 2D, got ", A.dim(), "D");
@@ -25,28 +25,24 @@ torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B) {
     int64_t shared = A_contig.size(1);
     int64_t cols = B_contig.size(1);
     TORCH_CHECK(rows > 0 && shared > 0 && cols > 0, "dimensions must be positive");
-    TORCH_CHECK(rows <= UINT32_MAX && shared <= UINT32_MAX && cols <= UINT32_MAX,
+    TORCH_CHECK(rows <= (int64_t)UINT32_MAX &&
+                shared <= (int64_t)UINT32_MAX &&
+                cols <= (int64_t)UINT32_MAX,
                 "dimensions exceed uint32 ABI of the Kuiper kernel");
+    TORCH_CHECK(rows <= (int64_t)UINT32_MAX / shared &&
+                shared <= (int64_t)UINT32_MAX / cols &&
+                rows <= (int64_t)UINT32_MAX / cols &&
+                rows <= ((int64_t)2097152 * 1024) / cols,
+                "shape exceeds the verified kernel bounds");
 
-    // Pad to minimum tile sizes if needed
-    int64_t p_rows = (rows + 127) / 128 * 128;
-    int64_t p_shared = (shared + 31) / 32 * 32;
-    int64_t p_cols = (cols + 127) / 128 * 128;
+    auto gC = torch::zeros({rows, cols}, A_contig.options());
 
-    auto gA = (p_rows == rows && p_shared == shared)
-        ? A_contig
-        : torch::nn::functional::pad(A_contig, torch::nn::functional::PadFuncOptions({0, (int)(p_shared - shared), 0, (int)(p_rows - rows)}));
-    auto gB = (p_shared == shared && p_cols == cols)
-        ? B_contig
-        : torch::nn::functional::pad(B_contig, torch::nn::functional::PadFuncOptions({0, (int)(p_cols - cols), 0, (int)(p_shared - shared)}));
-    auto gC = torch::zeros({p_rows, p_cols}, A_contig.options());
+    Klas_GEMM_Naive3_g_matmul_f32_rrr(
+        (uint32_t)rows, (uint32_t)cols, (uint32_t)shared,
+        A_contig.data_ptr<float>(), B_contig.data_ptr<float>(),
+        gC.data_ptr<float>());
 
-    Klas_GEMM_Naive2_g_matmul_f32_rrr(
-        (uint32_t)p_rows, (uint32_t)p_cols, (uint32_t)p_shared,
-        gA.data_ptr<float>(), gB.data_ptr<float>(), gC.data_ptr<float>());
-
-    // Slice back to original size
-    return gC.slice(0, 0, rows).slice(1, 0, cols);
+    return gC;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

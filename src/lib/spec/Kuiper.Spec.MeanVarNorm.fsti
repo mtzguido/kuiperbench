@@ -10,66 +10,76 @@ module Kuiper.Spec.MeanVarNorm
        y[r,j] = (x[r,j] - mean_r) * inv_r
               = inv_r * x[r,j] + (-mean_r * inv_r)
 
-   This is the InstanceNorm/GroupNorm contract used by KernelBench
-   #34/#35 (the bridge reshapes for #35).  As with the L1/L2 specs,
-   each row's statistics are bound existentially because the
-   device-side reductions are non-deterministic up to floating-point
-   rounding and [rsqrt] / [div] are opaque to the spec.  We *can* pin:
-
-     * shape: each row of the output equals an affine transform
-       [a*x + b] applied to the corresponding input row;
-     * value: [a == rsqrt(var_eps_r)], [b == -mean_r * a], with
-       [mean_r], [m2_r] each approximating the real-valued
-       (1/D)*Σ x and (1/D)*Σ x² respectively.
+   The public postcondition directly relates every output element to
+   this real normalization.  Floating reductions and affine scalars are
+   proof-local and are not existentially exposed.
 
    We re-use [sq_step_r], [frobenius_sumsq_r] and [affine_result]
    from Kuiper.Spec.Frobenius.
 
-   Edge cases: a constant row gives var = 0; the [eps] term keeps
-   var_eps strictly positive for any reasonable [eps > 0], yielding
-   a well-defined normalisation.  If [eps == 0] and the row is
-   constant, [rsqrt 0 == +inf] and the row becomes NaN, matching the
-   PyTorch reference. *)
+   The explicit domain requires each real [variance + eps] to be
+   positive, which is the premise of the temporary reciprocal-square-root
+   approximation law proposed for upstream Kuiper. *)
 
 open Kuiper.Real
 open Kuiper.Scalars
 open Kuiper.Floating.Base
-open Kuiper.Floating.Base
 open Kuiper.Approximates
 open Kuiper.Spec.Frobenius
 module Seq = FStar.Seq
+module RealSqrt = FStar.Math.Sqrt
 
-(* Per-row predicate: row [r] of [sx'] is the mean/variance
-   normalisation of the corresponding input row. *)
+let mvn_mean_r (#d:pos) (row:Seq.lseq real d) : real =
+  rsum row *. (1.0R /. FStar.Real.of_int d)
+
+let mvn_m2_r (#d:pos) (row:Seq.lseq real d) : real =
+  frobenius_sumsq_r row *. (1.0R /. FStar.Real.of_int d)
+
+let mvn_arg_r (#d:pos) (eps:real) (row:Seq.lseq real d) : real =
+  mvn_m2_r #d row -. mvn_mean_r #d row *. mvn_mean_r #d row +. eps
+
+let mvn_inv_r (#d:pos) (eps:real) (row:Seq.lseq real d) : real =
+  let a = mvn_arg_r #d eps row in
+  if a >. 0.0R then RealSqrt.rsqrt a else 0.0R
+
+let mvn_row_result_r (#d:pos) (eps:real) (row:Seq.lseq real d)
+  : Seq.lseq real d =
+  let mean = mvn_mean_r #d row in
+  let inv = mvn_inv_r #d eps row in
+  Seq.init d (fun j ->
+    Seq.index row j *. inv +. (0.0R -. mean *. inv))
+
+let row_mean_var_domain
+  (#t:Type0) {| scalar t, real_like t |}
+  (#bd:nat) (sx:Seq.lseq t bd)
+  (off:nat) (d:pos{off+d <= bd}) (eps:t) : prop =
+  mvn_arg_r #d (to_real eps)
+    (to_real_seq (Seq.slice sx off (off+d))) >. 0.0R
+
 let row_mean_var_normalized
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (#bd:nat)
-  (sx sx' : Seq.lseq t bd)
-  (off d : nat{off + d <= bd})
-  (eps inv_d : t)
-  : prop =
-  exists (sum sum2 mean m2 var var_eps inv neg_mean_inv : t).
-    (let row : Seq.lseq t d = Seq.slice sx off (off + d) in
-     sum  %~ rsum (to_real_seq row) /\
-     sum2 %~ frobenius_sumsq_r (to_real_seq row) /\
-     mean         == mul sum  inv_d /\
-     m2           == mul sum2 inv_d /\
-     var          == sub m2 (mul mean mean) /\
-     var_eps      == add var eps /\
-     inv          == rsqrt var_eps /\
-     neg_mean_inv == sub zero (mul mean inv) /\
-     Seq.slice sx' off (off + d) ==
-       affine_result #t inv neg_mean_inv #d row)
+  (#t:Type0) {| scalar t, real_like t |}
+  (#bd:nat) (sx sx':Seq.lseq t bd)
+  (off:nat) (d:pos{off+d <= bd}) (eps:t) : prop =
+  Seq.slice sx' off (off+d) %~
+    mvn_row_result_r #d (to_real eps)
+      (to_real_seq (Seq.slice sx off (off+d)))
 
 (* Whole-tensor spec: every row is mean/var-normalised. *)
+let mean_var_domain
+  (#t:Type0) {| scalar t, real_like t |}
+  (b:nat) (d:pos) (eps:t)
+  (sx:Seq.lseq t (b*d)) : prop =
+  forall (r:nat). r < b ==>
+    row_mean_var_domain sx (r*d) d eps
+
 let mean_var_post
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (b d : nat)
-  (eps inv_d : t)
+  (#t:Type0) {| scalar t, real_like t |}
+  (b:nat) (d:pos)
+  (eps : t)
   (sx sx' : Seq.lseq t (b * d))
   : prop =
   forall (r : nat). r < b ==>
     (let lo : nat = r * d in
      let hi : nat = lo + d in
      hi <= b * d /\
-     row_mean_var_normalized sx sx' lo d eps inv_d)
+     row_mean_var_normalized sx sx' lo d eps)

@@ -11,16 +11,13 @@ module Kuiper.KB.L2Norm
    Per row uses the device-to-device offset memcpy primitive to copy a
    row in/out of a fixed-size scratch buffer.
 
-   Functional postcondition (see [Kuiper.Spec.L2Norm]).  Each output
-   row [r] is a uniform scaling [frobenius_result inv_r] of the
-   corresponding input row, where [inv_r == rsqrt sumsq_r] and
-   [sumsq_r] approximates the row's real-valued sum-of-squares.  Both
-   [inv_r] and [sumsq_r] are existentially bound per row because the
-   device-side reduction only approximates the real sum and [rsqrt]
-   is opaque to the spec.
+   Functional postcondition (see [Kuiper.Spec.L2Norm]).  Every output
+   row directly approximates its real-valued L2 normalization.  The
+   floating reduction and reciprocal-square-root values remain local
+   implementation details.
 
-   Edge case (all-zero row): see Kuiper.Spec.L2Norm.  No precondition
-   required; matches the PyTorch reference (NaNs out). *)
+   The finite-real specification excludes all-zero rows, whose IEEE
+   execution produces infinities/NaNs. *)
 
 #lang-pulse
 open Kuiper
@@ -39,7 +36,9 @@ type l2norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
   (x : array1 t (l1_forward (b * d)) { is_global x })
   (#s : chest1 t (b * d))
   preserves cpu
-  requires on gpu_loc (x |-> s)
+  requires
+    on gpu_loc (x |-> s) **
+    pure (l2norm_domain b d (chest1_to_seq s))
   ensures
     exists* (s' : chest1 t (b * d)).
       on gpu_loc (x |-> s') **
