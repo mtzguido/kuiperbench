@@ -109,6 +109,8 @@ torch::Tensor kuiper_maxpool3d_cuda(torch::Tensor X,
     int64_t H = Xc.size(3);
     int64_t W = Xc.size(4);
 
+    TORCH_CHECK(B > 0 && C > 0 && D > 0 && H > 0 && W > 0,
+                "kuiper_maxpool3d: input dimensions must be positive");
     // ── Pass 1: reduce over W axis. View as (B*C*D*H, W). ────────────
     auto Y1 = run_axis(Xc, B * C * D * H, W,
                        kernel_size, stride, padding, dilation,

@@ -8,8 +8,11 @@
 #include "Kuiper_KB_Elu.cu"
 
 torch::Tensor kuiper_elu_cuda(torch::Tensor X) {
+    TORCH_CHECK(X.is_cuda(), "kuiper #31: expected a CUDA tensor");
     auto Y = X.contiguous().clone();
     int64_t numel = Y.numel();
+    TORCH_CHECK(numel > 0 && numel <= (int64_t)2097152 * 1024,
+                "kuiper #31: element count exceeds the verified kernel bound");
 
     if (Y.scalar_type() == torch::kFloat32) {
         Kuiper_KB_Elu_elu_fw_f32((uint32_t)numel, Y.data_ptr<float>());

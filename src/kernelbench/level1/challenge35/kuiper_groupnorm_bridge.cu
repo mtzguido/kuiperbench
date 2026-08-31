@@ -5,8 +5,12 @@
 // run row-wise mean/variance normalisation.  Per (n, group) slice over
 // (C/G, H, W), compute (x - mean) / sqrt(var + eps).  eps default 1e-5.
 #include <torch/extension.h>
+#include <cmath>
 #include "Kuiper_KB_MeanVarNorm.h"
 #include "Kuiper_KB_MeanVarNorm.cu"
+
+// max_blocks * max_threads from Kuiper.Base: 2^21 * 1024 = 2^31
+static constexpr int64_t KUIPER_MAX_NTHR = (int64_t)2097152 * 1024;
 
 torch::Tensor kuiper_groupnorm_cuda(torch::Tensor X, int64_t G, double eps) {
     TORCH_CHECK(X.is_cuda() && X.dim() == 4 && X.scalar_type() == torch::kFloat32,
@@ -18,10 +22,14 @@ torch::Tensor kuiper_groupnorm_cuda(torch::Tensor X, int64_t G, double eps) {
     int64_t rows = B * G, d = (C / G) * H * W;
     TORCH_CHECK(rows > 0 && d > 0 && rows <= (int64_t)UINT32_MAX
                 && d + 1024 <= (int64_t)UINT32_MAX
-                && rows * d <= (int64_t)UINT32_MAX,
+                && rows * d <= (int64_t)UINT32_MAX
+                && rows * d <= KUIPER_MAX_NTHR,
                 "kuiper_groupnorm: shape out of range");
+    float eps_f = (float)eps;
+    TORCH_CHECK(std::isfinite(eps_f) && eps_f > 0.0f,
+                "kuiper_groupnorm: eps must remain finite and positive in float32");
     Kuiper_KB_MeanVarNorm_mean_var_norm_fw_f32(
-        (uint32_t)rows, (uint32_t)d, (float)eps,
+        (uint32_t)rows, (uint32_t)d, eps_f,
         Xc.data_ptr<float>());
     return Xc;
 }

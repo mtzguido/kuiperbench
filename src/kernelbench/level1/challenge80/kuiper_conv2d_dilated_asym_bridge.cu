@@ -44,10 +44,35 @@ static torch::Tensor kuiper_conv2d_dilated_asym_cuda(
     int64_t Kh   = Wc.size(2);
     int64_t Kw   = Wc.size(3);
     TORCH_CHECK(Cin == WCin, "kuiper_conv2d_dilated_asym: Cin mismatch");
+    TORCH_CHECK(B > 0 && Cin > 0 && Hin > 0 && Win > 0 && Cout > 0
+                && Kh > 0 && Kw > 0,
+                "kuiper_conv2d_dilated_asym: shapes must be positive");
+    TORCH_CHECK(B    <= (int64_t)UINT32_MAX &&
+                Cin  <= (int64_t)UINT32_MAX &&
+                Hin  <= (int64_t)UINT32_MAX &&
+                Win  <= (int64_t)UINT32_MAX &&
+                Cout <= (int64_t)UINT32_MAX &&
+                Kh   <= (int64_t)UINT32_MAX &&
+                Kw   <= (int64_t)UINT32_MAX &&
+                stride_h <= (int64_t)UINT32_MAX &&
+                stride_w <= (int64_t)UINT32_MAX &&
+                pad_h    <= (int64_t)UINT32_MAX &&
+                pad_w    <= (int64_t)UINT32_MAX &&
+                dil_h    <= (int64_t)UINT32_MAX &&
+                dil_w    <= (int64_t)UINT32_MAX,
+                "kuiper_conv2d_dilated_asym: raw dimensions out of u32 range");
+    TORCH_CHECK((Kh == 1 || dil_h <= ((int64_t)UINT32_MAX - 1) / (Kh - 1)) &&
+                (Kw == 1 || dil_w <= ((int64_t)UINT32_MAX - 1) / (Kw - 1)),
+                "kuiper_conv2d_dilated_asym: effective kernel out of u32 range");
     int64_t eff_kh = dil_h * (Kh - 1) + 1;
     int64_t eff_kw = dil_w * (Kw - 1) + 1;
     TORCH_CHECK(Hin + 2*pad_h >= eff_kh && Win + 2*pad_w >= eff_kw,
                 "kuiper_conv2d_dilated_asym: padded input < dilated kernel");
+    TORCH_CHECK(eff_kh <= (int64_t)UINT32_MAX &&
+                eff_kw <= (int64_t)UINT32_MAX &&
+                Hin + 2*pad_h <= (int64_t)UINT32_MAX &&
+                Win + 2*pad_w <= (int64_t)UINT32_MAX,
+                "kuiper_conv2d_dilated_asym: output-size helper precondition failed");
     int64_t Hout = (int64_t)Kuiper_KB_Conv2DDilatedAsym_conv2dd_out_dim_sz(
         (uint32_t)Hin, (uint32_t)Kh, (uint32_t)stride_h, (uint32_t)dil_h, (uint32_t)pad_h);
     int64_t Wout = (int64_t)Kuiper_KB_Conv2DDilatedAsym_conv2dd_out_dim_sz(
@@ -58,9 +83,6 @@ static torch::Tensor kuiper_conv2d_dilated_asym_cuda(
     int64_t xnel = B * Cin  * Hin  * Win;
     int64_t wnel = Cout * Cin * Kh * Kw;
     int64_t ynel = nthr;
-    TORCH_CHECK(B > 0 && Cin > 0 && Hin > 0 && Win > 0 && Cout > 0
-                && Kh > 0 && Kw > 0,
-                "kuiper_conv2d_dilated_asym: shapes must be positive");
     TORCH_CHECK(B    <= (int64_t)UINT32_MAX &&
                 Cin  <= (int64_t)UINT32_MAX &&
                 Hin  <= (int64_t)UINT32_MAX &&

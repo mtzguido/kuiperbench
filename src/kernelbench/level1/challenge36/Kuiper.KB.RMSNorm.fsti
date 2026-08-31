@@ -18,7 +18,8 @@ module Kuiper.KB.RMSNorm
      2. map_gpu (s ↦ rsqrt(s/C+ε)) -- inv_rms per row
      3. row_scale                   -- in-place scale each row
 
-   No assume / magic / admit. *)
+   The square-root approximation law is supplied by the temporary local
+   compatibility assumption documented in patches/kuiper-sqrt-approx.md. *)
 
 #lang-pulse
 open Kuiper
@@ -48,9 +49,10 @@ fn rmsnorm_fw_f32
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b * SZ.v hw > 0 /\
-      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads
+      SZ.v b * SZ.v hw * SZ.v c <= max_blocks * max_threads /\
+      to_real eps >. 0.0R
     )
   ensures
     (exists* (sx' : chest2 f32 (SZ.v b * SZ.v hw) c).
        on gpu_loc (x |-> sx') **
-       pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps (rms_inv_c c) sx sx'))
+       pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps sx sx'))

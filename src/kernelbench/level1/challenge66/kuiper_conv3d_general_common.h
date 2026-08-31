@@ -64,6 +64,8 @@ static torch::Tensor kuiper_conv3d_general_cuda(
     TORCH_CHECK(B > 0 && Cin > 0 && Din > 0 && Hin > 0 && Win > 0 && Cout > 0
                 && Kd > 0 && Kh > 0 && Kw > 0,
                 "kuiper_conv3d_general: shapes must be positive");
+    TORCH_CHECK(stride_d <= (int64_t)UINT32_MAX,
+                "kuiper_conv3d_general: stride out of u32 range");
 
     // Padded input must be at least as large as the kernel on every axis.
     // This discharges the `k <= n + 2*pad` precondition of the verified

@@ -10,14 +10,12 @@ End-to-end:   bash run.sh -> PASS vs torch.nn.functional.cross_entropy
 ## What is actually verified (the whole loss, as a function of all inputs)
 
 The single verified entry `Kuiper.KB.CrossEntropyLoss.ce_loss_fw_f32`
-carries an honest Pulse separation-logic contract whose post is exactly
-`Kuiper.Spec.CrossEntropyLoss.cross_entropy_post (SZ.v b) (SZ.v c) inv_b
-sp st res`:
+carries an honest Pulse separation-logic contract whose post directly states:
 
-    exists per_batch s.
-      (forall r < B. per_batch[r] %~ ce_term_r C sp r (st[r])) /\
-      s %~ rsum (to_real_seq per_batch) /\
-      res == mul s inv_b
+    res %~ real_cross_entropy B C rp targets
+
+where the input f32 logits are required to approximate [rp].  No
+floating-point intermediate is existentially chosen.
 
 with `ce_term_r C sp r t = - (log_softmax(crow sp C r))[t]`, pinned via
 `%~` to the verified `Kuiper.Kernel.LogSoftmax.log_softmax_real` value
@@ -27,16 +25,16 @@ per-sample cross entropy.
 
 Crucially, BOTH the per-row terms AND the cross-batch reduction are now
 inside the boundary:
-  * the device-to-device row copy is pinned to the true input row
-    (`crow sp C r`) by a `seq_blit`/`Seq.lemma_eq_intro` step;
-  * the on-device `HReduce.reduce` pins `s %~ rsum (to_real_seq per_batch)`;
-  * the `mul s inv_b` multiplies by the verified reciprocal `1/B`.
+  * the device-to-device row copy remains related to the corresponding real row;
+  * each log-softmax loss approximates its real term;
+  * the on-device reduction approximates the sum of those real terms;
+  * the mean multiplies by an internally computed and proved `1/B`.
 So the returned scalar is verified as a function of ALL B*C predictions
 and ALL B targets — not of a single row.
 
 Proof structure mirrors the verified L1 #99 TripletMarginLoss:
 `ce_carried` carried-prefix loop invariant, `ce_inv_init` /
-`ce_prefix_extend` extension lemmas, `ce_final_lemma` discharge.  Two
+`ce_prefix_extend` extension lemmas, and a final sequence approximation.  Two
 small standalone lemmas (`neg_approx_f32`, `ce_term_fold`) keep the
 negation/`%~`-fold off the large loop context.  z3rlimit 40.
 

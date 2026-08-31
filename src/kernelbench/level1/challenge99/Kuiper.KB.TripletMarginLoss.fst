@@ -11,6 +11,8 @@ module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KBMap = Kuiper.KB.Compat.Map
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RealSqrt = FStar.Math.Sqrt
 module Vec = Pulse.Lib.Vec
 module KS = Kuiper.Seq.Common
 
@@ -45,11 +47,6 @@ let sq_diff_step_f32 (eps x y : f32) : f32 =
 inline_for_extraction noextract
 let triplet_step_f32 (margin d_ap d_an : f32) : f32 =
   fmax (zero #f32) (add (sub d_ap d_an) margin)
-
-let triplet_step_f32_eq (margin d_ap d_an : f32)
-  : Lemma (triplet_step_f32 margin d_ap d_an ==
-           triplet_step margin d_ap d_an)
-  = ()
 
 let seq_map_id_eq (#a:Type) (s : Seq.seq a)
   : Lemma (Seq.equal (KS.seq_map id s) s)
@@ -159,227 +156,151 @@ fn t_memcpy_h2d
   ()
 }
 
-(* ── Approximation lemmas linking the f32 squared-difference step to
-      the real-arithmetic [sqdiff_step_r]. ─────────────────────────── *)
+(* ── Approximation lemmas from the f32 implementation to the direct
+      real-valued specification. ─────────────────────────────────── *)
 
-(* Pointwise: the f32 epsilon-shifted squared difference approximates
-   the corresponding real expression. [sub_approx] and [a_add] give
-   [(x - y + eps) %~ (rx -. ry +. to_real eps)], then [a_mul] squares it. *)
 let sqdiff_approx (eps x y : f32) (rx ry : real)
-  : Lemma (requires v_approximates x rx /\ v_approximates y ry)
-          (ensures  v_approximates (sq_diff_step_f32 eps x y)
-                                  (sqdiff_step_r eps rx ry))
+  : Lemma (requires x %~ rx /\ y %~ ry)
+          (ensures sq_diff_step_f32 eps x y
+                   %~ sqdiff_step_r (to_real eps) rx ry)
   = to_real_ok eps;
     sub_approx x y rx ry;
     a_add (sub x y) eps (rx -. ry) (to_real eps);
     a_mul (add (sub x y) eps) (add (sub x y) eps)
-          ((rx -. ry) +. to_real eps) ((rx -. ry) +. to_real eps)
+      ((rx -. ry) +. to_real eps) ((rx -. ry) +. to_real eps)
 
-(* Sequence-level lift: the elementwise f32 squared-difference of two
-   rows approximates the elementwise real squared-difference of their
-   [to_real] images. *)
-let map2_sqdiff_approx (eps : f32) (d:nat) (sca scb : Seq.lseq f32 d)
+let triplet_step_approx
+  (margin d_ap d_an : f32)
+  (rd_ap rd_an : real)
+  : Lemma (requires d_ap %~ rd_ap /\ d_an %~ rd_an)
+          (ensures triplet_step_f32 margin d_ap d_an
+                   %~ real_triplet_step (to_real margin) rd_ap rd_an)
+  = to_real_ok margin;
+    to_real_ok (zero #f32);
+    sub_approx d_ap d_an rd_ap rd_an;
+    a_add (sub d_ap d_an) margin (rd_ap -. rd_an) (to_real margin);
+    fmax_approx (zero #f32) (add (sub d_ap d_an) margin)
+      0.0R ((rd_ap -. rd_an) +. to_real margin)
+
+(* A valid row slice of related flat sequences remains related. *)
+let row_slice_approx
+  (#n:nat)
+  (sf : Seq.lseq f32 n)
+  (sr : Seq.lseq real n)
+  (d r : nat)
   : Lemma
-      (seq_approximates
-        (KBMap.lseq_map2 (sq_diff_step_f32 eps) sca scb)
-        (Seq.init d (fun j ->
-          sqdiff_step_r eps (to_real (sca @! j)) (to_real (scb @! j)))))
-  = let lhs : Seq.lseq f32 d = KBMap.lseq_map2 (sq_diff_step_f32 eps) sca scb in
-    let rhs : Seq.lseq real d =
-      Seq.init d (fun j ->
-        sqdiff_step_r eps (to_real (sca @! j)) (to_real (scb @! j))) in
-    introduce forall (i:nat{i < Seq.length lhs}). (lhs @! i) %~ (rhs @! i)
-    with begin
-      to_real_ok (sca @! i);
-      to_real_ok (scb @! i);
-      lseq_map2_index (sq_diff_step_f32 eps) sca scb i;
-      sqdiff_approx eps (sca @! i) (scb @! i)
-        (to_real (sca @! i)) (to_real (scb @! i))
-    end;
-    assert (Seq.length lhs == Seq.length rhs)
+      (requires sf %~ sr /\ r * d + d <= n)
+      (ensures Seq.slice sf (r * d) (r * d + d) %~ trow sr d r)
+  = introduce forall (i:nat{i < d}).
+      Seq.index (Seq.slice sf (r * d) (r * d + d)) i
+        %~ Seq.index (trow sr d r) i
+    with ()
 
-(* Chest-level analogue of [map2_sqdiff_approx], phrased directly over
-   the [acc1]-values of two GPU-ownership chests.  [sqdiff_row_real sca
-   scb] is the real-arithmetic integrand of the squared distance; the
-   f32 elementwise map [chest1_map2 sq_diff_step_f32] approximates its
-   [seq_to_chest1] lift.  (Mirrors [Kuiper.KB.MSELoss.mse_map_approx].) *)
-let sqdiff_row_real (eps : f32) (dd:nat) (sca scb : chest1 f32 dd)
-  : GTot (lseq real dd) =
-  Seq.init_ghost dd (fun j ->
-    sqdiff_step_r eps (to_real (acc1 sca j)) (to_real (acc1 scb j)))
+(* Turn a sequence approximation into the corresponding chest
+   approximation after a memcpy-established sequence equality. *)
+let chest_from_seq_approx
+  (#n:nat)
+  (c : chest1 f32 n)
+  (sf : Seq.lseq f32 n)
+  (sr : Seq.lseq real n)
+  : Lemma
+      (requires chest1_to_seq c == sf /\ sf %~ sr)
+      (ensures c %~ seq_to_chest1 sr)
+  = let aux (i:natlt n)
+      : Lemma (acc1 c i %~ acc1 (seq_to_chest1 sr) i)
+      = ()
+    in
+    Classical.forall_intro aux
 
-(* Pointwise-to-chest approximation intro (mirrors
-   [Kuiper.Kernel.OnlineSoftmax.chest1_approx_intro]): the explicit
-   [let (b0, ()) = i] destructuring discharges the [natlt]-to-[abs]
-   bridge that [Classical.forall_intro] alone leaves open. *)
-let chest1_approx_intro
-  (#et : Type0) {| scalar et, real_like et |} (#n : nat)
-  (c1 : chest1 et n) (c2 : chest1 real n)
-  : Lemma (requires forall (bid:natlt n). acc1 c1 bid %~ acc1 c2 bid)
-          (ensures c1 %~ c2)
-  = introduce forall (i:abs (n @| INil)). acc c1 i %~ acc c2 i
-    with (let (b0, ()) = i in ())
+let chest_to_seq_approx
+  (#n:nat)
+  (c : chest1 f32 n)
+  (sr : Seq.lseq real n)
+  : Lemma
+      (requires c %~ seq_to_chest1 sr)
+      (ensures chest1_to_seq c %~ sr)
+  = introduce forall (i:nat{i < n}).
+      (chest1_to_seq c @! i) %~ (sr @! i)
+    with ()
 
 #push-options ""
-let sqdiff_map_approx (eps : f32) (dd:nat) (sca scb : chest1 f32 dd)
-  : Lemma (Map.chest1_map2 (sq_diff_step_f32 eps) sca scb
-           %~ seq_to_chest1 (sqdiff_row_real eps dd sca scb))
-  = let c1 = Map.chest1_map2 (sq_diff_step_f32 eps) sca scb in
-    let c2 = seq_to_chest1 (sqdiff_row_real eps dd sca scb) in
-    let aux (i:natlt dd)
-      : Lemma (acc1 c1 i %~ acc1 c2 i)
-      = to_real_ok (acc1 sca i);
-        to_real_ok (acc1 scb i);
-        sqdiff_approx eps (acc1 sca i) (acc1 scb i)
-          (to_real (acc1 sca i)) (to_real (acc1 scb i))
+let sqdiff_map_approx
+  (eps : f32)
+  (d:nat)
+  (sca scb : chest1 f32 d)
+  (ra rb : Seq.lseq real d)
+  : Lemma
+      (requires sca %~ seq_to_chest1 ra /\ scb %~ seq_to_chest1 rb)
+      (ensures Map.chest1_map2 (sq_diff_step_f32 eps) sca scb
+               %~ seq_to_chest1 (Seq.init d (fun j ->
+                    sqdiff_step_r (to_real eps) (ra @! j) (rb @! j))))
+  = let aux (i:natlt d)
+      : Lemma
+          (acc1 (Map.chest1_map2 (sq_diff_step_f32 eps) sca scb) i
+           %~ acc1 (seq_to_chest1 (Seq.init d (fun j ->
+                sqdiff_step_r (to_real eps) (ra @! j) (rb @! j)))) i)
+      = sqdiff_approx eps (acc1 sca i) (acc1 scb i) (ra @! i) (rb @! i)
     in
-    Classical.forall_intro aux;
-    chest1_approx_intro c1 c2
+    Classical.forall_intro aux
 #pop-options
 
-(* The real integrand of a copied row, re-expressed over the (equal)
-   underlying sequences [rx]/[ry]; lets [real_sq_dist_unfold] line up. *)
-let sqdiff_row_real_eq (eps : f32) (dd:nat) (sca scb : chest1 f32 dd)
-  (rx ry : Seq.lseq f32 dd)
-  : Lemma (requires chest1_to_seq sca == rx /\ chest1_to_seq scb == ry)
-          (ensures sqdiff_row_real eps dd sca scb ==
-                   Seq.init dd (fun j ->
-                     sqdiff_step_r eps (to_real (rx @! j)) (to_real (ry @! j))))
-  = assert (Seq.equal (sqdiff_row_real eps dd sca scb)
-              (Seq.init dd (fun j ->
-                sqdiff_step_r eps (to_real (rx @! j)) (to_real (ry @! j)))))
-
-(* [real_sq_dist] unfolded to its [rsum]-of-[Seq.init] form, so the
-   SMT solver does not have to unfold the [let] on its own in the
-   (large) kernel proof context. *)
-let real_sq_dist_unfold (eps : f32) (d:nat) (ra rb : Seq.lseq f32 d)
+let real_sq_dist_unfold
+  (eps : real)
+  (d : nat)
+  (ra rb : Seq.lseq real d)
   : Lemma
-    (real_sq_dist eps d ra rb ==
-     rsum (Seq.init d (fun j ->
-       sqdiff_step_r eps (to_real (ra @! j)) (to_real (rb @! j)))))
+      (real_sq_dist eps d ra rb ==
+       rsum (Seq.init d (fun j -> sqdiff_step_r eps (ra @! j) (rb @! j))))
   = ()
 
-(* ── Carried loop-invariant predicate. ─────────────────────────────── *)
-
-let tup4 (b:nat) =
-  (Seq.lseq f32 b & Seq.lseq f32 b & Seq.lseq f32 b & Seq.lseq f32 b)
-
-(* Total accessor for the (host) result vector: keeps [carried_pred]
-   total even when its length is left abstract. *)
+noextract
 let sidx (s : Seq.seq f32) (r : nat) : f32 =
   if r < Seq.length s then Seq.index s r else zero
 
-(* For every already-processed row [r < bound]:
-     - [d_ap[r] == sqrt sumsq_ap[r]] / [d_an[r] == sqrt sumsq_an[r]];
-     - [sumsq_ap[r]] / [sumsq_an[r]] approximate the true real squared
-       distances of row [r] of [sa] against [sp] / [sn];
-     - [vt[r]] holds the per-row [triplet_step].
-   The four distance vectors are bundled into a tuple so we can thread
-   a single existential through the loop.  All accesses go through the
-   total [sidx] accessor, so no index-range refinement is needed. *)
+(* The loop carries only the public real-valued fact: every completed
+   host-vector element approximates its ideal triplet-loss term. *)
 let carried_pred
-  (b : nat) (dd : nat) (#n : nat) (margin eps : f32)
-  (sa sp sn : Seq.lseq f32 n)
+  (b : nat)
+  (terms : Seq.lseq real b)
   (vt : Seq.seq f32)
   (bound : nat)
-  (w : tup4 b)
   : prop =
-  let (sumsq_ap, sumsq_an, d_ap, d_an) = w in
-  forall (r : nat). r < bound ==>
-     sidx d_ap r == sqrt (sidx sumsq_ap r) /\
-     sidx d_an r == sqrt (sidx sumsq_an r) /\
-     sidx sumsq_ap r %~ real_sq_dist eps dd (trow sa dd r) (trow sp dd r) /\
-     sidx sumsq_an r %~ real_sq_dist eps dd (trow sa dd r) (trow sn dd r) /\
-     sidx vt r == triplet_step margin (sidx d_ap r) (sidx d_an r)
+  bound <= b /\ Seq.length vt == b /\
+  (forall (r : nat). r < bound ==> sidx vt r %~ (terms @! r))
 
-(* Loop-entry witness: vacuously true at [bound = 0]. *)
-let triplet_inv_init
-  (b dd : nat) (#n : nat) (margin eps : f32)
-  (sa sp sn : Seq.lseq f32 n)
+#push-options "--z3rlimit 40"
+let triplet_prefix_extend
+  (b : nat)
+  (terms : Seq.lseq real b)
+  (vt vt' : Seq.seq f32)
+  (vi : nat { vi < b })
+  (step : f32)
+  : Lemma
+      (requires carried_pred b terms vt vi /\
+                vt' == Seq.upd vt vi step /\
+                step %~ (terms @! vi))
+      (ensures carried_pred b terms vt' (vi + 1))
+  = ()
+#pop-options
+
+let carried_complete
+  (b : nat)
+  (terms : Seq.lseq real b)
   (vt : Seq.seq f32)
-  : Lemma (exists (w : tup4 b). carried_pred b dd margin eps sa sp sn vt 0 w)
-  = let z : Seq.lseq f32 b = Seq.create b (zero #f32) in
-    introduce exists (w : tup4 b). carried_pred b dd margin eps sa sp sn vt 0 w
-    with (z, z, z, z)
-    and  ()
+  : Lemma (requires carried_pred b terms vt b)
+          (ensures (vt <: Seq.lseq f32 b) %~ terms)
+  = introduce forall (i:nat{i < b}).
+      ((vt <: Seq.lseq f32 b) @! i) %~ (terms @! i)
+    with ()
 
-(* Per-iteration extension: given the freshly computed row-[vi]
-   quantities, extend the agreement prefix from [< vi] to [< vi+1]. *)
 let memcpy_row_eq
   (#n:nat) (dd:nat) (prev : Seq.lseq f32 dd) (s : Seq.lseq f32 n)
   (vi:nat) (off:nat)
   : Lemma (requires off == vi * dd /\ vi * dd + dd <= n)
-          (ensures KS.seq_blit prev 0 s off dd == trow s dd vi)
-  = Seq.lemma_eq_intro (KS.seq_blit prev 0 s off dd) (trow s dd vi)
-
-#push-options "--z3rlimit 40"
-let triplet_prefix_extend
-  (b : nat) (dd : nat) (#n : nat) (margin eps : f32)
-  (sa sp sn : Seq.lseq f32 n)
-  (vt vt' : Seq.seq f32)
-  (vi : nat { vi < b })
-  (sumsq_p sumsq_n d_ap_r d_an_r : f32)
-  : Lemma
-    (requires
-      Seq.length vt == b /\ Seq.length vt' == b /\
-      vt' == Seq.upd vt vi (triplet_step margin d_ap_r d_an_r) /\
-      d_ap_r == sqrt sumsq_p /\
-      d_an_r == sqrt sumsq_n /\
-      sumsq_p %~ real_sq_dist eps dd (trow sa dd vi) (trow sp dd vi) /\
-      sumsq_n %~ real_sq_dist eps dd (trow sa dd vi) (trow sn dd vi) /\
-      (exists (w : tup4 b). carried_pred b dd margin eps sa sp sn vt vi w))
-    (ensures
-      (exists (w : tup4 b). carried_pred b dd margin eps sa sp sn vt' (vi + 1) w))
-  = let pw (w : tup4 b) : prop = carried_pred b dd margin eps sa sp sn vt vi w in
-    let w0 : (w : tup4 b { pw w }) =
-      FStar.IndefiniteDescription.indefinite_description_ghost (tup4 b) pw in
-    let (sap, san, dap, dan) = w0 in
-    let sap' = Seq.upd sap vi sumsq_p in
-    let san' = Seq.upd san vi sumsq_n in
-    let dap' = Seq.upd dap vi d_ap_r in
-    let dan' = Seq.upd dan vi d_an_r in
-    let w' : tup4 b = (sap', san', dap', dan') in
-    assert (carried_pred b dd margin eps sa sp sn vt' (vi + 1) w');
-    introduce exists (w : tup4 b). carried_pred b dd margin eps sa sp sn vt' (vi + 1) w
-    with w'
-    and  ()
-#pop-options
-
-(* Final discharge: from the loop-exit form (agreement prefix covers
-   all [b] rows) and the reduce + scalar-mul outputs, witness
-   [triplet_post]. *)
-#push-options "--z3rlimit 40"
-let triplet_final_lemma
-  (b : pos) (dd : nat) (margin eps inv_b : f32)
-  (sa sp sn : Seq.lseq f32 (b * dd))
-  (vt : Seq.lseq f32 b)
-  (s res : f32)
-  : Lemma
-    (requires
-      (exists (w : tup4 b). carried_pred b dd margin eps sa sp sn vt b w) /\
-      s %~ rsum (to_real_seq #f32 vt) /\
-      res == mul s inv_b)
-    (ensures triplet_post b dd margin eps inv_b sa sp sn res)
-  = let pw (w : tup4 b) : prop = carried_pred b dd margin eps sa sp sn vt b w in
-    let w0 : (w : tup4 b { pw w }) =
-      FStar.IndefiniteDescription.indefinite_description_ghost (tup4 b) pw in
-    let (sumsq_ap, sumsq_an, d_ap, d_an) = w0 in
-    let init_vt : Seq.lseq f32 b =
-      Seq.init b (fun r -> triplet_step margin (Seq.index d_ap r) (Seq.index d_an r)) in
-    assert (Seq.equal vt init_vt);
-    assert (to_real_seq #f32 vt == to_real_seq #f32 init_vt);
-    introduce exists (sumsq_ap' sumsq_an' d_ap' d_an' : Seq.lseq f32 b) (s' : f32).
-      (forall (r : nat). r < b ==>
-         (d_ap' @! r) == sqrt (sumsq_ap' @! r) /\
-         (d_an' @! r) == sqrt (sumsq_an' @! r) /\
-         (sumsq_ap' @! r) %~ real_sq_dist eps dd (trow sa dd r) (trow sp dd r) /\
-         (sumsq_an' @! r) %~ real_sq_dist eps dd (trow sa dd r) (trow sn dd r)) /\
-      s' %~ rsum (to_real_seq (Seq.init b (fun r ->
-        triplet_step margin (d_ap' @! r) (d_an' @! r)))) /\
-      res == mul s' inv_b
-    with sumsq_ap sumsq_an d_ap d_an s
-    and  ()
-#pop-options
+          (ensures KS.seq_blit prev 0 s off dd ==
+                   Seq.slice s (vi * dd) (vi * dd + dd))
+  = Seq.lemma_eq_intro (KS.seq_blit prev 0 s off dd)
+      (Seq.slice s (vi * dd) (vi * dd + dd))
 
 (* ── Per-row squared-distance helper. ──────────────────────────────────
 
@@ -400,6 +321,8 @@ fn dist_sq_row
   (scratch_b : array1 f32 (l1_forward d) { is_global scratch_b })
   (off : sz)
   (ri : erased nat)
+  (rx : erased (Seq.lseq real len))
+  (ry : erased (Seq.lseq real len))
   (#sx : chest1 f32 len)
   (#sy : chest1 f32 len)
   (#va0 : chest1 f32 d)
@@ -407,7 +330,8 @@ fn dist_sq_row
   (#fx #fy : perm)
   preserves cpu **
             on gpu_loc (x |-> Frac fx sx) **
-            on gpu_loc (y |-> Frac fy sy)
+            on gpu_loc (y |-> Frac fy sy) **
+            pure (sx %~ seq_to_chest1 rx /\ sy %~ seq_to_chest1 ry)
   requires
     on gpu_loc (scratch_a |-> va0) **
     on gpu_loc (scratch_b |-> vb0) **
@@ -418,9 +342,9 @@ fn dist_sq_row
     (exists* (va : chest1 f32 d) (vb : chest1 f32 d).
        on gpu_loc (scratch_a |-> va) **
        on gpu_loc (scratch_b |-> vb)) **
-    pure (sumsq %~ real_sq_dist eps d
-                    (trow (chest1_to_seq (reveal sx)) d (reveal ri))
-                    (trow (chest1_to_seq (reveal sy)) d (reveal ri)))
+    pure (sumsq %~ real_sq_dist (to_real eps) d
+                    (trow rx d (reveal ri))
+                    (trow ry d (reveal ri)))
 {
   t_memcpy_d2d' scratch_a 0sz x off d;
   with sca. assert (on gpu_loc (scratch_a |-> reveal sca));
@@ -430,7 +354,14 @@ fn dist_sq_row
   memcpy_row_eq #len d (chest1_to_seq (reveal va0))
     (chest1_to_seq (reveal sx)) (reveal ri) off;
   assert pure (chest1_to_seq (reveal sca) ==
-               trow (chest1_to_seq (reveal sx)) d (reveal ri));
+               Seq.slice (chest1_to_seq (reveal sx))
+                 (reveal ri * d) (reveal ri * d + d));
+  chest_to_seq_approx (reveal sx) rx;
+  row_slice_approx (chest1_to_seq (reveal sx)) rx d (reveal ri);
+  chest_from_seq_approx (reveal sca)
+    (Seq.slice (chest1_to_seq (reveal sx))
+      (reveal ri * d) (reveal ri * d + d))
+    (trow rx d (reveal ri));
 
   t_memcpy_d2d' scratch_b 0sz y off d;
   with scb. assert (on gpu_loc (scratch_b |-> reveal scb));
@@ -440,7 +371,14 @@ fn dist_sq_row
   memcpy_row_eq #len d (chest1_to_seq (reveal vb0))
     (chest1_to_seq (reveal sy)) (reveal ri) off;
   assert pure (chest1_to_seq (reveal scb) ==
-               trow (chest1_to_seq (reveal sy)) d (reveal ri));
+               Seq.slice (chest1_to_seq (reveal sy))
+                 (reveal ri * d) (reveal ri * d + d));
+  chest_to_seq_approx (reveal sy) ry;
+  row_slice_approx (chest1_to_seq (reveal sy)) ry d (reveal ri);
+  chest_from_seq_approx (reveal scb)
+    (Seq.slice (chest1_to_seq (reveal sy))
+      (reveal ri * d) (reveal ri * d + d))
+    (trow ry d (reveal ri));
 
   Map.map_gpu2 #f32 (sq_diff_step_f32 eps) d scratch_a scratch_b;
   with v. assert (on gpu_loc (scratch_a |-> reveal v));
@@ -448,25 +386,24 @@ fn dist_sq_row
     (Map.chest1_map2 (sq_diff_step_f32 eps) (reveal sca) (reveal scb)));
   Kuiper.Chest.ext (reveal v)
     (Map.chest1_map2 (sq_diff_step_f32 eps) (reveal sca) (reveal scb));
-  let vr : chest1 real d =
-    hide (seq_to_chest1 (sqdiff_row_real eps d (reveal sca) (reveal scb)));
-  sqdiff_map_approx eps d (reveal sca) (reveal scb);
+  let terms : erased (Seq.lseq real d) =
+    hide (Seq.init d (fun j -> sqdiff_step_r (to_real eps)
+      (trow rx d (reveal ri) @! j)
+      (trow ry d (reveal ri) @! j)));
+  let vr : chest1 real d = hide (seq_to_chest1 (reveal terms));
+  sqdiff_map_approx eps d (reveal sca) (reveal scb)
+    (trow rx d (reveal ri)) (trow ry d (reveal ri));
   assert pure (reveal v %~ reveal vr);
   let sumsq = HRed.reduce #f32 id id 1024sz d scratch_a #v vr;
   assert pure (equal (chest_map id (reveal vr)) (reveal vr));
-  chest1_seq_roundtrip (sqdiff_row_real eps d (reveal sca) (reveal scb));
-  assert pure (Seq.equal (chest1_to_seq (reveal vr))
-                         (sqdiff_row_real eps d (reveal sca) (reveal scb)));
-  assert pure (sumsq %~ rsum (sqdiff_row_real eps d (reveal sca) (reveal scb)));
-  sqdiff_row_real_eq eps d (reveal sca) (reveal scb)
-    (trow (chest1_to_seq (reveal sx)) d (reveal ri))
-    (trow (chest1_to_seq (reveal sy)) d (reveal ri));
-  real_sq_dist_unfold eps d
-    (trow (chest1_to_seq (reveal sx)) d (reveal ri))
-    (trow (chest1_to_seq (reveal sy)) d (reveal ri));
-  assert pure (sumsq %~ real_sq_dist eps d
-                  (trow (chest1_to_seq (reveal sx)) d (reveal ri))
-                  (trow (chest1_to_seq (reveal sy)) d (reveal ri)));
+  chest1_seq_roundtrip (reveal terms);
+  assert pure (Seq.equal (chest1_to_seq (reveal vr)) (reveal terms));
+  assert pure (sumsq %~ rsum (reveal terms));
+  real_sq_dist_unfold (to_real eps) d
+    (trow rx d (reveal ri)) (trow ry d (reveal ri));
+  assert pure (sumsq %~ real_sq_dist (to_real eps) d
+                  (trow rx d (reveal ri))
+                  (trow ry d (reveal ri)));
   sumsq;
 }
 #pop-options
@@ -486,39 +423,33 @@ fn triplet_fw_f32
   (#sa : chest1 f32 (b * d))
   (#sp : chest1 f32 (b * d))
   (#sn : chest1 f32 (b * d))
+  (ra : erased (Seq.lseq real (b * d)))
+  (rp : erased (Seq.lseq real (b * d)))
+  (rn : erased (Seq.lseq real (b * d)))
   (#fanc #fpos #fneg : perm)
   norewrite
   preserves cpu **
             on gpu_loc (anchor   |-> Frac fanc sa) **
             on gpu_loc (positive |-> Frac fpos sp) **
-            on gpu_loc (negative |-> Frac fneg sn)
+            on gpu_loc (negative |-> Frac fneg sn) **
+            pure (sa %~ seq_to_chest1 ra /\
+                  sp %~ seq_to_chest1 rp /\
+                  sn %~ seq_to_chest1 rn)
   returns res : f32
   ensures
-    pure (triplet_post b d margin eps (triplet_recip_f32 b)
-            (chest1_to_seq sa)
-            (chest1_to_seq sp)
-            (chest1_to_seq sn)
-            res)
+    pure (triplet_post b d margin eps ra rp rn res)
 {
   let inv_b = triplet_recip_f32 b;
-
-  (* The flat-length nat coincides with [b * d]; rebind the inputs at
-     that length so all spec-level uses line up with [triplet_post]. *)
-  let sa_c : erased (Seq.lseq f32 (SZ.v b * SZ.v d)) =
-    hide (chest1_to_seq (reveal sa) <: Seq.lseq f32 (SZ.v b * SZ.v d));
-  let sp_c : erased (Seq.lseq f32 (SZ.v b * SZ.v d)) =
-    hide (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v d));
-  let sn_c : erased (Seq.lseq f32 (SZ.v b * SZ.v d)) =
-    hide (chest1_to_seq (reveal sn) <: Seq.lseq f32 (SZ.v b * SZ.v d));
+  let terms : erased (Seq.lseq real b) =
+    hide (real_triplet_terms b d (to_real margin) (to_real eps) ra rp rn);
 
   let scratch_a = alloc0 #f32 d (l1_forward d);
   let scratch_b = alloc0 #f32 d (l1_forward d);
   let t_dev     = alloc0 #f32 b (l1_forward b);
   let t_host    = Vec.alloc #f32 (zero #f32) b;
 
-  triplet_inv_init b d margin eps
-    (reveal sa_c) (reveal sp_c) (reveal sn_c)
-    (Seq.create b (zero #f32));
+  assert pure (carried_pred b (reveal terms)
+    (Seq.create b (zero #f32)) 0);
   let mut idx : SZ.t = 0sz;
   while (let i = !idx; SZ.(i <^ b))
     invariant
@@ -534,11 +465,7 @@ fn triplet_fw_f32
         on gpu_loc (t_dev |-> vt_dev) **
         cpu **
         pure (SZ.v vi <= SZ.v b /\
-              Seq.length vt == SZ.v b /\
-              (exists (w : tup4 b).
-                 carried_pred b d margin eps
-                   (reveal sa_c) (reveal sp_c) (reveal sn_c)
-                   vt vi w))
+              carried_pred b (reveal terms) vt vi)
     decreases (SZ.v b - SZ.v !idx)
   {
     let i = !idx;
@@ -550,35 +477,34 @@ fn triplet_fw_f32
     (* ── per-row squared distances via the factored helper ──────── *)
     assert pure (i * d + d <= b * d);
 
-    let sumsq_p = dist_sq_row d eps anchor positive scratch_a scratch_b off (hide (SZ.v i));
-    assert pure (trow (chest1_to_seq (reveal sa)) d i == trow (reveal sa_c) d i);
-    assert pure (trow (chest1_to_seq (reveal sp)) d i == trow (reveal sp_c) d i);
-    assert pure (sumsq_p %~ real_sq_dist eps d
-                   (trow (reveal sa_c) d i)
-                   (trow (reveal sp_c) d i));
+    let sumsq_p = dist_sq_row d eps anchor positive scratch_a scratch_b off
+      (hide (SZ.v i)) ra rp;
+    let rsq_ap = real_sq_dist (to_real eps) d (trow ra d i) (trow rp d i);
+    real_sq_dist_nonnegative (to_real eps) d (trow ra d i) (trow rp d i);
+    SqrtApprox.sqrt_approx sumsq_p rsq_ap;
     let d_ap_r = sqrt sumsq_p;
 
-    let sumsq_n = dist_sq_row d eps anchor negative scratch_a scratch_b off (hide (SZ.v i));
-    assert pure (trow (chest1_to_seq (reveal sa)) d i == trow (reveal sa_c) d i);
-    assert pure (trow (chest1_to_seq (reveal sn)) d i == trow (reveal sn_c) d i);
-    assert pure (sumsq_n %~ real_sq_dist eps d
-                   (trow (reveal sa_c) d i)
-                   (trow (reveal sn_c) d i));
+    let sumsq_n = dist_sq_row d eps anchor negative scratch_a scratch_b off
+      (hide (SZ.v i)) ra rn;
+    let rsq_an = real_sq_dist (to_real eps) d (trow ra d i) (trow rn d i);
+    real_sq_dist_nonnegative (to_real eps) d (trow ra d i) (trow rn d i);
+    SqrtApprox.sqrt_approx sumsq_n rsq_an;
     let d_an_r = sqrt sumsq_n;
 
     (* ── margin step + store ────────────────────────────────────── *)
     let step = triplet_step_f32 margin d_ap_r d_an_r;
-    triplet_step_f32_eq margin d_ap_r d_an_r;
+    triplet_step_approx margin d_ap_r d_an_r
+      (RealSqrt.sqrt rsq_ap) (RealSqrt.sqrt rsq_an);
+    assert pure (step %~ (reveal terms @! i));
 
     Vec.pts_to_len t_host;
     Vec.(t_host.(i) <- step);
 
     with vt_old. assert (Vec.pts_to t_host (reveal vt_old));
-    triplet_prefix_extend b d margin eps
-      (reveal sa_c) (reveal sp_c) (reveal sn_c)
+    triplet_prefix_extend b (reveal terms)
       (reveal vt_old)
-      (Seq.upd (reveal vt_old) i (triplet_step margin d_ap_r d_an_r))
-      i sumsq_p sumsq_n d_ap_r d_an_r;
+      (Seq.upd (reveal vt_old) i step)
+      i step;
 
     idx := SZ.(!idx +^ 1sz);
   };
@@ -589,20 +515,30 @@ fn triplet_fw_f32
   with vt_dev_final. assert (on gpu_loc (t_dev |-> reveal vt_dev_final));
   assert pure (chest1_to_seq (reveal vt_dev_final) == reveal vt_loop);
 
-  let vt_r : chest1 real b = hide (to_real_chest (reveal vt_dev_final));
-  lemma_to_real_chest_approximates (reveal vt_dev_final);
+  carried_complete b (reveal terms) (reveal vt_loop);
+  chest_from_seq_approx (reveal vt_dev_final)
+    (reveal vt_loop <: Seq.lseq f32 b) (reveal terms);
+  let vt_r : chest1 real b = hide (seq_to_chest1 (reveal terms));
   let s = HRed.reduce #f32 id id 1024sz b t_dev vt_r;
   assert pure (equal (chest_map id (reveal vt_r)) (reveal vt_r));
-  lem_to_real_chest_to_seq (reveal vt_dev_final);
-  assert pure (s %~ rsum (to_real_seq #f32 (reveal vt_loop)));
+  chest1_seq_roundtrip (reveal terms);
+  assert pure (s %~ rsum (reveal terms));
 
+  let b64 : Int64.t = FStar.Int.Cast.uint64_to_int64
+    (FStar.SizeT.sizet_to_uint64 b);
+  assert pure (Int64.v b64 == SZ.v b);
+  let bf : f32 = of_int b64;
+  of_int_approx #f32 b64;
+  assert pure (bf %~ Real.of_int b);
+  assert pure (inv_b == div one bf);
+  div_approx (one #f32) bf 1.0R (Real.of_int b);
   let m : f32 = mul s inv_b;
-
-  triplet_final_lemma b d margin eps inv_b
-    (reveal sa_c) (reveal sp_c) (reveal sn_c)
-    (reveal vt_loop <: Seq.lseq f32 b)
-    s
-    m;
+  a_mul s inv_b (rsum (reveal terms)) (1.0R /. Real.of_int b);
+  assert pure (rsum (reveal terms) == rsum (real_triplet_terms b d
+    (to_real margin) (to_real eps) ra rp rn));
+  real_triplet_loss_mul b d (to_real margin) (to_real eps) ra rp rn;
+  assert pure (m %~ real_triplet_loss b d
+    (to_real margin) (to_real eps) ra rp rn);
 
   Vec.free t_host;
   free scratch_a;

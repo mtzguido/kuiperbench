@@ -63,9 +63,8 @@ torch::Tensor kuiper_crossentropy_cuda(torch::Tensor predictions,
     auto T32 = T.to(torch::kInt32).contiguous();
     uint32_t *Tp = reinterpret_cast<uint32_t *>(T32.data_ptr<int32_t>());
 
-    float inv_b = Kuiper_KB_CrossEntropyLoss_ce_recip_f32((uint32_t)B);
     float mean = Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(
-        (uint32_t)B, (uint32_t)C, inv_b,
+        (uint32_t)B, (uint32_t)C,
         P.data_ptr<float>(), Tp);
 
     auto out = torch::tensor(mean, torch::dtype(torch::kFloat32).device(torch::kCPU));

@@ -1,22 +1,22 @@
 KernelBench L1 #98: KLDivLoss (reduction='batchmean')
 ======================================================
 
-Spec: src/lib/spec/Kuiper.Spec.KLDivLoss.fsti  (kl_post)
+Spec: src/lib/spec/Kuiper.Spec.KLDivLoss.fsti
 
-  exists s. s %~ rsum (to_real_seq (lseq_map2 kl_step sp st))
-        /\ sout[0] == mul s inv_n
-  with kl_step p t = t * (log t - log p).
+  res %~ real_kl N batch_size rp rt
+
+where the f32 inputs approximate positive real sequences [rp]/[rt], and
+real_kl uses the real operation t * (log t - log p) followed by the batch mean.
 
 Faithfulness to PyTorch's
   F.kl_div(log(predictions), targets, reduction='batchmean'):
   * For each i: torch's kl_div formula reduces (when log_target=False)
     to  target * (log(target) - input)  where input = log(predictions).
     So target * (log(target) - log(predictions))  = our kl_step.
-  * 'batchmean' divides by batch_size (predictions.shape[0]),
-    not by N_total.  The Python wrapper sets
-    inv_n = 1.0 / batch_size accordingly.
-  * Bit-exact f32 elementwise op; only the tree-reduction sum is
-    [%~]-approximated against the real sum.
+  * 'batchmean' divides by batch_size, not by N_total.  The verified entry
+    computes this division itself.
+  * [log_approx] and the arithmetic approximation laws connect every
+    floating step to the direct real operation.
 
 Inherited debt:
   * Float-summation associativity (same %~ pattern used elsewhere).
@@ -25,12 +25,11 @@ Inherited debt:
     elsewhere in Kuiper).
 
 Edge cases:
-  * Non-positive inputs to log produce NaN/-inf; this matches PyTorch
-    behaviour (also calls log on the same data).  Out-of-distribution
-    inputs are caller's responsibility.
+  * The verified contract requires positive real inputs, matching the
+    KernelBench generator's domain and the domain of real logarithm; the
+    bridge now checks both tensors before entering the verified function.
   * Empty input forbidden by bridge TORCH_CHECK.
   * Falls back to torch reference for non-conforming shapes/dtypes.
 
-Extraction note: same typeclass-extraction workaround as #94 / #100;
-[kl_step_f32] uses [Kuiper.Float32] ops directly and is shown
-definitionally equal to the spec's [kl_step #f32].
+The final result, including division by batch size, is inside the verified
+boundary; the bridge performs no loss arithmetic.

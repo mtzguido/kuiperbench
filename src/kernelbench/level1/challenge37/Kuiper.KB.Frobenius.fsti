@@ -13,16 +13,13 @@ module Kuiper.KB.Frobenius
    single [map_gpu] pass scales the input by [inv].
 
    Functional postcondition (see [Kuiper.Spec.Frobenius]): the result
-   is exactly [frobenius_result inv s], where [inv] is existentially
-   bound and [inv == rsqrt sumsq] for some [sumsq : t] approximating
-   the real-valued sum-of-squares of the input.  This pins the result
-   to be a *uniform* scaling of the input by an [inv] that
-   approximates [1/||s||_F], which is genuinely Frobenius
-   normalisation up to floating-point rounding.
+   directly approximates the real-valued Frobenius normalization of
+   the input.  Floating reduction and reciprocal-square-root values
+   remain proof-local and are not existentially exposed.
 
-   Edge case (all-zero input): the spec is satisfied with
-   [inv = rsqrt 0]; in IEEE-754 this is [+inf] and the result is
-   NaN-filled.  This matches the PyTorch reference.
+   The real specification requires a positive norm.  IEEE [rsqrt 0]
+   produces an infinity and subsequent NaNs, which have no finite-real
+   interpretation under [%~].
 
    Note on input shape.  KernelBench #37 allows an input tensor of
    *arbitrary* dimension (the reference flattens it implicitly via
@@ -44,12 +41,12 @@ type frobenius_fw_ty (t:Type0) {| floating t, real_like t |} =
      (a : array1 t (l1_forward lena) { is_global a })
      (#s : chest1 t lena)
      preserves cpu
-     requires on gpu_loc (a |-> s)
+     requires
+       on gpu_loc (a |-> s) **
+       pure (frobenius_sumsq_r (to_real_seq (chest1_to_seq s)) >. 0.0R)
      ensures
        (exists* (s' : chest1 t lena).
           on gpu_loc (a |-> s') **
-          pure (exists (sumsq : t).
-            chest1_to_seq s' == frobenius_result (rsqrt sumsq) (chest1_to_seq s) /\
-            sumsq %~ frobenius_sumsq_r (to_real_seq (chest1_to_seq s))))
+          pure (frobenius_post (chest1_to_seq s) (chest1_to_seq s')))
 
 val frobenius_fw_f32 : frobenius_fw_ty f32

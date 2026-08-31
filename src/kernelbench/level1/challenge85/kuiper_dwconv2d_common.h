@@ -73,6 +73,10 @@ static torch::Tensor kuiper_dwconv2d_cuda(
     TORCH_CHECK(B > 0 && Cin > 0 && Hin > 0 && Win > 0
                 && Kh > 0 && Kw > 0,
                 "kuiper_dwconv2d: shapes must be positive");
+    TORCH_CHECK(Hin <= (int64_t)UINT32_MAX && Win <= (int64_t)UINT32_MAX &&
+                Kh <= (int64_t)UINT32_MAX && Kw <= (int64_t)UINT32_MAX &&
+                stride_h <= (int64_t)UINT32_MAX && pad_h <= (int64_t)UINT32_MAX,
+                "kuiper_dwconv2d: output-size helper arguments out of range");
 
     // Padded input must be at least as large as the kernel.  This discharges
     // the `k <= n + 2*pad` precondition of the verified `dwconv2d_out_dim`

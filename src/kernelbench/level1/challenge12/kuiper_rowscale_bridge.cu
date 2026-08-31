@@ -10,10 +10,22 @@
 #include "Klas_RowScale.cu"
 
 torch::Tensor kuiper_rowscale_cuda(torch::Tensor A, torch::Tensor B) {
+    TORCH_CHECK(A.dim() == 1 && B.dim() == 2 && A.size(0) == B.size(0),
+                "kuiper #12: expected A=(M), B=(M,N)");
+    TORCH_CHECK(A.scalar_type() == torch::kFloat32 && B.scalar_type() == torch::kFloat32,
+                "kuiper #12: expected float32 tensors");
+    TORCH_CHECK(A.is_cuda() && B.is_cuda() && A.device() == B.device(),
+                "kuiper #12: tensors must be CUDA tensors on the same device");
     auto A_c = A.contiguous();
     auto B_c = B.contiguous().clone();  // in-place kernel mutates B_c
-    uint32_t M = (uint32_t)A_c.size(0);
-    uint32_t N = (uint32_t)B_c.size(1);
+    int64_t m = A_c.size(0);
+    int64_t n = B_c.size(1);
+    TORCH_CHECK(m > 0 && n > 0 &&
+                m <= (int64_t)UINT32_MAX / n &&
+                m <= ((int64_t)2097152 * 1024) / n,
+                "kuiper #12: shape exceeds the verified kernel bounds");
+    uint32_t M = (uint32_t)m;
+    uint32_t N = (uint32_t)n;
 
     Klas_RowScale_rowscale_f32_rowmajor(
         M, N,

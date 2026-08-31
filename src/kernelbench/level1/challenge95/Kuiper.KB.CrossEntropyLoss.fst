@@ -13,9 +13,8 @@ module HRed = Kuiper.Kernel.HReduce
 module Vec = Pulse.Lib.Vec
 module KS = Kuiper.Seq.Common
 
-(* Verified, extractable reciprocal 1/B as f32 (extracts to
-   1.0f / (float)(int64_t)(uint64_t)b), so the mean's 1/B factor is
-   computed inside the verification boundary. *)
+(* Verified reciprocal 1/B, inlined into the public entry point. *)
+inline_for_extraction noextract
 let ce_recip_f32 (b : szp) : f32 =
   div one (of_int (FStar.Int.Cast.uint64_to_int64
                      (FStar.SizeT.sizet_to_uint64 b)))
@@ -53,6 +52,34 @@ let approx_at (#et:Type0) {| scalar et, real_like et |} (#n:nat)
   (c1 : chest1 et n) (c2 : chest1 real n) (i:natlt n)
   : Lemma (requires c1 %~ c2) (ensures acc1 c1 i %~ acc1 c2 i)
   = ()
+
+let chest_to_seq_approx
+  (#n:nat) (c : chest1 f32 n) (sr : Seq.lseq real n)
+  : Lemma (requires c %~ seq_to_chest1 sr)
+          (ensures chest1_to_seq c %~ sr)
+  = introduce forall (i:nat{i < n}).
+      (chest1_to_seq c @! i) %~ (sr @! i)
+    with ()
+
+let row_slice_approx
+  (#n:nat) (sf : Seq.lseq f32 n) (sr : Seq.lseq real n) (c r:nat)
+  : Lemma (requires sf %~ sr /\ r * c + c <= n)
+          (ensures Seq.slice sf (r * c) (r * c + c) %~ crow sr c r)
+  = introduce forall (i:nat{i < c}).
+      Seq.index (Seq.slice sf (r * c) (r * c + c)) i
+        %~ Seq.index (crow sr c r) i
+    with ()
+
+let chest_from_seq_approx
+  (#n:nat) (c : chest1 f32 n) (sf : Seq.lseq f32 n)
+  (sr : Seq.lseq real n)
+  : Lemma (requires chest1_to_seq c == sf /\ sf %~ sr)
+          (ensures c %~ seq_to_chest1 sr)
+  = let aux (i:natlt n)
+      : Lemma (acc1 c i %~ acc1 (seq_to_chest1 sr) i)
+      = ()
+    in
+    Classical.forall_intro aux
 
 (* device-to-device blit (chest level) *)
 inline_for_extraction noextract
@@ -177,43 +204,30 @@ let neg_approx_f32 (v : f32) (rv : real)
 
 (* Unfold [ce_term_r] for an in-range target: the guard reduces to the
    real log-softmax branch. *)
-let ce_term_fold (c : pos) (#n : nat) (sp : Seq.lseq f32 n) (r : nat) (t : nat)
+let ce_term_fold (c : pos) (#n : nat) (rp : Seq.lseq real n) (r : nat) (t : nat)
   : Lemma (requires t < c)
-          (ensures ce_term_r c sp r t ==
+          (ensures ce_term_r c rp r t ==
                    (0.0R -. acc1 (LSM.log_softmax_real
-                              (seq_to_chest1 (to_real_seq (crow sp c r) <: Seq.lseq real c))) t))
+                              (seq_to_chest1 (crow rp c r))) t))
   = ()
-
-(* The real chest fed to [log_softmax_gpu] (the [to_real] image of the
-   freshly copied row [sca]) is exactly the spec's per-row real chest. *)
-let ce_ra_eq (c : pos) (#n : nat) (sp_s : Seq.lseq f32 n) (r : nat) (sca : chest1 f32 c)
-  : Lemma (requires chest1_to_seq sca == crow sp_s c r)
-          (ensures to_real_chest sca ==
-                   seq_to_chest1 (to_real_seq (crow sp_s c r) <: Seq.lseq real c))
-  = assert (Kuiper.Chest.equal (to_real_chest sca)
-              (seq_to_chest1 (to_real_seq (crow sp_s c r) <: Seq.lseq real c)))
 
 (* The device-to-device row copy lands exactly row [r] (= [crow]). *)
 let memcpy_row_eq
   (#n:nat) (c:nat) (prev : Seq.lseq f32 c) (s : Seq.lseq f32 n)
   (r:nat) (off:nat)
   : Lemma (requires off == r * c /\ r * c + c <= n)
-          (ensures KS.seq_blit prev 0 s off c == crow s c r)
-  = Seq.lemma_eq_intro (KS.seq_blit prev 0 s off c) (crow s c r)
-
-(* [crow] depends only on the underlying [Seq.seq] and the numeric
-   length, so it is stable under a length-coercion of the buffer. *)
-let crow_coerce
-  (#n1 #n2:nat) (s1 : Seq.lseq f32 n1) (s2 : Seq.lseq f32 n2) (c r:nat)
-  : Lemma (requires n1 == n2 /\ (s1 <: Seq.seq f32) == (s2 <: Seq.seq f32))
-          (ensures crow s1 c r == crow s2 c r)
-  = ()
+          (ensures KS.seq_blit prev 0 s off c ==
+                   Seq.slice s (r * c) (r * c + c))
+  = Seq.lemma_eq_intro (KS.seq_blit prev 0 s off c)
+      (Seq.slice s (r * c) (r * c + c))
 
 (* Total accessor for the (host) per-row loss vector. *)
+noextract
 let sidx (s : Seq.seq f32) (r : nat) : f32 =
   if r < Seq.length s then Seq.index s r else zero
 
 (* Total accessor for the target index of row [r] (as a nat). *)
+noextract
 let tgt (#b : nat) (stv : Seq.lseq SZ.t b) (r : nat) : nat =
   if r < b then SZ.v (stv @! r) else 0
 
@@ -221,56 +235,44 @@ let tgt (#b : nat) (stv : Seq.lseq SZ.t b) (r : nat) : nat =
    approximates the genuine real CE term of row [r] at its target. *)
 let ce_carried
   (b : nat) (c : pos) (#n : nat)
-  (sp : Seq.lseq f32 n) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real n) (stv : Seq.lseq SZ.t b)
   (vt : Seq.seq f32) (bound : nat)
   : prop =
   forall (r : nat). r < bound ==>
-    sidx vt r %~ ce_term_r c sp r (tgt stv r)
+    sidx vt r %~ ce_term_r c rp r (tgt stv r)
 
 (* Loop-entry witness (vacuous at [bound = 0]). *)
 let ce_inv_init
   (b : nat) (c : pos) (#n : nat)
-  (sp : Seq.lseq f32 n) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real n) (stv : Seq.lseq SZ.t b)
   (vt : Seq.seq f32)
-  : Lemma (ce_carried b c sp stv vt 0)
+  : Lemma (ce_carried b c rp stv vt 0)
   = ()
 
 (* Per-iteration extension: storing the row-[vi] loss into slot [vi]
    extends the agreement prefix from [< vi] to [< vi+1]. *)
 let ce_prefix_extend
   (b : nat) (c : pos) (#n : nat)
-  (sp : Seq.lseq f32 n) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real n) (stv : Seq.lseq SZ.t b)
   (vt vt' : Seq.seq f32) (vi : nat { vi < b }) (newv : f32)
   : Lemma
     (requires
       Seq.length vt == b /\ Seq.length vt' == b /\
       vt' == Seq.upd vt vi newv /\
-      newv %~ ce_term_r c sp vi (tgt stv vi) /\
-      ce_carried b c sp stv vt vi)
-    (ensures ce_carried b c sp stv vt' (vi + 1))
+      newv %~ ce_term_r c rp vi (tgt stv vi) /\
+      ce_carried b c rp stv vt vi)
+    (ensures ce_carried b c rp stv vt' (vi + 1))
   = ()
 
-(* Final discharge: from the full agreement prefix and the
-   reduce + scalar-mul outputs, witness [cross_entropy_post]. *)
-let ce_final_lemma
+let ce_carried_complete
   (b : pos) (c : pos)
-  (inv_b : f32)
-  (sp : Seq.lseq f32 (b * c)) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real (b * c)) (stv : Seq.lseq SZ.t b)
   (vt : Seq.lseq f32 b)
-  (s res : f32)
-  : Lemma
-    (requires
-      ce_carried b c sp stv vt b /\
-      s %~ rsum (to_real_seq vt) /\
-      res == mul s inv_b)
-    (ensures cross_entropy_post b c inv_b sp stv res)
-  = introduce exists (per_batch : Seq.lseq f32 b) (s' : f32).
-      (forall (r : nat). r < b ==>
-         (per_batch @! r) %~ ce_term_r c sp r (stv @! r)) /\
-      s' %~ rsum (to_real_seq per_batch) /\
-      res == mul s' inv_b
-    with vt s
-    and  ()
+  : Lemma (requires ce_carried b c rp stv vt b)
+          (ensures vt %~ real_cross_entropy_terms b c rp stv)
+  = introduce forall (r:nat{r < b}).
+      (vt @! r) %~ (real_cross_entropy_terms b c rp stv @! r)
+    with ()
 
 #push-options "--z3rlimit 40"
 inline_for_extraction noextract
@@ -280,36 +282,36 @@ fn ce_loss_impl
   (c : szp { c <= max_blocks * max_threads /\
              SZ.fits (c + max_threads) /\
              SZ.fits (b * c) })
-  (inv_b : f32)
   (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
   (targets : array1 SZ.t (l1_forward b) { is_global targets })
   (#sp : chest1 f32 (b * c))
   (#stv : chest1 SZ.t b)
+  (rp : erased (Seq.lseq real (b * c)))
   (#fp #ft : perm)
   norewrite
   preserves cpu **
             on gpu_loc (predictions |-> Frac fp sp) **
-            on gpu_loc (targets |-> Frac ft stv)
+            on gpu_loc (targets |-> Frac ft stv) **
+            pure (sp %~ seq_to_chest1 rp)
   requires
     pure (forall (r : nat). r < SZ.v b ==> SZ.v (acc1 (reveal stv) r) < SZ.v c)
   returns res : f32
   ensures
-    pure (cross_entropy_post b c inv_b
-            (chest1_to_seq (reveal sp) <: Seq.lseq f32 (SZ.v b * SZ.v c))
+    pure (cross_entropy_post b c rp
             (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t b)
             res)
 {
-  let sp_c : erased (Seq.lseq f32 (b * c)) =
-    hide (chest1_to_seq (reveal sp) <: Seq.lseq f32 (b * c));
   let stv_s : erased (Seq.lseq SZ.t b) =
     hide (chest1_to_seq (reveal stv));
-  assert pure ((reveal sp_c <: Seq.seq f32) == (chest1_to_seq (reveal sp) <: Seq.seq f32));
+  let inv_b = ce_recip_f32 b;
+  let terms : erased (Seq.lseq real b) =
+    hide (real_cross_entropy_terms b c rp (reveal stv_s));
 
   let scratch = alloc0 #f32 c (l1_forward c);
   let t_dev   = alloc0 #f32 b (l1_forward b);
   let t_host  = Vec.alloc #f32 (zero #f32) b;
 
-  ce_inv_init b c (reveal sp_c) (reveal stv_s)
+  ce_inv_init b c rp (reveal stv_s)
     (Seq.create b (zero #f32));
   let mut idx : SZ.t = 0sz;
   while (let i = !idx; SZ.(i <^ b))
@@ -325,7 +327,7 @@ fn ce_loss_impl
         cpu **
         pure (SZ.v vi <= SZ.v b /\
               Seq.length vt == SZ.v b /\
-              ce_carried b c (reveal sp_c) (reveal stv_s) vt vi)
+              ce_carried b c rp (reveal stv_s) vt vi)
     decreases (SZ.v b - SZ.v !idx)
   {
     let i = !idx;
@@ -344,21 +346,20 @@ fn ce_loss_impl
                              (chest1_to_seq (reveal sp)) off c);
     memcpy_row_eq #(b * c) c
       (chest1_to_seq (reveal va_prev)) (chest1_to_seq (reveal sp)) i off;
-    assert pure (chest1_to_seq (reveal sca) == crow (chest1_to_seq (reveal sp)) c i);
-    crow_coerce #(b * c) #(b * c)
-      (chest1_to_seq (reveal sp)) (reveal sp_c) c i;
-    assert pure (chest1_to_seq (reveal sca) == crow (reveal sp_c) c i);
+    assert pure (chest1_to_seq (reveal sca) ==
+                 Seq.slice (chest1_to_seq (reveal sp)) (i * c) (i * c + c));
+    chest_to_seq_approx (reveal sp) rp;
+    row_slice_approx (chest1_to_seq (reveal sp)) rp c i;
+    chest_from_seq_approx (reveal sca)
+      (Seq.slice (chest1_to_seq (reveal sp)) (i * c) (i * c + c))
+      (crow rp c i);
 
     (* ── verified numerically-stable log-softmax in place ───────── *)
-    let ra : chest1 real c = hide (to_real_chest (reveal sca));
-    lemma_to_real_chest_approximates (reveal sca);
+    let ra : chest1 real c = hide (seq_to_chest1 (crow rp c i));
     assert pure (reveal sca %~ reveal ra);
     LSM.log_softmax_gpu #f32 1024sz scratch ra;
     with sca'. assert (on gpu_loc (scratch |-> reveal sca'));
     assert pure (reveal sca' %~ LSM.log_softmax_real (reveal ra));
-    ce_ra_eq c (reveal sp_c) i (reveal sca);
-    assert pure (reveal ra ==
-                 seq_to_chest1 (to_real_seq (crow (reveal sp_c) c i) <: Seq.lseq real c));
 
     (* ── gather the (negated) target lane ───────────────────────── *)
     let ti = t_read_1 targets i 0sz;
@@ -373,16 +374,16 @@ fn ce_loss_impl
     let neg_v : f32 = sub (zero #f32) v;
     neg_approx_f32 v (acc1 (LSM.log_softmax_real (reveal ra)) ti);
     (* fold back to the spec term [ce_term_r] *)
-    ce_term_fold c (reveal sp_c) i ti;
-    assert pure (neg_v %~ ce_term_r c (reveal sp_c) i ti);
+    ce_term_fold c rp i ti;
+    assert pure (neg_v %~ ce_term_r c rp i ti);
     assert pure (tgt (reveal stv_s) i == SZ.v ti);
-    assert pure (neg_v %~ ce_term_r c (reveal sp_c) i (tgt (reveal stv_s) i));
+    assert pure (neg_v %~ ce_term_r c rp i (tgt (reveal stv_s) i));
 
     (* ── store per-row loss ─────────────────────────────────────── *)
     Vec.pts_to_len t_host;
     Vec.(t_host.(i) <- neg_v);
     with vt_old. assert (Vec.pts_to t_host (reveal vt_old));
-    ce_prefix_extend b c (reveal sp_c) (reveal stv_s)
+    ce_prefix_extend b c rp (reveal stv_s)
       (reveal vt_old) (Seq.upd (reveal vt_old) i neg_v)
       i neg_v;
 
@@ -396,19 +397,28 @@ fn ce_loss_impl
   with vt_dev_final. assert (on gpu_loc (t_dev |-> reveal vt_dev_final));
   assert pure (chest1_to_seq (reveal vt_dev_final) == reveal vt_loop);
 
-  let vr : chest1 real b = hide (to_real_chest (reveal vt_dev_final));
-  lemma_to_real_chest_approximates (reveal vt_dev_final);
+  ce_carried_complete b c rp (reveal stv_s)
+    (reveal vt_loop <: Seq.lseq f32 b);
+  chest_from_seq_approx (reveal vt_dev_final)
+    (reveal vt_loop <: Seq.lseq f32 b) (reveal terms);
+  let vr : chest1 real b = hide (seq_to_chest1 (reveal terms));
   let s = HRed.reduce #f32 id id 1024sz b t_dev vr;
   assert pure (equal (chest_map id (reveal vr)) (reveal vr));
-  lem_to_real_chest_to_seq (reveal vt_dev_final);
-  assert pure (s %~ rsum (to_real_seq #f32 (reveal vt_loop)));
+  assert pure (Seq.equal (chest1_to_seq (reveal vr)) (reveal terms));
+  assert pure (s %~ rsum (reveal terms));
 
+  let b64 : Int64.t = FStar.Int.Cast.uint64_to_int64
+    (FStar.SizeT.sizet_to_uint64 b);
+  assert pure (Int64.v b64 == SZ.v b);
+  let bf : f32 = of_int b64;
+  of_int_approx #f32 b64;
+  assert pure (bf %~ Real.of_int b);
+  assert pure (inv_b == div one bf);
+  div_approx (one #f32) bf 1.0R (Real.of_int b);
   let m : f32 = mul s inv_b;
-
-  ce_final_lemma b c inv_b
-    (reveal sp_c) (reveal stv_s)
-    (reveal vt_loop <: Seq.lseq f32 b)
-    s m;
+  a_mul s inv_b (rsum (reveal terms)) (1.0R /. Real.of_int b);
+  real_cross_entropy_mul b c rp (reveal stv_s);
+  assert pure (m %~ real_cross_entropy b c rp (reveal stv_s));
 
   Vec.free t_host;
   free scratch;
@@ -419,6 +429,6 @@ fn ce_loss_impl
 
 #push-options "--z3rlimit 40"
 let ce_loss_fw_f32 : ce_loss_fw_ty =
-  fun b c inv_b predictions targets #sp #stv #fp #ft ->
-    ce_loss_impl b c inv_b predictions targets #sp #stv #fp #ft
+  fun b c predictions targets #sp #stv rp #fp #ft ->
+    ce_loss_impl b c predictions targets #sp #stv rp #fp #ft
 #pop-options

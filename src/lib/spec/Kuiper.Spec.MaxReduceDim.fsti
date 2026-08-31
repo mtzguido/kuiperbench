@@ -20,9 +20,8 @@ module Kuiper.Spec.MaxReduceDim
      - Empty rows are not realised: the spec parameter [n_cols] is
        constrained [> 0], and the kernel only runs at [cols > 0]
        (enforced at the call site by [szp]).
-     - NaN/Inf in input: propagate; spec is satisfied since the
-       existential is on the floating-point witness, not its exact
-       value. *)
+     - NaN/Inf behavior is governed by the scalar approximation
+       relation; there is no unconstrained result witness. *)
 
 open Kuiper
 open Kuiper.Chest

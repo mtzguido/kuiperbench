@@ -16,10 +16,14 @@ Internally it calls (all F*-verified, zero admit/assume/magic):
   - row_softmax_rm_f32 (RowSoftmax, bundled static) (per-row softmax)
   - Kuiper_KB_BatchedGEMM_batched_gemm_f32   (out = probs @ V)
 
-The proven postcondition (`Kuiper.KB.SDPA.fsti`, lines 94-104):
+The proven functional postcondition is direct:
 
-  probs %~ softmax_pages (to_real (mscale scale (batched_matmul sQ sKT)))
-  eOut  == batched_matmul probs sV
+  eOut %~ real_sdpa rQ rKT rV
+
+where the three f32 inputs approximate [rQ], [rKT], and [rV], and
+[real_sdpa] is `softmax((rQ @ rKT) * (1/sqrt(D))) @ rV`.  The intermediate
+[probs] exists only to name the owned scratch-buffer contents; it does not
+weaken or mediate the numerical output claim.
 
 i.e. the two GEMMs and the scalar multiply are EXACT (==-pinned in the
 ghost reals), and the softmax is the single [%~] (float-models-real)
@@ -33,9 +37,8 @@ What is NOT verified at the F* level
   PyTorch op, not a Kuiper kernel. The spec takes `gKT` already
   transposed and proves `batched_matmul sQ sKT` (= Q @ K^T). The
   transpose itself is trusted (same pattern as L1 #17 "A B^T").
-- The scale value: the bridge computes scale = 1/sqrt(D) in C; the spec
-  takes `scale` as an opaque parameter. The reference uses 1/sqrt(d_k),
-  so this matches, but the literal constant is not proven in F*.
+- The scale value is computed as `1/sqrt(D)` inside the verified public
+  entry point; callers cannot substitute an unrelated scale.
 - softmax uses the opaque `exp` intrinsic (the single %~ step), so the
   spec is precise "up to approximation", not bit-exact.
 

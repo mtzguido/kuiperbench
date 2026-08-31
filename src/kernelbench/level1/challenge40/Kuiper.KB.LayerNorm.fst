@@ -14,6 +14,104 @@ module Map = Kuiper.Kernel.Map
 module KBMap = Kuiper.KB.Compat.Map
 module HRed = Kuiper.Kernel.HReduce
 module KS = Kuiper.Seq.Common
+module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+
+(* Proof-local description of the concrete floating intermediates.  Its final
+   conjunct records the direct-real public row contract, so none of these
+   numerical witnesses escape through the entry point. *)
+let row_layer_normalized
+  (#t:Type0) {| scalar t, real_like t, floating t |}
+  (#bn:nat) (#n:nat)
+  (sx sx':Seq.lseq t bn) (gamma beta:Seq.lseq t n)
+  (off:nat{off+n <= bn}) (eps inv_n:t) : prop =
+  exists (sum sumsq mean m2 var var_eps inv neg_mean_inv:t).
+    (let row = Seq.slice sx off (off+n) in
+     sum %~ rsum (to_real_seq row) /\
+     sumsq %~ frobenius_sumsq_r (to_real_seq row) /\
+     mean == mul sum inv_n /\
+     m2 == mul sumsq inv_n /\
+     var == sub m2 (mul mean mean) /\
+     var_eps == add var eps /\
+     inv == rsqrt var_eps /\
+     neg_mean_inv == sub (zero #t) (mul mean inv) /\
+     Seq.slice sx' off (off+n) ==
+       ln_row_result #t #_ #n inv neg_mean_inv gamma beta row /\
+     (n > 0 ==>
+       Kuiper.Spec.LayerNorm.row_layer_normalized
+         sx sx' gamma beta off eps))
+
+let layernorm_float_post
+  (b n:nat) (eps inv_n:f32)
+  (gamma beta:Seq.lseq f32 n)
+  (sx sx':Seq.lseq f32 (b*n)) : prop =
+  forall (r:nat). r < b ==>
+    r*n+n <= b*n /\
+    row_layer_normalized sx sx' gamma beta (r*n) eps inv_n
+
+let row_layer_real_from_witnesses
+  (#bn:nat) (n:pos)
+  (gamma beta:Seq.lseq f32 n)
+  (sx sx':Seq.lseq f32 bn) (off:nat{off+n <= bn})
+  (eps inv_n sum sumsq mean m2 var var_eps inv neg_mean_inv:f32)
+  : Lemma
+      (requires
+        sum %~ rsum (to_real_seq (Seq.slice sx off (off+n))) /\
+        sumsq %~ frobenius_sumsq_r
+          (to_real_seq (Seq.slice sx off (off+n))) /\
+        inv_n %~ (1.0R /. FStar.Real.of_int n) /\
+        mean == mul sum inv_n /\ m2 == mul sumsq inv_n /\
+        var == sub m2 (mul mean mean) /\ var_eps == add var eps /\
+        inv == rsqrt var_eps /\
+        neg_mean_inv == sub (zero #f32) (mul mean inv) /\
+        Seq.slice sx' off (off+n) ==
+          ln_row_result #f32 #_ #n inv neg_mean_inv gamma beta
+            (Seq.slice sx off (off+n)) /\
+        row_layernorm_domain sx off n eps)
+      (ensures Kuiper.Spec.LayerNorm.row_layer_normalized
+        sx sx' gamma beta off eps)
+  = let row = to_real_seq (Seq.slice sx off (off+n)) in
+    let rmean = ln_mean_r #n row in
+    let rm2 = ln_m2_r #n row in
+    let rarg = ln_arg_r #n (to_real eps) row in
+    a_mul sum inv_n (rsum row) (1.0R /. FStar.Real.of_int n);
+    assert (mean %~ rmean);
+    a_mul sumsq inv_n (frobenius_sumsq_r row)
+      (1.0R /. FStar.Real.of_int n);
+    assert (m2 %~ rm2);
+    a_mul mean mean rmean rmean;
+    sub_approx m2 (mul mean mean) rm2 (rmean *. rmean);
+    to_real_ok eps;
+    a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
+    assert (var_eps %~ rarg);
+    SqrtApprox.rsqrt_approx var_eps rarg;
+    let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
+    assert (inv %~ rinv);
+    a_mul mean inv rmean rinv;
+    sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
+    assert (neg_mean_inv %~ (0.0R -. rmean *. rinv));
+    let aux (j:nat{j<n}) : Lemma
+      (Seq.index (Seq.slice sx' off (off+n)) j %~
+       Seq.index
+         (ln_row_result_r #n (to_real eps)
+           (to_real_seq gamma) (to_real_seq beta) row) j)
+      = let x = Seq.index (Seq.slice sx off (off+n)) j in
+        let g = Seq.index gamma j in
+        let b = Seq.index beta j in
+        let rx = Seq.index row j in
+        let rg = Seq.index (to_real_seq gamma) j in
+        let rb = Seq.index (to_real_seq beta) j in
+        to_real_ok x;
+        to_real_ok g;
+        to_real_ok b;
+        a_mul x inv rx rinv;
+        a_add (mul x inv) neg_mean_inv (rx *. rinv)
+          (0.0R -. rmean *. rinv);
+        a_mul (add (mul x inv) neg_mean_inv) g
+          (rx *. rinv +. (0.0R -. rmean *. rinv)) rg;
+        a_add (mul (add (mul x inv) neg_mean_inv) g) b
+          ((rx *. rinv +. (0.0R -. rmean *. rinv)) *. rg) rb
+    in
+    Classical.forall_intro aux
 
 (* ── l1_forward <-> seq bridges (row memcpy / reduce / map) ────────────
 
@@ -167,7 +265,7 @@ let ln_row_result_via_affine_lemma
 (* Intro lemma for row_layer_normalized: witnesses → predicate. *)
 #push-options "--z3rlimit 20"
 let row_layer_normalized_intro
-  (#bn : nat) (n : nat)
+  (#bn : nat) (n : pos)
   (gamma beta : Seq.lseq f32 n)
   (sx sx' : Seq.lseq f32 bn)
   (off : nat { off + n <= bn })
@@ -185,9 +283,12 @@ let row_layer_normalized_intro
         neg_mean_inv == sub (zero #f32) (mul mean inv) /\
         Seq.slice sx' off (off + n) ==
           ln_row_result #_ #_ #n inv neg_mean_inv gamma beta
-            (Seq.slice sx off (off + n)))
+            (Seq.slice sx off (off + n)) /\
+        inv_n %~ (1.0R /. FStar.Real.of_int n) /\
+        row_layernorm_domain sx off n eps)
       (ensures row_layer_normalized sx sx' gamma beta off eps inv_n)
-  = ()
+  = row_layer_real_from_witnesses n gamma beta sx sx' off eps inv_n
+      sum sumsq mean m2 var var_eps inv neg_mean_inv
 #pop-options
 
 (* Per-row body: copy x[r,:] into scratch, sum-reduce for the mean,
@@ -217,7 +318,9 @@ fn layer_norm_row
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta)
   requires
-    on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss)
+    on gpu_loc (x |-> sx) ** on gpu_loc (scratch |-> ss) **
+    pure (inv_n %~ (1.0R /. FStar.Real.of_int (SZ.v n))) **
+    pure (row_layernorm_domain (chest1_to_seq sx) rv_off n eps)
   ensures
     (exists* (sx' : chest1 f32 (b * n)) (ss' : chest1 f32 n).
        on gpu_loc (x |-> sx') ** on gpu_loc (scratch |-> ss') **
@@ -543,6 +646,19 @@ let rln_lift_input_via_suffix
     rln_lift_input n (vi * n) eps inv_n gamma beta sx sx_alt sx_post
 #pop-options
 
+let row_layernorm_domain_via_suffix
+  (#bn:nat) (n:pos) (vi:nat)
+  (suffix_hi:nat{vi*n+n <= suffix_hi /\ suffix_hi <= bn})
+  (eps:f32) (sx sx_alt:Seq.lseq f32 bn)
+  : Lemma
+      (requires
+        row_layernorm_domain sx (vi*n) n eps /\
+        Seq.slice sx (vi*n) suffix_hi ==
+          Seq.slice sx_alt (vi*n) suffix_hi)
+      (ensures row_layernorm_domain sx_alt (vi*n) n eps)
+  = FStar.Seq.Properties.slice_slice sx (vi*n) suffix_hi 0 n;
+    FStar.Seq.Properties.slice_slice sx_alt (vi*n) suffix_hi 0 n
+
 (* For all r < vi, r*n+n <= vi*n. *)
 let ln_prefix_le_lemma (n vi r : nat)
   : Lemma
@@ -647,11 +763,13 @@ fn layer_norm
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta)
   requires
-    on gpu_loc (x |-> sx)
+    on gpu_loc (x |-> sx) **
+    pure (inv_n %~ (1.0R /. FStar.Real.of_int (SZ.v n))) **
+    pure (layernorm_domain b n eps (chest1_to_seq sx))
   ensures
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
-       pure (layernorm_post b n eps inv_n
+       pure (layernorm_float_post b n eps inv_n
                (chest1_to_seq sg) (chest1_to_seq sbeta)
                (chest1_to_seq sx) (chest1_to_seq sx')))
 {
@@ -693,6 +811,8 @@ fn layer_norm
         (r * SZ.v n) eps inv_n);
     (* Re-establish the bound fact inside the loop body. *)
     row_lt_b_bound_forall_lemma n b;
+    row_layernorm_domain_via_suffix #(b*n) n i (b*n) eps
+      (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx_pre));
     layer_norm_row b n off eps inv_n x gamma beta scratch;
     with sx_post. assert (on gpu_loc (x |-> reveal sx_post));
     (* From the row postcondition: row is normalized w.r.t. sx_pre,
@@ -734,6 +854,25 @@ fn layer_norm
 }
 #pop-options
 
+let ln_inv_n_approx (n:szp)
+  : Lemma (ln_inv_n #f32 n %~
+      (1.0R /. FStar.Real.of_int (SZ.v n)))
+  = let n64 : Int64.t = FStar.Int.Cast.uint64_to_int64
+      (FStar.SizeT.sizet_to_uint64 n) in
+    assert (Int64.v n64 == SZ.v n);
+    of_int_approx #f32 n64;
+    div_approx (one #f32) (of_int #f32 n64)
+      1.0R (FStar.Real.of_int (SZ.v n))
+
+let layernorm_float_post_to_real
+  (b:nat) (n:pos) (eps inv_n:f32)
+  (gamma beta:Seq.lseq f32 n)
+  (sx sx':Seq.lseq f32 (b*n))
+  : Lemma
+      (requires layernorm_float_post b n eps inv_n gamma beta sx sx')
+      (ensures layernorm_post b n eps gamma beta sx sx')
+  = ()
+
 (* Public entry point: compute the per-row reciprocal [ln_inv_n n] inside
    the verification boundary (extracts to 1.0f / (float)(int64_t)(uint64_t)n),
    then delegate to [layer_norm].  The proof above treats [inv_n]
@@ -756,16 +895,22 @@ fn layernorm_fw
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sbeta)
   requires
-    on gpu_loc (x |-> sx)
+    on gpu_loc (x |-> sx) **
+    pure (layernorm_domain b n eps (chest1_to_seq sx))
   ensures
     (exists* (sx' : chest1 f32 (b * n)).
        on gpu_loc (x |-> sx') **
-       pure (layernorm_post b n eps (ln_inv_n n)
+       pure (layernorm_post b n eps
                (chest1_to_seq sg) (chest1_to_seq sbeta)
                (chest1_to_seq sx) (chest1_to_seq sx')))
 {
   let inv_n : f32 = ln_inv_n n;
+  ln_inv_n_approx n;
   layer_norm b n eps inv_n x gamma beta;
+  with sx'. assert (on gpu_loc (x |-> reveal sx'));
+  layernorm_float_post_to_real b n eps inv_n
+    (chest1_to_seq (reveal sg)) (chest1_to_seq (reveal sbeta))
+    (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal sx'));
 }
 
 let layernorm_fw_f32 = layernorm_fw

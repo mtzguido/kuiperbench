@@ -66,18 +66,27 @@ static torch::Tensor kuiper_convt2d_general_cuda(
     TORCH_CHECK(B > 0 && Cin > 0 && Hin > 0 && Win > 0 && Cout > 0
                 && Kh > 0 && Kw > 0,
                 "kuiper_convt2d_general: shapes must be positive");
+    TORCH_CHECK(Hin <= (int64_t)UINT32_MAX && Win <= (int64_t)UINT32_MAX &&
+                Kh <= (int64_t)UINT32_MAX && Kw <= (int64_t)UINT32_MAX &&
+                stride_h <= (int64_t)UINT32_MAX && stride_w <= (int64_t)UINT32_MAX &&
+                pad_h <= (int64_t)UINT32_MAX && pad_w <= (int64_t)UINT32_MAX &&
+                out_pad_h <= (int64_t)UINT32_MAX && out_pad_w <= (int64_t)UINT32_MAX &&
+                dil_h <= (int64_t)UINT32_MAX && dil_w <= (int64_t)UINT32_MAX,
+                "kuiper_convt2d_general: output-size arguments out of u32 range");
 
     // VERIFIED ConvTranspose2D output-size formula (extracted from
     // Kuiper.KB.ConvT2DGeneral), per axis:
     //   L_out = (L_in - 1)*S - 2*P + D*(K - 1) + output_padding + 1.
     // The non-negative part [pos = (L_in-1)*S + D*(K-1) + opad + 1] is
-    // computed in int64 ONLY as an underflow/overflow guard (it is NOT the
-    // output value): the [pos > 2*P] check discharges the verified helper's
+    // computed in widened host arithmetic as an underflow/overflow guard (it
+    // is NOT the output value): the [pos > 2*P] check discharges the helper's
     // [2*P <= pos] precondition (no size_t underflow, output >= 1) and the
     // [pos <= UINT32_MAX] check discharges its [SZ.fits] precondition.  The
     // actual output dimension is produced by the verified helper.
-    int64_t pos_h = (Hin - 1) * stride_h + dil_h * (Kh - 1) + out_pad_h + 1;
-    int64_t pos_w = (Win - 1) * stride_w + dil_w * (Kw - 1) + out_pad_w + 1;
+    __int128 pos_h = (__int128)(Hin - 1) * stride_h +
+                     (__int128)dil_h * (Kh - 1) + out_pad_h + 1;
+    __int128 pos_w = (__int128)(Win - 1) * stride_w +
+                     (__int128)dil_w * (Kw - 1) + out_pad_w + 1;
     TORCH_CHECK(pos_h > 2 * pad_h && pos_w > 2 * pad_w,
                 "kuiper_convt2d_general: zero-sized output");
     TORCH_CHECK(pos_h <= (int64_t)UINT32_MAX && pos_w <= (int64_t)UINT32_MAX,

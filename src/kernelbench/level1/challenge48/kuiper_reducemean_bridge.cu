@@ -31,7 +31,6 @@ torch::Tensor kuiper_reducemean_dim1_cuda(torch::Tensor X) {
     auto Y = torch::empty({B, M}, Xc.options());
     Kuiper_KB_ReduceMean_reduce_mean_fw_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
-        Kuiper_KB_ReduceMean_reducemean_recip_f32((uint32_t)D),
         Xc.data_ptr<float>(), Y.data_ptr<float>());
     return Y;
 }

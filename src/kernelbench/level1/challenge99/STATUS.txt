@@ -23,6 +23,11 @@ and bridge ABI. The bridge passes `1.0e-6f`.
 The exported entry point derives the mean reciprocal from `B` internally;
 `inv_b` is not a caller-controlled ABI argument.
 
+The postcondition quantifies the real input sequences at the entry point and
+directly states that the result approximates the corresponding real loss. It
+contains no existential distance, square-root, loss-term, or reduction
+witnesses. The real distance uses `FStar.Math.Sqrt.sqrt`.
+
 Verification boundary
 ---------------------
 
@@ -41,6 +46,9 @@ Files
 Known qualifications
 --------------------
 
+- `Kuiper.KB.Compat.SqrtApprox` temporarily assumes the missing law that the
+  floating `sqrt` approximates `FStar.Math.Sqrt.sqrt`. The proposed upstream
+  Kuiper patch is in `patches/kuiper-sqrt-approx.patch`.
 - The shared compatibility D2D-copy proof contains an `admit()`.
 - The shared HReduce implementation uses `magic()` for sendability proofs.
 - The per-row host orchestration is correctness-first and launch-heavy.

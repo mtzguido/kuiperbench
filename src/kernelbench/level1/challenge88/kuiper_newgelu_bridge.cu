@@ -8,9 +8,14 @@
 #include "Kuiper_KB_NewGelu.h"
 #include "Kuiper_KB_NewGelu.cu"
 
+static constexpr int64_t KUIPER_MAX_NTHR = (int64_t)2097152 * 1024;
+
 torch::Tensor kuiper_newgelu_cuda(torch::Tensor X) {
+    TORCH_CHECK(X.is_cuda(), "kuiper_newgelu: expected a CUDA tensor");
     auto Y = X.contiguous().clone();
     int64_t numel = Y.numel();
+    TORCH_CHECK(numel > 0 && numel <= KUIPER_MAX_NTHR,
+                "kuiper_newgelu: numel outside the verified size domain");
 
     // sqrt(2/pi) to ~20 digits.
     if (Y.scalar_type() == torch::kFloat32) {

@@ -127,6 +127,8 @@ torch::Tensor kuiper_avgpool2d_cuda(torch::Tensor X,
     int64_t dilation = 1;  // PyTorch nn.AvgPool2d has no dilation arg
     auto opts = Xc.options();
 
+    TORCH_CHECK(B > 0 && C > 0 && H > 0 && W > 0,
+                "kuiper_avgpool2d: input dimensions must be positive");
     // -- Pass 1: sum over W axis (then /K). View as (B*C*H, W). --
     auto Y1 = run_axis(Xc.data_ptr<float>(), B * C * H, W,
                        kernel_size, stride, padding, dilation, opts);

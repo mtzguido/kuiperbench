@@ -186,9 +186,8 @@ let row_avg_pooled_1d
   (let row_in  : Seq.lseq t l  = Seq.slice sx  off_in  (off_in  + l)  in
    let row_out : Seq.lseq t lo = Seq.slice sx' off_out (off_out + lo) in
    forall (j : nat). j < lo ==>
-     (exists (sm : t).
-       sm %~ avg_window_sum_r row_in k s p d j /\
-       Seq.index row_out j == mul sm inv_k))
+     Seq.index row_out j %~
+       (avg_window_sum_r row_in k s p d j *. to_real inv_k))
 
 (* ----- Whole-tensor specs ------------------------------------------ *)
 

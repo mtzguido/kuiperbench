@@ -70,7 +70,7 @@ torch::Tensor kuiper_maxpool1d_cuda(torch::Tensor X,
     // allocates, fills, and returns it.  [kspan = D*(K-1)+1], [padded = L+2P].
     int64_t kspan  = dilation * (kernel_size - 1) + 1;
     int64_t padded = L + 2 * padding;
-    TORCH_CHECK(B > 0 && C > 0
+    TORCH_CHECK(B > 0 && C > 0 && L > 0
                 && B * C > 0 && B * C <= (int64_t)UINT32_MAX
                 && L <= (int64_t)UINT32_MAX
                 && kspan <= (int64_t)UINT32_MAX

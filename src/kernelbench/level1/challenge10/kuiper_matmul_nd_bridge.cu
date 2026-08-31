@@ -41,14 +41,15 @@ torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B) {
     // Per-dim checks above don't bound these products, so guard them explicitly;
     // otherwise a uint32 index multiply could wrap and read out of bounds. We use
     // division so the guard arithmetic itself can't overflow int64.
-    int64_t nm = n * m;  // <= UINT32_MAX^2 < int64 max, since n,m <= UINT32_MAX
-    TORCH_CHECK(nm <= (int64_t)UINT32_MAX, "N*M exceeds the uint32 length bound");
+    TORCH_CHECK(n <= (int64_t)UINT32_MAX / m,
+                "N*M exceeds the uint32 length bound");
+    int64_t nm = n * m;
     TORCH_CHECK(nm <= (int64_t)UINT32_MAX / k,
                 "N*M*K exceeds the uint32 length bound of the Kuiper kernel");
     TORCH_CHECK(k <= (int64_t)UINT32_MAX / l,
                 "K*L exceeds the uint32 length bound of the Kuiper kernel");
     // The kernel's size_req is (n*m)*l <= max_blocks * max_threads (~2.1e9).
-    TORCH_CHECK(nm <= (int64_t)2147483647 / l,
+    TORCH_CHECK(nm <= ((int64_t)2097152 * 1024) / l,
                 "N*M*L exceeds the kernel's launch bound");
 
     auto C = torch::empty({n, m, l}, A_c.options());

@@ -2,7 +2,7 @@ module Kuiper.KB.SDPA
 
 (* KernelBench L1 #97 — Scaled Dot-Product Attention.
 
-     out = softmax(scale * (Q @ K^T)) @ V          (no mask, no dropout)
+     out = softmax((Q @ K^T) / sqrt(D)) @ V        (no mask, no dropout)
 
    Q, K, V have shape (B, H, S, D); the batch+head dims are flattened to
    BH = B*H, giving (BH, S, D) tensors.  K is supplied ALREADY TRANSPOSED
@@ -13,7 +13,7 @@ module Kuiper.KB.SDPA
    chains four already-verified Kuiper primitives over the SAME GPU buffers:
 
      1. batched_gemm_f32 : gScores := Q @ K^T            (exact float)
-     2. smul_fw_f32      : gScores *= scale              (exact float)
+     2. smul_fw_f32      : gScores *= 1/sqrt(D)          (exact float)
      3. row_softmax      : gScores := softmax_S(gScores) (the %~ step)
      4. batched_gemm_f32 : gOut    := gScores @ V        (exact float)
 
@@ -22,13 +22,17 @@ module Kuiper.KB.SDPA
    via pure ghost re-interpretations (no data movement); see the reshape
    lemmas in the .fst, which mirror Kuiper.KB.MatmulND.
 
-   Functional spec (stated at the float level — the two GEMMs and the scalar
-   multiply are EXACT; the softmax is the single [%~] step):
+   Functional spec (stated directly over real tensors approximated by the
+   three f32 inputs):
 
-     out  = batched_matmul probs V
-     probs %~ softmax_pages (to_real (scale * (Q @ K^T)))
+     out %~ softmax((Q @ K^T) * (1 / sqrt(D))) @ V
 
-   Zero assume * zero magic * zero admit. *)
+   The two GEMMs, scaling, and softmax are all connected to their real
+   counterparts by the corresponding [%~] laws.  No floating intermediate
+   appears in the public functional claim.
+
+   The direct real scale proof uses the temporary [rsqrt_approx]
+   compatibility assumption documented in the repository patch. *)
 
 #lang-pulse
 open Kuiper
@@ -36,10 +40,11 @@ open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l3_batched_row_major }
 module SZ = Kuiper.SizeT
 module SM = Kuiper.Spec.Softmax
+module RealSqrt = FStar.Math.Sqrt
 open Kuiper.KB.BatchedGEMM { batched_matmul }
 
-(* Verified, extractable attention scale 1/sqrt(d) as f32 (see .fst); the
-   scale is computed inside the verification boundary. *)
+(* Private extraction helper: the public entry computes this value itself. *)
+inline_for_extraction noextract
 val sdpa_scale_f32 (d : szp) : f32
 
 (* Elementwise scalar multiply of a 3-D tensor. *)
@@ -63,9 +68,22 @@ let softmax_pages
   = mk3 (fun p i j ->
       acc1 (SM.softmax_real (chest2_row (slice_page rm p) i)) j)
 
+let real_sdpa_scale (d : pos) : real =
+  RealSqrt.rsqrt (FStar.Real.of_int d)
+
+let real_sdpa
+  (#bh #s #d : pos)
+  (rQ : chest3 real bh s d)
+  (rKT : chest3 real bh d s)
+  (rV : chest3 real bh s d)
+  : chest3 real bh s d =
+  batched_matmul
+    (softmax_pages
+      (mscale (real_sdpa_scale d) (batched_matmul rQ rKT)))
+    rV
+
 fn sdpa_f32
   (bh s d : szp)
-  (scale : f32)
   (gQ  : array3 f32 (l3_batched_row_major bh s d) { is_global gQ })
   (gKT : array3 f32 (l3_batched_row_major bh d s) { is_global gKT })
   (gV  : array3 f32 (l3_batched_row_major bh s d) { is_global gV })
@@ -76,10 +94,14 @@ fn sdpa_f32
   (#sV  : chest3 f32 bh s d)
   (#sScores0 : chest3 f32 bh s s)
   (#sOut0 : chest3 f32 bh s d)
+  (rQ : erased (chest3 real bh s d))
+  (rKT : erased (chest3 real bh d s))
+  (rV : erased (chest3 real bh s d))
   (#fQ #fKT #fV : perm)
   preserves
     cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV)
+    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
+    pure (sQ %~ rQ /\ sKT %~ rKT /\ sV %~ rV)
   requires
     on gpu_loc (gScores |-> sScores0) **
     on gpu_loc (gOut |-> sOut0) **
@@ -97,8 +119,4 @@ fn sdpa_f32
     (exists* (probs : chest3 f32 bh s s) (eOut : chest3 f32 bh s d).
       on gpu_loc (gScores |-> probs) **
       on gpu_loc (gOut |-> eOut) **
-      pure (probs %~
-              (softmax_pages
-                 (to_real_chest
-                    (mscale scale (batched_matmul sQ sKT))))) **
-      pure (eOut == batched_matmul probs sV))
+      pure (eOut %~ real_sdpa rQ rKT rV))

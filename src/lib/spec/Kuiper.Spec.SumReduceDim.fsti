@@ -19,9 +19,8 @@ module Kuiper.Spec.SumReduceDim
 
    Edge cases match PyTorch:
      - All-zero input: real sum is 0, output is 0 (or close to).
-     - NaN/Inf in input: propagate; spec is satisfied since the
-       existential is on the floating-point witness, not its exact
-       value. *)
+     - NaN/Inf behavior is governed by the scalar approximation
+       relation; there is no unconstrained result witness. *)
 
 open Kuiper
 open Kuiper.Chest

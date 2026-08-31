@@ -55,6 +55,17 @@ static torch::Tensor kuiper_dwsep_cuda(
     int64_t PwKw  = Wpwc.size(3);
     TORCH_CHECK(PwCin == Cin && PwKh == 1 && PwKw == 1,
                 "kuiper_dwsep: pointwise weight shape (Cout, Cin, 1, 1) required");
+    TORCH_CHECK(B > 0 && Cin > 0 && Cout > 0 && Hin > 0 && Win > 0 &&
+                Kh > 0 && Kw > 0,
+                "kuiper_dwsep: shapes must be positive");
+    TORCH_CHECK(B <= (int64_t)UINT32_MAX && Cin <= (int64_t)UINT32_MAX &&
+                Cout <= (int64_t)UINT32_MAX &&
+                Hin <= (int64_t)UINT32_MAX && Win <= (int64_t)UINT32_MAX &&
+                Kh <= (int64_t)UINT32_MAX && Kw <= (int64_t)UINT32_MAX &&
+                stride <= (int64_t)UINT32_MAX && pad <= (int64_t)UINT32_MAX &&
+                Hin + 2*pad <= (int64_t)UINT32_MAX &&
+                Win + 2*pad <= (int64_t)UINT32_MAX,
+                "kuiper_dwsep: output-size helper precondition failed");
 
     // Precondition of the verified out-dim helper: padded input >= kernel.
     TORCH_CHECK(Hin + 2*pad >= Kh && Win + 2*pad >= Kw,

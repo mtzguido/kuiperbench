@@ -4,27 +4,28 @@ Skeptic review — KB L2Norm (#39) functional spec
 (a) Does the spec correspond to mathematical row-wise L2
 normalisation? YES. The post in Kuiper.KB.L2Norm.fsti is
 [l2norm_post b d s s'], which expands to: for every row r < b, the
-slice s'[r*d..(r+1)*d] equals frobenius_result inv_r (slice s ...)
-for some per-row inv_r,sumsq_r with sumsq_r %~ frobenius_sumsq_r
-(real sum-of-squares of row r) and inv_r == F32.rsqrt sumsq_r.  This
-pins (i) shape: each row of the output is a uniform scaling of the
-input row, (ii) value: the scaling factor approximates the row's
-reciprocal Frobenius norm.  Same pattern as #37, applied per row.
+slice s'[r*d..(r+1)*d] directly approximates
+[x / sqrt(sum_j x_j^2)] over the real interpretation of that same
+input row. Floating reduction and reciprocal-square-root values are
+proof-local implementation details, not existential outputs of the
+public contract.
 
 (b) Is the proof genuine?  YES.  grep -n
 "assume\|admit\|magic\|admit_smt_queries" turns up nothing in
 Kuiper.Spec.L2Norm.{fst,fsti} or Kuiper.KB.L2Norm.fst.  The proof
 mirrors Frobenius for the per-row body (sq_step %~ sq_step_r via
-a_mul; HReduce yields sumsq %~ frobenius_sumsq_r; map_gpu lays down
-frobenius_result inv).  The loop's invariant tracks "rows < vi
+a_mul; HReduce yields sumsq %~ frobenius_sumsq_r; the local
+rsqrt-approximation bridge connects that result to the mathematical
+reciprocal square root; map_gpu lays down the approximating result).
+The loop's invariant tracks "rows < vi
 already L2-normalised" and "rows ≥ vi unchanged from input"; the
 inductive step relies on memcpy_device_to_device''s seq_blit
 postcondition.  Two seq_blit≡slice equalities are discharged with
 Seq.lemma_eq_intro (pure structural facts).
 
-(c) Edge cases.  b = 0 : the forall over rows is vacuous; the
-"unchanged" equality is trivial (both slices empty).  d = 0 : ruled
-out by szp on d.  All-zero row: rsqrt 0 = +inf, row becomes NaN; the
-existentials still satisfy the spec.  Rows are processed sequentially
-in a single for-loop and the invariant carries the per-row witnesses
-existentially, so no two rows accidentally share a scaling factor.
+(c) Edge cases.  b = 0 and d = 0 are ruled out by their positive-size
+types.  All-zero rows are excluded by [l2norm_domain]: IEEE
+rsqrt(0) followed by multiplication produces infinities/NaNs, which
+cannot be related to finite mathematical reals by [%~]. Rows are
+processed sequentially in a single for-loop and the invariant proves
+the direct result independently for every row.

@@ -14,9 +14,10 @@ module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
 module HRedB = Kuiper.Kernel.HReduce.Block
 
-(* Verified, extractable reciprocal 1/d as f32 (extracts to
+(* Verified reciprocal 1/d as f32 (extracts to
    1.0f / (float)(int64_t)(uint64_t)d), so the mean divisor is computed
    inside the verification boundary instead of in unverified C. *)
+inline_for_extraction noextract
 let reducemean_recip_f32 (d : szp) : f32 =
   div one (of_int (FStar.Int.Cast.uint64_to_int64
                      (FStar.SizeT.sizet_to_uint64 d)))
@@ -52,35 +53,38 @@ let row_post_eq
       (KS.lseq_map id (EM.ematrix_row (EM.to_real_matrix sx) r))
       (to_real_seq (EM.ematrix_row sx r))
 
-(* For each row [r], if [smul_result inv_d s @! r == mul inv_d (s @! r)]
-   and [s @! r %~ rsum (...)], then [meanreduce_row] holds with the
-   witness [sumr = s @! r].  Helper lemma to discharge the per-row
-   existential. *)
+(* Scaling an approximate row sum by an approximate [1/cols] directly
+   approximates the mathematical row mean. *)
 let mean_row_aux
   (#t:Type0) {| scalar t, real_like t |}
-  (#rows #cols : nat)
+  (#rows : nat)
+  (#cols : nat{cols > 0})
   (inv_d : t)
   (sx : chest2 t rows cols)
   (s_sum : chest1 t rows)
   (r : natlt rows)
   : Lemma
-      (requires (acc1 s_sum r) %~ rsum (to_real_seq (EM.ematrix_row sx r)))
+      (requires
+        inv_d %~ (1.0R /. FStar.Real.of_int cols) /\
+        (acc1 s_sum r) %~ rsum (to_real_seq (EM.ematrix_row sx r)))
       (ensures
-        row_mean #t inv_d sx
+        row_mean #t sx
           (chest1_to_seq (chest_map (mul inv_d) s_sum)) r)
-  = let s_after = chest1_to_seq (chest_map (mul inv_d) s_sum) in
-    assert (Seq.index s_after r == mul inv_d (acc1 s_sum r))
+  = let sum_r = rsum (to_real_seq (EM.ematrix_row sx r)) in
+    a_mul inv_d (acc1 s_sum r) (1.0R /. FStar.Real.of_int cols) sum_r;
+    let s_after = chest1_to_seq (chest_map (mul inv_d) s_sum) in
+    assert (Seq.index s_after r == mul inv_d (acc1 s_sum r));
+    assert ((1.0R /. FStar.Real.of_int cols) *. sum_r ==
+            sum_r /. FStar.Real.of_int cols)
 
 #push-options "--z3rlimit 80"
 inline_for_extraction noextract
 fn reduce_mean_fw_f32_impl
   (b : szp)
   (m : szp { SZ.fits (SZ.v b * SZ.v m) /\ SZ.v b * SZ.v m <= max_blocks })
-  (d : szp { SZ.v d <= max_threads /\
-             SZ.fits (SZ.v d + max_threads) /\
+  (d : szp { SZ.fits (SZ.v d + max_threads) /\
              SZ.fits (SZ.v m * SZ.v d) /\
              SZ.fits (SZ.v b * (SZ.v m * SZ.v d)) })
-  (inv_d : f32)
   (x : array2 f32 (l2_bcm_pages b m d) { is_global x })
   (y : array1 f32 (l1_forward (SZ.v b * SZ.v m)) { is_global y })
   (#sx : chest2 f32 (SZ.v b * SZ.v m) d)
@@ -93,8 +97,18 @@ fn reduce_mean_fw_f32_impl
   ensures
     (exists* (sy' : chest1 f32 (SZ.v b * SZ.v m)).
        on gpu_loc (y |-> sy') **
-       pure (meanreduce_post (SZ.v b * SZ.v m) d inv_d sx (chest1_to_seq sy')))
+       pure (meanreduce_post (SZ.v b * SZ.v m) d sx (chest1_to_seq sy')))
 {
+  let inv_d = reducemean_recip_f32 d;
+  let d_i64 = FStar.Int.Cast.uint64_to_int64
+                (FStar.SizeT.sizet_to_uint64 d);
+  assert pure (FStar.Int64.v d_i64 == SZ.v d);
+  of_int_approx #f32 d_i64;
+  assert pure ((one #f32) `v_approximates` 1.0R);
+  div_approx (one #f32) (of_int #f32 d_i64)
+    1.0R (FStar.Real.of_int (SZ.v d));
+  assert pure (inv_d %~ (1.0R /. FStar.Real.of_int (SZ.v d)));
+
   (* Build the real-valued ghost chest2 and the sx %~ vr witness. *)
   let bm : szp = b *^ m;
   assert pure (SZ.v bm == SZ.v b * SZ.v m);

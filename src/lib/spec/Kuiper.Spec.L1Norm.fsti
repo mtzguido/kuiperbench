@@ -12,13 +12,9 @@ module Kuiper.Spec.L1Norm
    [chest2 t B D] (NOT a flattened sequence): the postcondition is
    stated over the matrix entries [acc2 sx r j].
 
-   Per-row spec is structurally analogous to RMSNorm: each row of the
-   output is a uniform scaling of the corresponding input row by a
-   single per-row factor [scale_r], with [scale_r == div dim_f
-   sum_abs_r] and [sum_abs_r] approximating the row's real-valued L1
-   norm.  Both [scale_r] and [sum_abs_r] are existentially bound per
-   row because the device-side reduction only approximates the real
-   sum and [div] is opaque to the spec.
+   The public per-row spec directly relates each output element to the
+   corresponding real input scaled by [D / sum |x|].  The floating
+   reduction and division values remain proof-local.
 
    The L1 reduction is naturally "sum of absolute values".  The kernel
    pushes [fabs] directly into the [HReduce.reduce_batched] pre-map, so
@@ -44,6 +40,7 @@ open Kuiper.Chest
 module Seq = FStar.Seq
 module KS = Kuiper.Seq.Common
 module EM = Kuiper.EMatrix
+unfold let f32 = Kuiper.Float32.t
 
 (* Sum of absolute values of a row, lifted to reals.
    Defined as the sum of [to_real_seq] applied to the elementwise
@@ -56,29 +53,33 @@ let l1_sum_r
   (s : Seq.lseq t n) : GTot real =
   rsum (to_real_seq (KS.lseq_map (fabs #t) s))
 
-(* Per-row predicate: row [r] of [sx'] is the L1-normalised version
-   of row [r] of [sx], with scale = dim_f / row's L1 norm. *)
+let l1_scale_r (#d:pos) (row : Seq.lseq f32 d)
+  : real =
+  let s = l1_sum_r row in
+  if s =!= 0.0R then FStar.Real.of_int d /. s else 0.0R
+
+let l1norm_domain (#b:nat) (#d:pos) (sx:chest2 f32 b d) : prop =
+  forall (r:nat). r < b ==> l1_sum_r (EM.ematrix_row sx r) =!= 0.0R
+
+(* Per-row predicate: every output directly approximates the
+   mathematical L1-normalized input cell. *)
 let row_l1_normalized
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (#b #d : nat)
-  (dim_f : t)
-  (sx sx' : chest2 t b d)
+  (#b : nat) (#d : pos)
+  (sx : chest2 f32 b d)
+  (sx' : chest2 f32 b d)
   (r : natlt b)
   : prop =
-  exists (scale : t) (sum_abs : t).
-    sum_abs %~ l1_sum_r (EM.ematrix_row sx r) /\
-    scale == div dim_f sum_abs /\
-    (forall (j : nat). j < d ==>
-       acc2 sx' r j == mul scale (acc2 sx r j))
+  let row = EM.ematrix_row sx r in
+  forall (j : nat). j < d ==>
+    acc2 sx' r j %~ (to_real (acc2 sx r j) *. l1_scale_r row)
 
 (* Whole-tensor spec: every row is L1-normalised with [dim_f]. *)
 let l1norm_post
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (b d : nat)
-  (dim_f : t)
-  (sx sx' : chest2 t b d)
+  (b : nat) (d : pos)
+  (sx : chest2 f32 b d)
+  (sx' : chest2 f32 b d)
   : prop =
-  forall (r : nat). r < b ==> row_l1_normalized dim_f sx sx' r
+  forall (r : nat). r < b ==> row_l1_normalized sx sx' r
 
 (* Bridge lemma: the deterministic device-side left-fold of absolute
    values produced by [reduce_batched fabs] approximates the

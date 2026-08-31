@@ -40,6 +40,8 @@ torch::Tensor kuiper_conv2d_square_cuda(torch::Tensor X, torch::Tensor W) {
     TORCH_CHECK(Kh == Kw,   "kuiper_conv2d_square: weight must be square");
     TORCH_CHECK(Cin == WCin,"kuiper_conv2d_square: Cin mismatch");
     TORCH_CHECK(Hin >= Kh,  "kuiper_conv2d_square: H_in < K");
+    TORCH_CHECK(Hin <= (int64_t)UINT32_MAX && Kh <= (int64_t)UINT32_MAX,
+                "kuiper_conv2d_square: output-size arguments out of u32 range");
     int64_t Hout = (int64_t)Kuiper_KB_Conv2DSquare_conv2d_square_out_sz(
         (uint32_t)Hin, (uint32_t)Kh);
     int64_t nthr = B * Cout * Hout * Hout;

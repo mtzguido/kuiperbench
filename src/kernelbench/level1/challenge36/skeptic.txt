@@ -7,11 +7,10 @@ The (B*HW, C) chest2 view of `l2_bcm_pages B HW C` has imap
     (r, ci) ↦ (r/HW)*C*HW + ci*HW + (r%HW)
 which is exactly the row-major (B,C,H,W) byte offset for
 b=r/HW, hw=r%HW, c=ci.  So spec rows are spatial positions, columns channels: `rmsnorm_post` genuinely pins per
-(b,h,w) RMS normalisation along the channel axis.  The spec uses
-`inv_c : t` as a host-precomputed stand-in for 1/C; bridging
-`inv_c %~ 1/C` is the caller's responsibility (uncalibrated
-callers could feed garbage and still satisfy the spec — see
-.fsti header).
+(b,h,w) RMS normalisation along the channel axis.  The verified entry
+point computes 1/C itself and proves that it approximates the real
+reciprocal.  The public post directly relates every output cell to
+the real RMS normalization; no floating statistic escapes existentially.
 
 (b) Proof is genuine
 --------------------
@@ -22,13 +21,12 @@ The .fst chains three verified primitives:
 The only non-trivial step is `row_reduce_partial_sq_approx`
 (Kuiper.Spec.RMSNorm.fst), which inducts on `row_reduce_partial`
 to re-express it as `seq_fold_left add zero (seq_map sq_step
-row)` and discharges the approx via `sum_is_approx`.  No
-`admit`, `magic`, `assume pure`, or new axioms.
+row)` and discharges the approx via `sum_is_approx`.  There is no local
+`admit` or `magic`; the proof uses the documented temporary
+`rsqrt_approx` compatibility assumption pending its upstream Kuiper law.
 
 (c) Edge cases
 --------------
-Zero row: sumsq=0, inv=rsqrt(eps); finite iff eps>0.  C=0 and
-HW=0 ruled out by the kernel preconditions.  inv_c=0 yields
-inv=rsqrt(eps) for every row (well-typed, mathematically
-meaningless) — not constrained by the spec.  Array2 `is_global`
-admission unchanged.
+Zero row: sumsq=0, inv=rsqrt(eps); the direct real contract requires
+positive real epsilon.  C=0 and HW=0 are ruled out by the kernel
+preconditions.  Array2 `is_global` admission is unchanged.

@@ -14,16 +14,12 @@ Status:    GREEN end-to-end:
 What landed (single verified entry — whole reduction is verified)
 -----------------------------------------------------------------
 - src/lib/spec/Kuiper.Spec.CrossEntropyLoss.fsti
-    CORRECT functional spec [cross_entropy_post], a genuine function of
-    ALL inputs (the flat (B*C) predictions buffer [sp] and the length-B
-    target index sequence [st]):
+    Direct real-valued functional spec [cross_entropy_post]: if the f32
+    logits approximate the real sequence [rp], then
 
-      exists per_batch s.
-        (forall r < B. per_batch[r] %~ ce_term_r C sp r (st[r])) /\
-        s %~ rsum (to_real_seq per_batch) /\
-        res == mul s inv_b
+      res %~ mean_r (-log_softmax(crow rp C r)[targets[r]])
 
-    where ce_term_r C sp r t = - (log_softmax(crow sp C r))[t], pinned to
+    with no existential floating-point intermediates.  [ce_term_r] is pinned to
     the verified [Kuiper.Kernel.LogSoftmax.log_softmax_real] (numerically
     stable subtract-max) path the kernel actually computes.  This equals
     the PyTorch per-sample CE  logsumexp(row) - row[target]  mathematically.
@@ -41,15 +37,15 @@ What landed (single verified entry — whole reduction is verified)
         per-row CE loss) via the requires-established in-range target;
       * write all B per-row losses into a device buffer and reduce-sum
         them on-device with verified [HReduce.reduce];
-      * multiply by the verified reciprocal [ce_recip_f32 = 1/B].
+      * compute and multiply by the verified reciprocal [1/B] internally.
     Post is exactly [Kuiper.Spec.CrossEntropyLoss.cross_entropy_post].
     Mirrors the verified L1 #99 TripletMarginLoss per-row-then-reduce
     pattern (carried-prefix loop invariant + final-lemma discharge).
     No admit / assume / assume pure / magic.  z3rlimit 40.
 
 - src/kernelbench/level1/challenge95/kuiper_crossentropyloss_bridge.cu
-    Single verified call: ce_recip_f32(B) then ce_loss_fw_f32(B, C, inv_b,
-    predictions, targets).  NO host reduction loop.  The only host loop is
+    Single verified call: ce_loss_fw_f32(B, C, predictions, targets).  NO host
+    reduction loop.  The only host loop is
     a pure bounds-check that establishes the kernel precondition (every
     target in [0, C)); it computes no loss arithmetic.
 

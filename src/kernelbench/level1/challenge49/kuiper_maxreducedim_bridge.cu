@@ -46,7 +46,8 @@ torch::Tensor kuiper_maxreduce_dim1_cuda(torch::Tensor X) {
                 && B * M <= (int64_t)UINT32_MAX
                 && M * D <= (int64_t)UINT32_MAX
                 && B * M * D <= (int64_t)UINT32_MAX
-                && B * M <= KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS,
+                && B * M <= KUIPER_MAX_BLOCKS
+                && D + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX,
                 "kuiper_maxreduce_dim1: shape out of range");
     auto Y = torch::empty({B, M}, Xc.options());
     Kuiper_KB_MaxReduceDim_maxreduce_dim_fw_f32(
