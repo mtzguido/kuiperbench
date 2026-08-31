@@ -1,100 +1,46 @@
-UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
-test (src/kernelbench/run_test.py 1 99 -> PASS, bit-correct vs the PyTorch
-reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper
-kernel, bridge, python wrapper and run.sh are all in place. The text below
-is HISTORICAL and was written before the kernel landed; treat its
-"deferred"/"pending" wording as obsolete.
-========================================================================
+STATUS — KernelBench L1 #99 TripletMarginLoss
+=============================================
 
-STATUS — KernelBench L1 #99 Triplet Margin Loss
-===============================================
+Updated: 2026-08-31
+Status: verified and extracted; CUDA runtime test requires an available GPU.
 
-Branch:    kb-l1-triplet-99 (off main @ 1590d539)
-Status:    .fst/.fsti verified; bridge + python + run.sh in place.
-           Pending: full `make -j$(nproc)` (verify+extract+nvcc) and
-           run.sh smoke against the KernelBench harness.
+Current semantics
+-----------------
 
-What landed
------------
-- src/kernelbench/level1/challenge99/Kuiper.KB.TripletMarginLoss.fsti
-    triplet_fw_ty (f32-only): preserves all three (anchor, positive,
-    negative) inputs at fractional perm, returns sout' such that
-    [triplet_post (SZ.v b) margin inv_b d_ap_real d_an_real d_ap d_an
-    sout'] for some per-row distance vector witnesses.
-- src/kernelbench/level1/challenge99/Kuiper.KB.TripletMarginLoss.fst
-    Per-row host loop with HReduce.reduce x2 + final HReduce.reduce
-    over a host-vec t_host of length B.  Loop invariant tracks ghost
-    [d_ap], [d_an], [vt] of length B with pointwise agreement on the
-    [< vi] prefix.  No assume / magic / admit; verified successfully.
-- src/kernelbench/level1/challenge99/kuiper_triplet_bridge.cu
-    Pybind11 entry [kuiper_triplet] taking three (B, D) f32 CUDA
-    tensors, margin, inv_b; allocates the 0-D output and dispatches to
-    the extracted [Kuiper_KB_TripletMarginLoss_triplet_fw_f32].
-- src/kernelbench/level1/challenge99/99_kuiper_triplet.py
-    [ModelNew] wrapping the JIT-loaded extension; falls back to
-    torch.nn.functional.triplet_margin_loss for non-CUDA / non-fp32
-    paths.
-- src/kernelbench/level1/challenge99/run.sh
-    Thin runner invoking src/kernelbench/run_test.py 1 99.
-- src/kernelbench/level1/challenge99/skeptic.txt
-    Honest write-up: the Phase-0 spec is loose (does not constrain
-    d_ap_real to the real L2 distance), spec faithfulness limited to
-    "the kernel produces *some* per-row vectors, and the mean is the
-    bit-exact mul of their f32-sum-approximator with inv_b".
+The implementation matches the pinned PyTorch defaults:
 
-Verification artefacts
-----------------------
-$ ./fstar.sh src/kernelbench/level1/challenge99/Kuiper.KB.TripletMarginLoss.fsti
-  Verified i'face: Kuiper.KB.TripletMarginLoss
-  All verification conditions discharged successfully
+  p=2, eps=1e-6, swap=False, reduction='mean'
 
-$ ./fstar.sh src/kernelbench/level1/challenge99/Kuiper.KB.TripletMarginLoss.fst
-  Verified module: Kuiper.KB.TripletMarginLoss
-  All verification conditions discharged successfully
+For each row it computes:
 
-Blockers
---------
-None expected for verify+extract.  `make -j$(nproc)` will exercise
-the karamel extraction and nvcc compile of the bridge; if a
-typeclass-instance projection bug surfaces (the [(float)(void *)0U]
-issue) we already work around it via [sq_diff_step_f32] and
-[triplet_step_f32] manually-inlined f32 arithmetic.
+  d_eps(x,y) = sqrt(sum_j ((x[j] - y[j]) + eps)^2)
+  loss = mean(max(0, d_eps(anchor,positive)
+                     - d_eps(anchor,negative) + margin))
 
-run.sh against the live KernelBench harness requires a CUDA device
-and the KernelBench/ submodule on PYTHONPATH; not exercised here.
+The `eps` term is present in the Kuiper specification, proof, extracted CUDA,
+and bridge ABI. The bridge passes `1.0e-6f`.
 
-Follow-ups (out of scope)
--------------------------
-1. Tighten Kuiper.Spec.TripletMarginLoss to constrain d_ap_real to be
-   [sqrt_r (frobenius_sumsq_r (to_real_seq (slice (sa - sp) (r*d) ((r+1)*d))))]
-   (or similar real-arithmetic form).  Requires adding %~ lemmas for
-   [sub]/[sqrt] and a [floating]-typeclass approximation rule.
-2. Replace the per-row reduce loop with a single
-   [reduce_batched_block id id B D] over a materialised B*D squared-
-   diff buffer.  Blocked on a clean Array1↔Array2 [pts_to] rewrite
-   ghost lemma (the [core] / [from_array] type-level conversion
-   exists but is not yet wrapped for use in user code).
+The exported entry point derives the mean reciprocal from `B` internally;
+`inv_b` is not a caller-controlled ABI argument.
 
+Verification boundary
+---------------------
 
-[2025 update] Verification completed.
-- .fst verified single-file via ./fstar.sh — GREEN.
-- make -j$(nproc) GREEN: extraction emits non-empty
-  obj/Kuiper_KB_TripletMarginLoss.{cu,h} declaring
-  Kuiper_KB_TripletMarginLoss_triplet_fw_f32(B, D, margin, inv_b, a, p, n, out).
-- nvcc compiles the generated CUDA + bridge cleanly.
-- No assume / admit / magic / ADMIT= used.
-- Skeptic review landed in skeptic.txt — sole spec gap is the Phase-0
-  decoupling of d_ap_real / d_an_real from the actual L2 distances of
-  inputs (documented in Kuiper.Spec.TripletMarginLoss.fsti).
+`ModelNew.forward` has no PyTorch fallback. Every call goes to the Kuiper
+extension; unsupported inputs fail the bridge checks.
 
-Verification techniques used:
-- F*-level `exists d_ap d_an` inside `pure` for the loop invariant
-  (Pulse couldn't synthesise lseq witnesses at loop entry).
-- `triplet_inv_init` vacuous-witness lemma at loop entry.
-- `prefix_extend_lemma_ex` for the per-iteration prefix extension
-  (uses IndefiniteDescription.indefinite_description_ghost).
-- `triplet_final_lemma` discharges `triplet_post` by picking
-  d_ap_real := to_real_seq w_ap and d_an_real := to_real_seq w_an.
-- `norewrite` on triplet_loss_impl + a 240-rlimit / split-queries
-  push-options block on the [triplet_fw_f32] wrapper to satisfy the
-  subtype check against [triplet_fw_ty].
+Files
+-----
+
+- `src/lib/spec/Kuiper.Spec.TripletMarginLoss.fsti`: functional postcondition.
+- `Kuiper.KB.TripletMarginLoss.fsti`: verified entry-point interface.
+- `Kuiper.KB.TripletMarginLoss.fst`: implementation and proof.
+- `kuiper_triplet_bridge.cu`: checked PyTorch/CUDA ABI bridge.
+- `99_kuiper_triplet.py`: unconditional extension loader/wrapper.
+
+Known qualifications
+--------------------
+
+- The shared compatibility D2D-copy proof contains an `admit()`.
+- The shared HReduce implementation uses `magic()` for sendability proofs.
+- The per-row host orchestration is correctness-first and launch-heavy.
