@@ -13,9 +13,10 @@ For every row and pair `(x,y)`, the verified distance computation is:
     sqrt(sum_j ((x[j] - y[j]) + eps)^2)
 
 This is PyTorch PairwiseDistance's epsilon placement, not merely an epsilon
-outside the square root. The postcondition relates both squared-distance
-reductions to the genuine anchor/positive/negative input rows through `%~`,
-then fixes the f32 square roots, margin hinge, final reduction, and mean.
+outside the square root. For every real sequence approximated by each f32
+input, the postcondition directly states that the f32 result approximates the
+real triplet loss. Its real distances use `FStar.Math.Sqrt.sqrt`; there are no
+existential intermediate distances, square roots, loss terms, or reductions.
 
 The earlier Phase-0 loose-witness discussion was about an obsolete version of
 the specification and has been removed rather than retained as misleading
@@ -49,8 +50,14 @@ boundary explicit and ensures the submitted model has only one semantic path.
 
 ## Trust and performance qualifications
 
-The challenge module contains no local `assume`, `admit`, or `magic`, but it
-uses two shared components with explicit repository-level trust obligations:
+The challenge module contains no `assume`, `admit`, or `magic`, but it uses
+three compatibility/shared components with explicit repository-level trust
+obligations:
+
+- `Kuiper.KB.Compat.SqrtApprox.sqrt_approx` is a temporary local `assume val`
+  for the missing floating/real square-root approximation law. The proposed
+  upstream change is `patches/kuiper-sqrt-approx.patch`; it uses
+  `FStar.Math.Sqrt.sqrt` and has been checked against the pinned package.
 
 - `Kuiper.KB.Compat.Array.gpu_memcpy_device_to_device'` currently has an
   admitted proof of its exact offset-copy postcondition.
