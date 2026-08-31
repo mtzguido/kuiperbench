@@ -472,8 +472,7 @@ fn dist_sq_row
 #pop-options
 
 #push-options "--z3rlimit 40"
-inline_for_extraction noextract
-fn triplet_loss_impl
+fn triplet_fw_f32
   (b : szp { b <= max_blocks * max_threads /\
              SZ.fits (b + max_threads) })
   (d : szp { d <= max_blocks * max_threads /\
@@ -611,11 +610,4 @@ fn triplet_loss_impl
   free t_dev;
   m;
 }
-#pop-options
-
-#push-options "--z3rlimit 40"
-let triplet_fw_f32 : triplet_fw_ty =
-  fun b d margin eps a p n #sa #sp #sn #fanc #fpos #fneg ->
-    triplet_loss_impl b d margin eps a p n
-      #sa #sp #sn #fanc #fpos #fneg
 #pop-options

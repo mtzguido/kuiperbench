@@ -7,7 +7,8 @@
 
 float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
                                                  float margin, float eps,
-                                                 float *a, float *p, float *n);
+                                                 float *anchor, float *positive,
+                                                 float *negative);
 
 #define Kuiper_KB_TripletMarginLoss_H_DEFINED
 #endif /* Kuiper_KB_TripletMarginLoss_H */

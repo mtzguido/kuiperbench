@@ -16,9 +16,7 @@ val triplet_recip_f32 (b : szp)
                               (FStar.SizeT.sizet_to_uint64 b)))
     }
 
-inline_for_extraction noextract
-type triplet_fw_ty =
-  fn
+fn triplet_fw_f32
     (b : szp { b <= max_blocks * max_threads /\
                SZ.fits (b + max_threads) })
     (d : szp { d <= max_blocks * max_threads /\
@@ -30,6 +28,7 @@ type triplet_fw_ty =
     (negative : array1 f32 (l1_forward (b * d)) { is_global negative })
     (#sa #sp #sn : chest1 f32 (b * d))
     (#fanc #fpos #fneg : perm)
+    norewrite
     preserves cpu **
               on gpu_loc (anchor   |-> Frac fanc sa) **
               on gpu_loc (positive |-> Frac fpos sp) **
@@ -41,5 +40,3 @@ type triplet_fw_ty =
               (chest1_to_seq sp)
               (chest1_to_seq sn)
               res)
-
-val triplet_fw_f32 : triplet_fw_ty
