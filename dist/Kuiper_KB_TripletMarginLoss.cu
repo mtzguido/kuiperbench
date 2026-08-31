@@ -1,33 +1,17 @@
 
 #include "Kuiper_KB_TripletMarginLoss.h"
 
-float Kuiper_KB_TripletMarginLoss_triplet_recip_f32(uint32_t b)
-{
-    return 1.0f / (float) (int64_t) (uint64_t) b;
-}
-
-float Kuiper_KB_TripletMarginLoss_sq_diff_step_f32(float x, float y)
-{
-    float d = x - y;
-    return d * d;
-}
-
-float Kuiper_KB_TripletMarginLoss_triplet_step_f32(float margin, float d_ap,
-                                                   float d_an)
-{
-    return fmaxf(0.0f, d_ap - d_an + margin);
-}
-
 __global__
 /**
   hoisted when extracting triplet_fw_f32
 */
 static void
-__hoisted_triplet_fw_f32_0(uint32_t d, float *scratch_a, float *scratch_b)
+__hoisted_triplet_fw_f32_0(uint32_t d, float eps, float *scratch_a,
+                           float *scratch_b)
 {
     if (1024U * blockIdx.x + threadIdx.x < d) {
         float d1 = scratch_a[1024U * blockIdx.x + threadIdx.x] -
-                   scratch_b[1024U * blockIdx.x + threadIdx.x];
+                   scratch_b[1024U * blockIdx.x + threadIdx.x] + eps;
         scratch_a[1024U * blockIdx.x + threadIdx.x] = d1 * d1;
     }
 }
@@ -64,11 +48,12 @@ __global__
   hoisted when extracting triplet_fw_f32
 */
 static void
-__hoisted_triplet_fw_f32_2(uint32_t d, float *scratch_a, float *scratch_b)
+__hoisted_triplet_fw_f32_2(uint32_t d, float eps, float *scratch_a,
+                           float *scratch_b)
 {
     if (1024U * blockIdx.x + threadIdx.x < d) {
         float d1 = scratch_a[1024U * blockIdx.x + threadIdx.x] -
-                   scratch_b[1024U * blockIdx.x + threadIdx.x];
+                   scratch_b[1024U * blockIdx.x + threadIdx.x] + eps;
         scratch_a[1024U * blockIdx.x + threadIdx.x] = d1 * d1;
     }
 }
@@ -128,9 +113,10 @@ __hoisted_triplet_fw_f32_4(uint32_t b, float *t_dev, float *out)
 }
 
 float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
-                                                 float margin, float inv_b,
+                                                 float margin, float eps,
                                                  float *a, float *p, float *n)
 {
+    float inv_b = 1.0f / (float) (int64_t) (uint64_t) b;
     float *scratch_a = (float *) KPR_GPU_ALLOC(sizeof(float), d);
     float *scratch_b = (float *) KPR_GPU_ALLOC(sizeof(float), d);
     float *t_dev = (float *) KPR_GPU_ALLOC(sizeof(float), b);
@@ -151,7 +137,7 @@ float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
         cudaStream_t s0 = KPR_FRESH_STREAM();
         KPR_KCALL(__hoisted_triplet_fw_f32_0,
                   d / 1024U + (uint32_t) (d % 1024U != 0U), 1024U, 0U, s0, d,
-                  scratch_a, scratch_b);
+                  eps, scratch_a, scratch_b);
         MUST(cudaStreamSynchronize(s0));
         MUST(cudaStreamDestroy(s0));
         float *out = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
@@ -174,7 +160,7 @@ float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
         cudaStream_t s2 = KPR_FRESH_STREAM();
         KPR_KCALL(__hoisted_triplet_fw_f32_2,
                   d / 1024U + (uint32_t) (d % 1024U != 0U), 1024U, 0U, s2, d,
-                  scratch_a, scratch_b);
+                  eps, scratch_a, scratch_b);
         MUST(cudaStreamSynchronize(s2));
         MUST(cudaStreamDestroy(s2));
         float *out0 = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);

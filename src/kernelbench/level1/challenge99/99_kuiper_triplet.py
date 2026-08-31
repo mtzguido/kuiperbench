@@ -26,19 +26,8 @@ class ModelNew(nn.Module):
         self.margin = float(margin)
 
     def forward(self, anchor: torch.Tensor, positive: torch.Tensor, negative: torch.Tensor) -> torch.Tensor:
-        # KernelBench reference: torch.nn.TripletMarginLoss(margin=margin)(a, p, n)
-        # which computes mean_b max(0, ||a_b - p_b||_2 - ||a_b - n_b||_2 + margin).
-        if (anchor.is_cuda and positive.is_cuda and negative.is_cuda
-                and anchor.dtype == torch.float32
-                and positive.dtype == torch.float32
-                and negative.dtype == torch.float32
-                and anchor.dim() == 2 and positive.dim() == 2 and negative.dim() == 2
-                and anchor.shape == positive.shape == negative.shape):
-            B = anchor.shape[0]
-            return kuiper_triplet.kuiper_triplet(
-                anchor.contiguous(),
-                positive.contiguous(),
-                negative.contiguous(),
-                self.margin)
-        # Fallback for shapes outside the verified path.
-        return torch.nn.functional.triplet_margin_loss(anchor, positive, negative, margin=self.margin)
+        return kuiper_triplet.kuiper_triplet(
+            anchor.contiguous(),
+            positive.contiguous(),
+            negative.contiguous(),
+            self.margin)

@@ -1,11 +1,12 @@
 // Bridge for KernelBench L1 #99: Triplet Margin Loss.
 //
-// PyTorch reference (margin=1.0, p=2, reduction='mean'):
-//   L = mean_b max(0, ||a_b - p_b||_2 - ||a_b - n_b||_2 + margin)
+// PyTorch reference (margin=1.0, p=2, eps=1e-6, reduction='mean'):
+//   dist_eps(x,y) = ||x - y + eps * 1||_2
+//   L = mean_b max(0, dist_eps(a_b,p_b) - dist_eps(a_b,n_b) + margin)
 //
 // The verified kernel runs the full per-row distance + reduction +
-// margin step + B-reduce + scalar multiply by [inv_b], returning the
-// mean scalar directly (no length-1 output buffer).
+// margin step + B-reduce + scalar multiply by the internally computed [1/B],
+// returning the mean scalar directly (no length-1 output buffer).
 #include <torch/extension.h>
 #include "Kuiper_KB_TripletMarginLoss.h"
 #include "Kuiper_KB_TripletMarginLoss.cu"
@@ -44,10 +45,10 @@ torch::Tensor kuiper_triplet_cuda(torch::Tensor anchor,
                 && B + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX
                 && D + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX,
                 "kuiper_triplet: shape out of range");
-    float inv_b = Kuiper_KB_TripletMarginLoss_triplet_recip_f32((uint32_t)B);
+    constexpr float eps = 1.0e-6f;
     auto res = Kuiper_KB_TripletMarginLoss_triplet_fw_f32(
         (uint32_t)B, (uint32_t)D,
-        (float)margin, inv_b,
+        (float)margin, eps,
         A.data_ptr<float>(),
         P.data_ptr<float>(),
         N.data_ptr<float>());
@@ -57,5 +58,5 @@ torch::Tensor kuiper_triplet_cuda(torch::Tensor anchor,
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("kuiper_triplet", &kuiper_triplet_cuda,
-          "Kuiper verified Triplet Margin Loss (mean of max(0, ||a-p||_2 - ||a-n||_2 + margin))");
+          "Kuiper verified Triplet Margin Loss (p=2, eps=1e-6, reduction=mean)");
 }
