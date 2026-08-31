@@ -35,6 +35,7 @@ else
 KUIPER_MARKER := $(KUIPER_HOME)/.packaged
 endif
 FSTAR_EXE := $(KUIPER_HOME)/inst/bin/fstar.exe
+FSTAR_SH := $(KUIPER_HOME)/fstar.sh
 KRML_EXE := $(KUIPER_HOME)/inst/bin/krml
 PLUGIN_SOURCE := $(KUIPER_HOME)/extraction/dune/_build/default/kuiper_extr.cmxs
 
@@ -63,34 +64,25 @@ CACHEDIR := $(OUTDIR)
 ROOTS := $(shell find src -type f \( -name '*.fst' -o -name '*.fsti' \) | sort)
 CHECKED := $(foreach f,$(ROOTS),$(OUTDIR)/$(notdir $(f)).checked)
 
-FSTAR_FLAGS :=
-FSTAR_FLAGS += --include $(KUIPER_HOME)/src
-FSTAR_FLAGS += --include $(KUIPER_HOME)/obj
-FSTAR_FLAGS += --include $(CURDIR)/src
-FSTAR_FLAGS += --include $(CURDIR)/$(CACHEDIR)
-FSTAR_FLAGS += --cache_dir $(CACHEDIR)
-FSTAR_FLAGS += --odir $(OUTDIR)
-FSTAR_FLAGS += --warn_error -274
-FSTAR_FLAGS += --warn_error -291
-FSTAR_FLAGS += --warn_error -249-321
-FSTAR_FLAGS += --warn_error @242@250
-FSTAR_FLAGS += --warn_error -288
-FSTAR_FLAGS += --warn_error -271
-FSTAR_FLAGS += --z3version 4.13.3
-FSTAR_FLAGS += --ext kuiper
-FSTAR_FLAGS += --ext __unrefine
-FSTAR_FLAGS += --ext no_krml_private
-FSTAR_FLAGS += --ext context_pruning_no_ambients
-FSTAR_FLAGS += --ext freshen
+# The package wrapper owns Kuiper's F* include paths, warnings, extensions,
+# solver version, and cache/output defaults. Only add KuiperBench's local
+# search paths and caller-supplied development options here.
+FSTAR_LOCAL_FLAGS :=
+FSTAR_LOCAL_FLAGS += --include $(CURDIR)/src
+FSTAR_LOCAL_FLAGS += --include $(CURDIR)/$(CACHEDIR)
 ifneq ($(filter-out 0 1,$(strip $(ADMIT))),)
 $(error ADMIT must be unset, 0, or 1)
 endif
 ifeq ($(strip $(ADMIT)),1)
-FSTAR_FLAGS += --admit_smt_queries true
+FSTAR_LOCAL_FLAGS += --admit_smt_queries true
 endif
-FSTAR_FLAGS += $(O)
+FSTAR_LOCAL_FLAGS += $(O)
 
-FSTAR := $(FSTAR_EXE) $(if $(V),,--silent) $(FSTAR_FLAGS)
+# Command-line make variables are exported through MAKEFLAGS. Hide ADMIT and O
+# from Kuiper's inner make so ADMIT=0 stays strict and local options are not
+# applied twice; their validated forms are already present above.
+FSTAR := env MAKEFLAGS= MAKEOVERRIDES= ADMIT= O= $(FSTAR_SH) \
+	$(if $(V),,--silent) $(FSTAR_LOCAL_FLAGS)
 
 KRML_FLAGS :=
 KRML_FLAGS += -add-early-include '<kuiper.h>'
@@ -137,6 +129,7 @@ $(KUIPER_MARKER):
 	$(Q)./scripts/install-kuiper.sh --nightly --version $(KUIPER_NIGHTLY) --dest $(KUIPER_HOME) --no-link
 	$(Q)test -f $(KUIPER_HOME)/.packaged
 	$(Q)test -x $(FSTAR_EXE)
+	$(Q)test -x $(FSTAR_SH)
 	$(Q)test -x $(KRML_EXE)
 	$(Q)test -f $(PLUGIN_SOURCE)
 	$(Q)rm -rf $(OUTDIR)
@@ -154,7 +147,7 @@ $(CLANG_FORMAT): scripts/install-clang-format.sh
 
 # These files appear as ordinary prerequisites later in the graph. On a fresh
 # checkout their rule first materializes the package, then validates its shape.
-$(FSTAR_EXE) $(KRML_EXE) $(PLUGIN_SOURCE) $(PACKAGE_EXTRACT): | $(KUIPER_MARKER)
+$(FSTAR_EXE) $(FSTAR_SH) $(KRML_EXE) $(PLUGIN_SOURCE) $(PACKAGE_EXTRACT): | $(KUIPER_MARKER)
 	$(Q)test -e $@
 
 ifeq ($(filter clean echo-fstar echo-krml install-kuiper prepare kb-venv,$(MAKECMDGOALS)),)
