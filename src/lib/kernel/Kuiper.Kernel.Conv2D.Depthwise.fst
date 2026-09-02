@@ -130,6 +130,10 @@ fn read_x_padded
     let hi = h_signed -^ pad;
     let wi = w_signed -^ pad;
     if (hi <^ h_in && wi <^ w_in) {
+      Math.lemma_mult_lt_right c bi b;
+      Math.lemma_mult_le_right h_in (bi * c + ci + 1) (b * c);
+      Math.lemma_mult_le_right w_in ((bi * c + ci) * h_in + hi + 1)
+                                    (b * c * h_in);
       let bc = bi *^ c;
       let bc_ci = bc +^ ci;
       let bc_ci_h = bc_ci *^ h_in;
