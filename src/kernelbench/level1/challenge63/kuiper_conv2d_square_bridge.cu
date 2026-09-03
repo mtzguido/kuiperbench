@@ -1,6 +1,6 @@
 // Thin checked boundary for the fixed KernelBench L1 #63 operation.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 
 #include "Kuiper_KB_Conv2DSquare.h"
@@ -18,7 +18,7 @@ static torch::Tensor kuiper_conv2d_square_cuda(torch::Tensor X, torch::Tensor W)
                     W.sizes() == torch::IntArrayRef({128, 16, 3, 3}),
                 "kuiper_conv2d_square: unexpected input or weight shape");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_Conv2DSquare_conv2d_square63_alloc_f32(
         X.data_ptr<float>(), W.data_ptr<float>());
     return torch::from_blob(

@@ -3,7 +3,7 @@
 // The fixed constants, allocation, and computation all remain in Kuiper.
 
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 
 #include "Kuiper_KB_NewGelu.h"
@@ -21,7 +21,7 @@ torch::Tensor kuiper_newgelu_cuda(torch::Tensor X) {
     TORCH_CHECK(numel > 0 && numel <= KUIPER_MAX_NTHR,
                 "kuiper_newgelu: numel outside the verified size domain");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     if (X.scalar_type() == torch::kFloat32) {
         float *output = Kuiper_KB_NewGelu_newgelu_alloc_f32(
             (uint32_t)numel, X.data_ptr<float>());

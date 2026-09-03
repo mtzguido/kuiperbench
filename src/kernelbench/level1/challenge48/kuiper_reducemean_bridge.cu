@@ -7,7 +7,7 @@
 //   1. reduce_sum_fw_f32 over (B*M, D) view  → y[b*M+j] %~ Σ_k x[b,k,j]
 //   2. smul_fw_f32 with c = 1/D in place    → y[b*M+j] *= 1/D
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_ReduceMean.h"
 #include "Kuiper_KB_ReduceMean.cu"
@@ -31,7 +31,7 @@ torch::Tensor kuiper_reducemean_dim1_cuda(torch::Tensor X) {
                 && (__int128) B * M <= KUIPER_MAX_BLOCKS
                 && D + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX,
                 "kuiper_reducemean_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_ReduceMean_reduce_mean_alloc_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
         X.data_ptr<float>());

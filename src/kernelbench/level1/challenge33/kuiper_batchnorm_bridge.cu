@@ -16,7 +16,7 @@
 // The exported Kuiper entry derives all flattened geometry, allocates/copies
 // the result, and orchestrates the full operation under one top-level spec.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cmath>
 #include <cuda_runtime.h>
 #include <limits>
@@ -55,7 +55,7 @@ torch::Tensor kuiper_batchnorm_cuda(torch::Tensor X, torch::Tensor gamma,
                     eps >= std::numeric_limits<float>::denorm_min() &&
                     eps <= std::numeric_limits<float>::max(),
                 "kuiper_batchnorm: eps must fit the positive float32 range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_BatchNorm_batchnorm2d_alloc_f32(
         (uint32_t)N, (uint32_t)C, (uint32_t)H, (uint32_t)W, eps,
         X.data_ptr<float>(), gamma.data_ptr<float>(), beta.data_ptr<float>());

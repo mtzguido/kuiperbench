@@ -2,7 +2,7 @@
 // Kuiper allocates and computes the result from the original input.
 
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 
 #include "Kuiper_KB_Softsign.h"
@@ -18,7 +18,7 @@ torch::Tensor kuiper_softsign_cuda(torch::Tensor X) {
     TORCH_CHECK(numel > 0 && numel <= (int64_t)2097152 * 1024,
                 "kuiper #30: element count exceeds the verified kernel bound");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     if (X.scalar_type() == torch::kFloat32) {
         float *output = Kuiper_KB_Softsign_softsign_alloc_f32(
             (uint32_t)numel, X.data_ptr<float>());

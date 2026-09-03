@@ -1,5 +1,5 @@
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_TransposedGEMM.h"
 #include "Kuiper_KB_TransposedGEMM.cu"
@@ -23,7 +23,7 @@ torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B)
                     (__int128) m * n <= umax &&
                     (__int128) m * n <= (__int128) 2097152 * 1024,
                 "kuiper #18 shape is outside the verified range");
-    const at::cuda::CUDAGuard device_guard(A.device());
+    const c10::cuda::CUDAGuard device_guard(A.device());
     float *out = Kuiper_KB_TransposedGEMM_matmul_f32_atbt_alloc(
         (uint32_t) m, (uint32_t) n, (uint32_t) k,
         A.data_ptr<float>(), B.data_ptr<float>());

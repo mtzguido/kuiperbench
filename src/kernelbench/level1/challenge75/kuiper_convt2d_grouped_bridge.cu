@@ -2,7 +2,7 @@
 // Group selection, zero-bias construction, output allocation, and the full
 // grouped ConvTranspose2D computation are inside the verified Kuiper entry.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include "Kuiper_KB_ConvT2DGrouped75.h"
 #include "Kuiper_KB_ConvT2DGrouped75.cu"
 
@@ -34,7 +34,7 @@ kuiper_convt2d_grouped_cuda(torch::Tensor X, torch::Tensor W,
             groups == 4,
         "kuiper_convt2d_grouped: parameters do not match challenge #75");
 
-    at::cuda::CUDAGuard device_guard(X.device());
+    c10::cuda::CUDAGuard device_guard(X.device());
     float *out_ptr = Kuiper_KB_ConvT2DGrouped75_convt2d_grouped75_alloc_f32(
         X.data_ptr<float>(), W.data_ptr<float>());
     return torch::from_blob(

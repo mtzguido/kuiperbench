@@ -13,7 +13,7 @@
 // The exported Kuiper entry derives n=C*H*W, allocates/copies the result,
 // and runs the complete operation under one top-level specification.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cmath>
 #include <cuda_runtime.h>
 #include <limits>
@@ -49,7 +49,7 @@ torch::Tensor kuiper_layernorm_cuda(torch::Tensor X, torch::Tensor gamma,
                     eps >= std::numeric_limits<float>::denorm_min() &&
                     eps <= std::numeric_limits<float>::max(),
                 "kuiper_layernorm: eps must fit the positive float32 range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_LayerNorm_layernorm4d_alloc_f32(
         (uint32_t)B, (uint32_t)C, (uint32_t)H, (uint32_t)W, eps,
         X.data_ptr<float>(), gamma.data_ptr<float>(), beta.data_ptr<float>());

@@ -13,7 +13,7 @@
 // semantics matching torch.argmax; the Kuiper proof verifies the full
 // first-occurrence property — see skeptic.txt.)
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cmath>
 #include <cstdint>
 #include <cuda_runtime.h>
@@ -41,7 +41,7 @@ torch::Tensor kuiper_argmaxreduce_dim1_cuda(torch::Tensor X) {
                 && (__int128) B * M <=
                        (__int128) KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS,
                 "kuiper_argmaxreduce_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     int64_t *out = Kuiper_KB_ArgmaxReduceDim_argmaxreduce_dim_alloc_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
         X.data_ptr<float>());

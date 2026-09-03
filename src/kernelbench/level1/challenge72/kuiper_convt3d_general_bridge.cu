@@ -1,7 +1,7 @@
 // Thin checked bridge for the fixed KernelBench L1 #72 configuration.
 // The complete grouped operation and all GPU allocation live in Kuiper.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include "Kuiper_KB_ConvT3DGrouped72.h"
 #include "Kuiper_KB_ConvT3DGrouped72.cu"
 
@@ -34,7 +34,7 @@ static torch::Tensor kuiper_convt3d_general_cuda(
             groups == 4,
         "kuiper_convt3d_general: parameters do not match challenge #72");
 
-    at::cuda::CUDAGuard device_guard(X.device());
+    c10::cuda::CUDAGuard device_guard(X.device());
     float *out_ptr = Kuiper_KB_ConvT3DGrouped72_convt3d_grouped72_alloc_f32(
         X.data_ptr<float>(), W.data_ptr<float>());
     return torch::from_blob(

@@ -1,6 +1,6 @@
 // Checked bridge for the self-allocating verified L1 normalization entry.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_L1Norm.h"
 #include "Kuiper_KB_L1Norm.cu"
@@ -16,7 +16,7 @@ torch::Tensor kuiper_l1norm_cuda(torch::Tensor X) {
                 && D <= (int64_t)UINT32_MAX
                 && (__int128) B * D <= ((__int128) 1 << 31),
                 "kuiper_l1norm: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_L1Norm_l1norm_alloc_f32(
         (uint32_t)B, (uint32_t)D, X.data_ptr<float>());
     return torch::from_blob(out, X.sizes(), [](void *p) { cudaFree(p); },

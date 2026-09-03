@@ -1,5 +1,5 @@
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_BatchedGEMM.h"
 #include "Kuiper_KB_BatchedGEMM.cu"
@@ -26,7 +26,7 @@ torch::Tensor kuiper_batched_gemm_cuda(torch::Tensor A, torch::Tensor B)
                     (__int128) batch * rows * cols <= umax &&
                     (__int128) batch * rows * cols <= launch_max,
                 "kuiper #3 shape is outside the verified range");
-    const at::cuda::CUDAGuard device_guard(A.device());
+    const c10::cuda::CUDAGuard device_guard(A.device());
     float *out = Kuiper_KB_BatchedGEMM_batched_gemm_alloc_f32(
         (uint32_t) batch, (uint32_t) rows, (uint32_t) shared, (uint32_t) cols,
         A.data_ptr<float>(), B.data_ptr<float>());

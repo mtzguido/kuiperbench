@@ -10,7 +10,7 @@
 // blocks (1 thread / block, sequential within a row).  Total work
 // O(B * D), parallelism = B blocks.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_CumSum.h"
 #include "Kuiper_KB_CumSum.cu"
@@ -29,7 +29,7 @@ torch::Tensor kuiper_cumsum_dim1_cuda(torch::Tensor X) {
                 && (__int128) B * D <= UINT32_MAX
                 && B <= KUIPER_MAX_BLOCKS,
                 "kuiper_cumsum_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_CumSum_cumsum_alloc_f32(
         (uint32_t)B, (uint32_t)D, X.data_ptr<float>());
     return torch::from_blob(out, X.sizes(), [](void *p) { cudaFree(p); },

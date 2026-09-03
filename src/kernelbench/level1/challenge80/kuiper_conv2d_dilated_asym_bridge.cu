@@ -1,6 +1,6 @@
 // Thin checked boundary for the complete verified fixed #80 operation.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_Conv2DDilatedAsym.h"
 #include "Kuiper_KB_Conv2DDilatedAsym.cu"
@@ -26,7 +26,7 @@ static torch::Tensor kuiper_conv2d_dilated_asym_cuda(
                     dil_h == 2 && dil_w == 3 && groups == 1,
                 "kuiper #80: parameters do not match the verified challenge");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out =
         Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym80_alloc_f32(
             X.data_ptr<float>(), W.data_ptr<float>());

@@ -1,5 +1,5 @@
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_ScalarMul.h"
 #include "Kuiper_KB_ScalarMul.cu"
@@ -12,7 +12,7 @@ torch::Tensor kuiper_smul_cuda(torch::Tensor A, double s)
     const int64_t numel = A.numel();
     TORCH_CHECK(numel > 0 && numel <= (int64_t) 2097152 * 1024,
                 "kuiper #5 element count exceeds the verified range");
-    const at::cuda::CUDAGuard device_guard(A.device());
+    const c10::cuda::CUDAGuard device_guard(A.device());
     float *out = Kuiper_KB_ScalarMul_smul_alloc_f64_f32(
         s, (uint32_t) numel, A.data_ptr<float>());
     return torch::from_blob(

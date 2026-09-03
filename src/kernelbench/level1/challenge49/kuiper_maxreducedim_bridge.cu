@@ -11,7 +11,7 @@
 // y[b*M+j] is the exact deterministic fmax reduction specified by Kuiper;
 // the proof does not assume blanket fmax algebraic laws over NaNs.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_MaxReduceDim.h"
 #include "Kuiper_KB_MaxReduceDim.cu"
@@ -41,7 +41,7 @@ torch::Tensor kuiper_maxreduce_dim1_cuda(torch::Tensor X) {
                 && BM <= (__int128)KUIPER_MAX_BLOCKS
                 && D_with_threads <= (__int128)UINT32_MAX,
                 "kuiper_maxreduce_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_MaxReduceDim_maxreduce_dim_alloc_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
         X.data_ptr<float>());

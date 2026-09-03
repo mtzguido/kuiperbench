@@ -2,7 +2,7 @@
 // raw NCHW/group contract and makes one call; C/G, row geometry, allocation,
 // input copy, and normalization are composed inside Kuiper.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cmath>
 #include <cuda_runtime.h>
 #include <limits>
@@ -36,7 +36,7 @@ torch::Tensor kuiper_groupnorm_cuda(torch::Tensor X, int64_t G, double eps) {
                     eps <= std::numeric_limits<float>::max(),
                 "kuiper_groupnorm: eps must fit the positive float32 range");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_MeanVarNorm_groupnorm35_alloc_f32(
         (uint32_t) B, (uint32_t) C, (uint32_t) H, (uint32_t) W,
         (uint32_t) G, eps, X.data_ptr<float>());

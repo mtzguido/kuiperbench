@@ -11,7 +11,7 @@
 // y[b*M+j] is the exact deterministic left-fold fmin reduction specified by
 // Kuiper; the proof does not assume blanket fmin algebraic laws over NaNs.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_MinReduceDim.h"
 #include "Kuiper_KB_MinReduceDim.cu"
@@ -39,7 +39,7 @@ torch::Tensor kuiper_minreduce_dim1_cuda(torch::Tensor X) {
                 && BM <= (__int128)KUIPER_MAX_BLOCKS *
                             (__int128)KUIPER_MAX_THREADS,
                 "kuiper_minreduce_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_MinReduceDim_minreduce_dim_alloc_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
         X.data_ptr<float>());

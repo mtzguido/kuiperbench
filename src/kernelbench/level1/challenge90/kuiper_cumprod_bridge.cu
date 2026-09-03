@@ -7,7 +7,7 @@
 // parametrised by the law-free multiplicative reducer [reducer_fmul_f32].  One
 // launch of [Kuiper_KB_CumProd_cumprod_fw_f32] does the whole forward.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_CumProd.h"
 #include "Kuiper_KB_CumProd.cu"
@@ -25,7 +25,7 @@ torch::Tensor kuiper_cumprod_dim1_cuda(torch::Tensor X) {
                 && (__int128) B * D <= UINT32_MAX
                 && B <= KUIPER_MAX_BLOCKS,
                 "kuiper_cumprod_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_CumProd_cumprod_alloc_f32(
         (uint32_t)B, (uint32_t)D, X.data_ptr<float>());
     return torch::from_blob(out, X.sizes(), [](void *p) { cudaFree(p); },

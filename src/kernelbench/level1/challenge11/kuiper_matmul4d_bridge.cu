@@ -1,5 +1,5 @@
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_Matmul4D.h"
 #include "Kuiper_KB_Matmul4D.cu"
@@ -25,7 +25,7 @@ torch::Tensor kuiper_matmul_cuda(torch::Tensor A, torch::Tensor B)
                     (__int128) b * i * j * k <= umax &&
                     (__int128) b * i * j * k <= launch_max,
                 "kuiper #11 shape is outside the verified range");
-    const at::cuda::CUDAGuard device_guard(A.device());
+    const c10::cuda::CUDAGuard device_guard(A.device());
     float *out = Kuiper_KB_Matmul4D_matmul4d_alloc_f32(
         (uint32_t) b, (uint32_t) i, (uint32_t) j, (uint32_t) l, (uint32_t) k,
         A.data_ptr<float>(), B.data_ptr<float>());

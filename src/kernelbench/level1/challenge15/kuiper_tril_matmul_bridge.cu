@@ -1,5 +1,5 @@
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_TrilMatmul.h"
 #include "Kuiper_KB_TrilMatmul.cu"
@@ -20,7 +20,7 @@ torch::Tensor kuiper_tril_matmul_cuda(torch::Tensor A, torch::Tensor B)
     TORCH_CHECK(n > 0 && (__int128) n * n <= (__int128) UINT32_MAX &&
                     (__int128) n * n <= (__int128) 2097152 * 1024,
                 "kuiper #15 shape is outside the verified range");
-    const at::cuda::CUDAGuard device_guard(A.device());
+    const c10::cuda::CUDAGuard device_guard(A.device());
     float *out = Kuiper_KB_TrilMatmul_tril_matmul_alloc_f32(
         (uint32_t) n, A.data_ptr<float>(), B.data_ptr<float>());
     return torch::from_blob(

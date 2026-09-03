@@ -1,6 +1,6 @@
 // Checked bridge for the self-allocating verified FrobeniusNorm entry.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_Frobenius.h"
 #include "Kuiper_KB_Frobenius.cu"
@@ -15,7 +15,7 @@ torch::Tensor kuiper_frobenius_cuda(torch::Tensor X) {
     int64_t numel = X.numel();
     TORCH_CHECK(numel > 0 && numel <= KUIPER_MAX_NTHR,
                 "kuiper_frobenius: numel exceeds verified launch range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_Frobenius_frobenius_alloc_f32(
         (uint32_t)numel, X.data_ptr<float>());
     return torch::from_blob(out, X.sizes(), [](void *p) { cudaFree(p); },

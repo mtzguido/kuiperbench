@@ -2,7 +2,7 @@
 // raw NCHW contract and makes one call; row geometry, allocation, input copy,
 // reciprocal construction, and normalization are composed inside Kuiper.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cmath>
 #include <cuda_runtime.h>
 #include <limits>
@@ -35,7 +35,7 @@ torch::Tensor kuiper_instancenorm_cuda(torch::Tensor X, double eps) {
                     eps <= std::numeric_limits<float>::max(),
                 "kuiper_instancenorm: eps must fit the positive float32 range");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_MeanVarNorm_instancenorm34_alloc_f32(
         (uint32_t) B, (uint32_t) C, (uint32_t) H, (uint32_t) W,
         eps, X.data_ptr<float>());

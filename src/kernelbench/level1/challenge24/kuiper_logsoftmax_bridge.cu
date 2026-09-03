@@ -2,7 +2,7 @@
 // One self-allocating Kuiper call processes the entire (B, D) tensor.
 
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 
 #include "Kuiper_KB_LogSoftmaxAlloc.h"
@@ -29,7 +29,7 @@ torch::Tensor kuiper_log_softmax_cuda(torch::Tensor X) {
     TORCH_CHECK((int64_t)B <= ((int64_t)2097152 * 1024) / D,
                 "kuiper_log_softmax: element count exceeds the verified launch bound");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     if (X.scalar_type() == torch::kFloat32) {
         float *output = Kuiper_KB_LogSoftmaxAlloc_logsoftmax_alloc_f32(
             B, D, X.data_ptr<float>());

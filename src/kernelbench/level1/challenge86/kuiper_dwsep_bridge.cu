@@ -1,6 +1,6 @@
 // Thin checked boundary for the complete verified fixed #86 composition.
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_SeparableConv2D.h"
 #include "Kuiper_KB_SeparableConv2D.cu"
@@ -30,7 +30,7 @@ static torch::Tensor kuiper_dwsep_cuda(
     TORCH_CHECK(stride == 1 && pad == 1 && dilation == 1,
                 "kuiper #86: parameters do not match the verified challenge");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_SeparableConv2D_separable86_alloc_f32(
         X.data_ptr<float>(), Wdw.data_ptr<float>(), Wpw.data_ptr<float>());
     return torch::from_blob(

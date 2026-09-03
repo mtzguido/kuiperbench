@@ -10,7 +10,7 @@
 // length-D slice x[b,:,j].  One launch of [reduce_batched_block]
 // produces y[b*M+j] ≈ Σ_k x[b,k,j].
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 #include "Kuiper_KB_ReduceSum.h"
 #include "Kuiper_KB_ReduceSum.cu"
@@ -36,7 +36,7 @@ torch::Tensor kuiper_reducesum_dim1_cuda(torch::Tensor X) {
                 && (__int128) B * M <= KUIPER_MAX_BLOCKS
                 && D + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX,
                 "kuiper_reducesum_dim1: shape out of range");
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     float *out = Kuiper_KB_ReduceSum_reduce_sum_alloc_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
         X.data_ptr<float>());

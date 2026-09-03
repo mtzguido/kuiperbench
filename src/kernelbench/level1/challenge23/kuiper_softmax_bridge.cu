@@ -2,7 +2,7 @@
 // Input shape (B, D). One self-allocating Kuiper call processes all rows.
 
 #include <torch/extension.h>
-#include <ATen/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
 
 #include "Kuiper_KB_SoftmaxAlloc.h"
@@ -29,7 +29,7 @@ torch::Tensor kuiper_softmax_cuda(torch::Tensor X) {
     TORCH_CHECK(B <= 2147483648LL / D,
                 "kuiper_softmax: element count exceeds the kernel launch bound");
 
-    const at::cuda::CUDAGuard device_guard(X.device());
+    const c10::cuda::CUDAGuard device_guard(X.device());
     if (X.scalar_type() == torch::kFloat32) {
         float *output = Kuiper_KB_SoftmaxAlloc_softmax_alloc_f32(
             B, D, X.data_ptr<float>());
