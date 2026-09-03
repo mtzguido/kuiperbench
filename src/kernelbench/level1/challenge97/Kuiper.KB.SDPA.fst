@@ -62,12 +62,6 @@ let sdpa_scale_f32 (d : szp) : f32 =
 (* memory operation.                                                        *)
 (* ----------------------------------------------------------------------- *)
 
-let transpose_pages
-  (#et : Type) (#bh #rows #cols : nat)
-  (m : chest3 et bh rows cols)
-  : chest3 et bh cols rows =
-  mk3 (fun p j i -> acc3 m p i j)
-
 #push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 let imap_swap_pages_rc
   (#bh #rows #cols : nat)

@@ -50,10 +50,11 @@ val sdpa_scale_f32 (d : szp) : f32
 
 (* Logical transpose of the last two axes on every batch page. *)
 [@@erasable]
-val transpose_pages
+let transpose_pages
   (#et : Type) (#bh #rows #cols : nat)
   (m : chest3 et bh rows cols)
   : chest3 et bh cols rows
+  = mk3 (fun p j i -> acc3 m p i j)
 
 (* Elementwise scalar multiply of a 3-D tensor. *)
 let mscale
