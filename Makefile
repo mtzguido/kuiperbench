@@ -184,7 +184,7 @@ $(OUTDIR)/kuiper_extr.cmxs: $(PLUGIN_SOURCE) | $(KUIPER_MARKER)
 $(OUTDIR)/%.krml: | $(KUIPER_MARKER) $(OUTDIR)/kuiper_extr.cmxs
 	$(call msg,EXTRACT,$(MOD))
 	$(Q)$(FSTAR) --codegen krml --load_cmxs $(PLUGIN) \
-		--extract "-*,+$(MOD),+Kuiper$(if $(findstring Kuiper.KB.SDPA,$(MOD)),$(comma)+Klas)" \
+		--extract "-*,+$(MOD),+Kuiper$(if $(filter Kuiper.KB.RowScaleAlloc Kuiper.KB.SDPA,$(MOD)),$(comma)+Klas)" \
 		-o $@ $<
 
 $(OUTDIR)/pre/%.cu $(OUTDIR)/pre/%.h &: MOD = $(subst _,.,$(basename $(notdir $<)))
