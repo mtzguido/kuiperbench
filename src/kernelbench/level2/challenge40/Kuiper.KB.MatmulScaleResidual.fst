@@ -37,7 +37,7 @@ let msr_row_aux
             == scale_residual sf (acc1 sy_b tid))
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn matmul_scale_residual_f32_impl
   (batch : szp)

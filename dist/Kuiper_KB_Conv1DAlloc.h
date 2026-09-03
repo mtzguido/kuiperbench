@@ -14,5 +14,14 @@ float *Kuiper_KB_Conv1DAlloc_conv1d_general_alloc_f32(
     uint32_t stride, uint32_t pad, uint32_t dilation, uint32_t l_out, float *gx,
     float *gw, float *gbias);
 
+Prims_dtuple2__uint32_t__float_ Kuiper_KB_Conv1DAlloc_conv1d_raw_alloc_bias_f32(
+    uint32_t b, uint32_t cin, uint32_t l_in, uint32_t cout, uint32_t kk,
+    uint32_t stride, uint32_t pad, uint32_t dilation, float *gx, float *gw,
+    float *gbias);
+
+Prims_dtuple2__uint32_t__float_ Kuiper_KB_Conv1DAlloc_conv1d_raw_alloc_zero_f32(
+    uint32_t b, uint32_t cin, uint32_t l_in, uint32_t cout, uint32_t kk,
+    uint32_t stride, uint32_t pad, uint32_t dilation, float *gx, float *gw);
+
 #define Kuiper_KB_Conv1DAlloc_H_DEFINED
 #endif /* Kuiper_KB_Conv1DAlloc_H */

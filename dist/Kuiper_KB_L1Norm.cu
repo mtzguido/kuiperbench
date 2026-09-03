@@ -71,3 +71,14 @@ void Kuiper_KB_L1Norm_l1norm_fw(uint32_t b, uint32_t d, float *x)
 
 void (*Kuiper_KB_L1Norm_l1norm_fw_f32)(uint32_t x0, uint32_t x1,
                                        float *x2) = Kuiper_KB_L1Norm_l1norm_fw;
+
+float *Kuiper_KB_L1Norm_l1norm_alloc_f32(uint32_t b, uint32_t d, float *x)
+{
+    uint32_t n = b * d;
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), n);
+    MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * n,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_L1Norm_l1norm_fw_f32(b, d, out);
+    return out;
+}

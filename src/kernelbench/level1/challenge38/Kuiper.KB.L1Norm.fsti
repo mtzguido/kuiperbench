@@ -60,3 +60,20 @@ fn l1norm_fw_f32
     (exists* (sx' : chest2 f32 b d).
        on gpu_loc (x |-> sx') **
        pure (l1norm_post b d sx sx'))
+
+fn l1norm_alloc_f32
+  (b : szp)
+  (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
+  (x : array2 f32 (l2_row_major b d) { is_global x })
+  (#f : perm)
+  (#sx : chest2 f32 b d)
+  preserves cpu ** on gpu_loc (x |-> Frac f sx)
+  requires
+    pure (SZ.v b > 0 /\
+          SZ.v b * SZ.v d <= max_blocks * max_threads /\
+          l1norm_domain sx)
+  returns out : array2 f32 (l2_row_major b d)
+  ensures
+    exists* (sx' : chest2 f32 b d).
+      on gpu_loc (out |-> sx') **
+      pure (l1norm_post b d sx sx')

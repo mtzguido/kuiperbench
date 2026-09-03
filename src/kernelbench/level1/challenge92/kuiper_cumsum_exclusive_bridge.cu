@@ -17,36 +17,42 @@
 // there is NO host-side subtraction or shift.  Total work O(B * D),
 // parallelism = B blocks.
 //
-// The kernel's verified postcondition (cumsum_exclusive_post) ties
+// The entry's verified postcondition (cumsum_exclusive_post) ties
 // output[b, j] (up to fp32 %~ approximation) to the real-arithmetic
 // exclusive prefix sum rsum(x[b, 0..j)).  This bridge therefore does
-// only dimension-contract checks and plumbing.
+// only ABI checks, selects the input device, makes one Kuiper call, and wraps
+// the returned allocation.
 #include <torch/extension.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <cuda_runtime.h>
 #include "Kuiper_KB_CumSumExclusive.h"
 #include "Kuiper_KB_CumSumExclusive.cu"
 
 // max_blocks from Kuiper.Base = 2^21
-static constexpr int64_t KUIPER_MAX_BLOCKS = (int64_t)2097152;
+static constexpr int64_t KUIPER_MAX_BLOCKS = (int64_t) 2097152;
 
-torch::Tensor kuiper_cumsum_exclusive_dim1_cuda(torch::Tensor X) {
-    TORCH_CHECK(X.is_cuda() && X.scalar_type() == torch::kFloat32 && X.dim() == 2,
-                "kuiper_cumsum_exclusive_dim1: expected 2-D float32 CUDA tensor");
-    auto Xc = X.contiguous();
-    int64_t B = Xc.size(0), D = Xc.size(1);
-    TORCH_CHECK(B > 0 && D > 0
-                && B <= (int64_t)UINT32_MAX
-                && D <= (int64_t)UINT32_MAX
-                && B * D <= (int64_t)UINT32_MAX
-                && B <= KUIPER_MAX_BLOCKS,
+torch::Tensor kuiper_cumsum_exclusive_dim1_cuda(torch::Tensor X)
+{
+    TORCH_CHECK(
+        X.is_cuda() && X.scalar_type() == torch::kFloat32 && X.dim() == 2,
+        "kuiper_cumsum_exclusive_dim1: expected 2-D float32 CUDA tensor");
+    TORCH_CHECK(X.is_contiguous(),
+                "kuiper_cumsum_exclusive_dim1: input must be contiguous");
+    int64_t B = X.size(0), D = X.size(1);
+    TORCH_CHECK(B > 0 && D > 0 && B <= (int64_t) UINT32_MAX &&
+                    D <= (int64_t) UINT32_MAX &&
+                    B <= (int64_t) UINT32_MAX / D && B <= KUIPER_MAX_BLOCKS,
                 "kuiper_cumsum_exclusive_dim1: shape out of range");
-    auto Y = torch::empty_like(Xc);
-    Kuiper_KB_CumSumExclusive_cumsum_exclusive_fw_f32(
-        (uint32_t)B, (uint32_t)D,
-        Xc.data_ptr<float>(), Y.data_ptr<float>());
-    return Y;
+    const c10::cuda::CUDAGuard device_guard(X.device());
+    float *out = Kuiper_KB_CumSumExclusive_cumsum_exclusive_fw_f32(
+        (uint32_t) B, (uint32_t) D, X.data_ptr<float>());
+    return torch::from_blob(
+        out, {B, D}, [](void *p) { cudaFree(p); }, X.options());
 }
 
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("kuiper_cumsum_exclusive_dim1", &kuiper_cumsum_exclusive_dim1_cuda,
-          "Kuiper verified exclusive cumulative sum along dim=1 of a 2-D tensor");
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m)
+{
+    m.def(
+        "kuiper_cumsum_exclusive_dim1", &kuiper_cumsum_exclusive_dim1_cuda,
+        "Kuiper verified exclusive cumulative sum along dim=1 of a 2-D tensor");
 }

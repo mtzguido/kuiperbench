@@ -120,7 +120,7 @@ let kpost
     Cell gy (idx1 tid) |-> conv2dd_out_at b cin h_in w_in cout kh kw sh sw ph pw dh dw
                                    h_out w_out sx sw_ sbias tid
 
-#push-options "--z3rlimit 120"
+#push-options "--z3rlimit 60"
 
 (* Inner-loop helper: read a tap from x at (bi, ic, h_int, w_int)
    with zero-padded out-of-range guards, where
@@ -213,7 +213,7 @@ fn read_w_tap
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 (* Local helper: partial conv2dd sum over the linearised (ic, kh_i, kw_i)
    index up to [to], with all parameters explicit.  Used as the loop-
@@ -562,7 +562,7 @@ fn conv2d_dilated_teardown
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 
 inline_for_extraction noextract
 let kdesc

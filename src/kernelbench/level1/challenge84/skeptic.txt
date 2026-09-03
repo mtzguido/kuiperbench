@@ -1,3 +1,11 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+#82-#85 now enter through `dwconv2d_raw_alloc_{bias,zero}_f32`.  Geometry,
+optional zero bias, allocation, and the fully proved kernel are one verified
+operation; the bridge has no helper call or bias scratch.  Historical claims
+below about `assume pure`, `magic`, admitted views, cudaMemset staging, or the
+old common header are superseded.
+
 UPDATE 2026-06-14 (corrections — read first)
 ============================================
 Two disclosures below are now STALE:

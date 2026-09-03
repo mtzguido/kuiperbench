@@ -38,7 +38,7 @@ let bcm_offset_bound
   = ()
 
 (* Concrete ctlayout instance for use in Pulse kernels. *)
-#push-options "--z3rlimit 400 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 inline_for_extraction noextract
 instance c_l2_bcm_pages
   (b  : erased nat)

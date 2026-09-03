@@ -48,4 +48,4 @@ class ModelNew(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return kuiper_avgpool2d.kuiper_avgpool2d(
-            x.contiguous(), self.kernel_size, self.stride, self.padding)
+            x, self.kernel_size, self.stride, self.padding)

@@ -25,15 +25,4 @@ class ModelNew(nn.Module):
         super().__init__()
 
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        # KernelBench reference: mean(clamp(1 - predictions * targets, min=0))
-        # over the broadcast result of (B, N) * (N,) -> (B, N).
-        if (predictions.is_cuda and targets.is_cuda
-                and predictions.dtype == torch.float32
-                and targets.dtype == torch.float32
-                and predictions.dim() == 2 and targets.dim() == 1
-                and targets.size(0) == predictions.size(1)):
-            B, N = predictions.shape
-            pred_flat = predictions.contiguous().view(-1)
-            tgt_flat = targets.repeat(B)
-            return kuiper_hingeloss.kuiper_hingeloss(pred_flat, tgt_flat)
-        return torch.mean(torch.clamp(1 - predictions * targets, min=0))
+        return kuiper_hingeloss.kuiper_hingeloss(predictions, targets)

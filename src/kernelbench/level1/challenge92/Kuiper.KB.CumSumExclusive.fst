@@ -106,8 +106,28 @@ fn cumsum_exclusive_fw_f32_impl
 }
 #pop-options
 
-(* z3rlimit > 40: top-level coercion of the impl to the interface type,
- * mirrors the inclusive [cumsum_fw_f32]. *)
-#push-options "--z3rlimit 100"
-let cumsum_exclusive_fw_f32 = cumsum_exclusive_fw_f32_impl
+(* Self-allocating public entry.  Allocation and ownership transfer are part
+ * of the verified surface, so the bridge only checks the ABI and calls this
+ * function once. *)
+#push-options "--z3rlimit 60"
+fn cumsum_exclusive_fw_f32
+  (b : szp { b <= max_blocks })
+  (d : szp { SZ.fits (SZ.v b * SZ.v d) })
+  (input : array2 f32 (l2_row_major b d) { is_global input })
+  (#sx : chest2 f32 b d)
+  preserves
+    cpu **
+    on gpu_loc (input |-> sx)
+  returns output : array2 f32 (l2_row_major b d)
+  ensures
+    (exists* (sy : chest2 f32 b d).
+       on gpu_loc (output |-> sy) **
+       pure (cumsum_exclusive_post b d sx sy))
+{
+  let n : szp = b *^ d;
+  let output = alloc0 #f32 n (l2_row_major b d);
+  with sy0. assert on gpu_loc (output |-> sy0);
+  cumsum_exclusive_fw_f32_impl b d input output;
+  output
+}
 #pop-options

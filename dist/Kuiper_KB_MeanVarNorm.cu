@@ -126,3 +126,36 @@ void Kuiper_KB_MeanVarNorm_mean_var_norm_fw(uint32_t b, uint32_t d, float eps,
 void (*Kuiper_KB_MeanVarNorm_mean_var_norm_fw_f32)(uint32_t x0, uint32_t x1,
                                                    float x2, float *x3) =
     Kuiper_KB_MeanVarNorm_mean_var_norm_fw;
+
+float *Kuiper_KB_MeanVarNorm_instancenorm34_alloc_f32(uint32_t b, uint32_t c,
+                                                      uint32_t h, uint32_t w,
+                                                      double eps, float *x)
+{
+    float eps32 = (float) eps;
+    uint32_t rows = b * c;
+    uint32_t d = h * w;
+    uint32_t n = rows * d;
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), n);
+    MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * n,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_MeanVarNorm_mean_var_norm_fw_f32(rows, d, eps32, out);
+    return out;
+}
+
+float *Kuiper_KB_MeanVarNorm_groupnorm35_alloc_f32(uint32_t b, uint32_t c,
+                                                   uint32_t h, uint32_t w,
+                                                   uint32_t groups, double eps,
+                                                   float *x)
+{
+    float eps32 = (float) eps;
+    uint32_t rows = b * groups;
+    uint32_t d = c / groups * h * w;
+    uint32_t n = rows * d;
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), n);
+    MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * n,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_MeanVarNorm_mean_var_norm_fw_f32(rows, d, eps32, out);
+    return out;
+}

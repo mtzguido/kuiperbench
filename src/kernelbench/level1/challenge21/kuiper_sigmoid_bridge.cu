@@ -1,30 +1,34 @@
 // Bridge for KernelBench L1 #21: Sigmoid.
-// y[i] = 1 / (1 + exp(-x[i])), applied in-place (computed on a clone) via
-// verified Kuiper_KB_Sigmoid_sigmoid_auto_{f32,f64}.
+// Kuiper allocates and computes the result from the original input.
 
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAGuard.h>
+#include <cuda_runtime.h>
 
 #include "Kuiper_KB_Sigmoid.h"
 #include "Kuiper_KB_Sigmoid.cu"
 
 torch::Tensor kuiper_sigmoid_cuda(torch::Tensor X) {
-    TORCH_CHECK(X.is_cuda(), "kuiper #21: expected a CUDA tensor");
-    auto Y = X.contiguous().clone();
-    int64_t numel = Y.numel();
+    TORCH_CHECK(X.is_cuda() && X.is_contiguous(),
+                "kuiper #21: expected a contiguous CUDA tensor");
+    TORCH_CHECK(X.scalar_type() == torch::kFloat32 ||
+                    X.scalar_type() == torch::kFloat64,
+                "kuiper_sigmoid: unsupported dtype");
+    int64_t numel = X.numel();
     TORCH_CHECK(numel > 0 && numel <= (int64_t)2097152 * 1024,
                 "kuiper #21: element count exceeds the verified kernel bound");
 
-    if (Y.scalar_type() == torch::kFloat32) {
-        Kuiper_KB_Sigmoid_sigmoid_fw_f32(
-            (uint32_t)numel, Y.data_ptr<float>());
-    } else if (Y.scalar_type() == torch::kFloat64) {
-        Kuiper_KB_Sigmoid_sigmoid_fw_f64(
-            (uint32_t)numel, Y.data_ptr<double>());
-    } else {
-        TORCH_CHECK(false, "kuiper_sigmoid: unsupported dtype");
+    const at::cuda::CUDAGuard device_guard(X.device());
+    if (X.scalar_type() == torch::kFloat32) {
+        float *output = Kuiper_KB_Sigmoid_sigmoid_alloc_f32(
+            (uint32_t)numel, X.data_ptr<float>());
+        return torch::from_blob(
+            output, X.sizes(), [](void *p) { cudaFree(p); }, X.options());
     }
-
-    return Y;
+    double *output = Kuiper_KB_Sigmoid_sigmoid_alloc_f64(
+        (uint32_t)numel, X.data_ptr<double>());
+    return torch::from_blob(
+        output, X.sizes(), [](void *p) { cudaFree(p); }, X.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

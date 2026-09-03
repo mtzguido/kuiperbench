@@ -184,7 +184,7 @@ fn read_w_tap
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 (* Local helper: partial depthwise sum over the linearised (kh_i, kw_i)
    index up to [to], with all parameters explicit.  Used as the loop-
@@ -508,7 +508,7 @@ fn dwconv2d_teardown
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 
 inline_for_extraction noextract
 let kdesc

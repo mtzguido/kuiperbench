@@ -15,5 +15,17 @@ void Kuiper_KB_TransposedGEMM_matmul_f32_atbt(uint32_t m, uint32_t n,
                                               uint32_t k, float *gA, float *gB,
                                               float *gC);
 
+float *Kuiper_KB_TransposedGEMM_matmul_f32_atb_alloc(uint32_t m, uint32_t n,
+                                                     uint32_t k, float *gA,
+                                                     float *gB);
+
+float *Kuiper_KB_TransposedGEMM_matmul_f32_abt_alloc(uint32_t m, uint32_t n,
+                                                     uint32_t k, float *gA,
+                                                     float *gB);
+
+float *Kuiper_KB_TransposedGEMM_matmul_f32_atbt_alloc(uint32_t m, uint32_t n,
+                                                      uint32_t k, float *gA,
+                                                      float *gB);
+
 #define Kuiper_KB_TransposedGEMM_H_DEFINED
 #endif /* Kuiper_KB_TransposedGEMM_H */

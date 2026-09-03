@@ -102,6 +102,23 @@ fn cumprod_fw_f32_impl
 }
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 let cumprod_fw_f32 = cumprod_fw_f32_impl
 #pop-options
+
+fn cumprod_alloc_f32
+  (b : szp { b <= max_blocks })
+  (d : szp { SZ.fits (SZ.v b * SZ.v d) })
+  (input : array2 f32 (l2_row_major b d) { is_global input })
+  (#sx : chest2 f32 b d)
+  preserves cpu ** on gpu_loc (input |-> sx)
+  returns output : array2 f32 (l2_row_major b d)
+  ensures
+    exists* (sy : chest2 f32 b d).
+      on gpu_loc (output |-> sy) ** pure (cumprod_post b d sx sy)
+{
+  let n : szp = b *^ d;
+  let output = alloc0 #f32 n (l2_row_major b d);
+  cumprod_fw_f32 b d input output;
+  output
+}

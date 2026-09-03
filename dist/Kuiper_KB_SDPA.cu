@@ -155,13 +155,49 @@ extern void Kuiper_KB_BatchedGEMM_batched_gemm_f32(uint32_t batch,
                                                    uint32_t cols, float *a,
                                                    float *b, float *c);
 
-void Kuiper_KB_SDPA_sdpa_f32(uint32_t bh, uint32_t s, uint32_t d, float *gQ,
-                             float *gKT, float *gV, float *gScores, float *gOut)
+__global__
+/**
+  hoisted when extracting sdpa_f32
+*/
+static void
+__hoisted_sdpa_f32_0(uint32_t s, uint32_t d, float *gQ, float *gK, uint32_t bh,
+                     float *gScores)
 {
-    float scale = rsqrtf((float) (int64_t) (uint64_t) d);
-    Kuiper_KB_BatchedGEMM_batched_gemm_f32(bh, s, d, s, gQ, gKT, gScores);
+    if (1024U * blockIdx.x + threadIdx.x < bh * s * s) {
+        uint32_t page = (1024U * blockIdx.x + threadIdx.x) % bh;
+        uint32_t rest = (1024U * blockIdx.x + threadIdx.x) / bh;
+        uint32_t trow = rest / s;
+        uint32_t tcol = rest % s;
+        uint32_t k = 0U;
+        float sum = 0.0f;
+        for (; k < d; k++) {
+            uint32_t vk = k;
+            sum += gQ[page * s * d + trow * d + vk] *
+                   gK[page * d * s + tcol * d + vk];
+        }
+        gScores[page * s * s + trow * s + tcol] = sum;
+    }
+}
+
+float *Kuiper_KB_SDPA_sdpa_f32(uint32_t b, uint32_t h, uint32_t s, uint32_t d,
+                               float *gQ, float *gK, float *gV)
+{
+    uint32_t bh = b * h;
     uint32_t bhs = bh * s;
-    smul_fw_f32(scale, bhs * s, gScores);
-    row_softmax_rm_f32(bhs, s, 1024U, gScores);
-    Kuiper_KB_BatchedGEMM_batched_gemm_f32(bh, s, s, d, gScores, gV, gOut);
+    uint32_t bhsd = bhs * d;
+    float *gScores = (float *) KPR_GPU_ALLOC(sizeof(float), bhs * s);
+    float *gOut4 = (float *) KPR_GPU_ALLOC(sizeof(float), bhsd);
+    float scale = rsqrtf((float) (int64_t) (uint64_t) d);
+    cudaStream_t s1 = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_sdpa_f32_0,
+              bh * s * s / 1024U + (uint32_t) (bh * s * s % 1024U != 0U), 1024U,
+              0U, s1, s, d, gQ, gK, bh, gScores);
+    MUST(cudaStreamSynchronize(s1));
+    MUST(cudaStreamDestroy(s1));
+    uint32_t bhs1 = bh * s;
+    smul_fw_f32(scale, bhs1 * s, gScores);
+    row_softmax_rm_f32(bhs1, s, 1024U, gScores);
+    Kuiper_KB_BatchedGEMM_batched_gemm_f32(bh, s, s, d, gScores, gV, gOut4);
+    MUST(cudaFree(gScores));
+    return gOut4;
 }

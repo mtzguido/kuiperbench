@@ -26,8 +26,6 @@ class ModelNew(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # The verified kernel implements cumsum(x, dim=1) for a 2-D
-        # float32 CUDA input.  Defer to PyTorch otherwise.
-        if self.dim == 1 and x.dim() == 2 and x.dtype == torch.float32 and x.is_cuda:
-            return kuiper_cumsum.kuiper_cumsum_dim1(x)
-        return torch.cumsum(x, dim=self.dim)
+        if self.dim != 1:
+            raise ValueError("Kuiper cumulative sum supports dim=1")
+        return kuiper_cumsum.kuiper_cumsum_dim1(x)

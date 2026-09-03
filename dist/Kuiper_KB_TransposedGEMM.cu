@@ -112,3 +112,30 @@ void Kuiper_KB_TransposedGEMM_matmul_f32_atbt(uint32_t m, uint32_t n,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_TransposedGEMM_matmul_f32_atb_alloc(uint32_t m, uint32_t n,
+                                                     uint32_t k, float *gA,
+                                                     float *gB)
+{
+    float *gC = (float *) KPR_GPU_ALLOC(sizeof(float), m * n);
+    Kuiper_KB_TransposedGEMM_matmul_f32_atb(m, n, k, gA, gB, gC);
+    return gC;
+}
+
+float *Kuiper_KB_TransposedGEMM_matmul_f32_abt_alloc(uint32_t m, uint32_t n,
+                                                     uint32_t k, float *gA,
+                                                     float *gB)
+{
+    float *gC = (float *) KPR_GPU_ALLOC(sizeof(float), m * n);
+    Kuiper_KB_TransposedGEMM_matmul_f32_abt(m, n, k, gA, gB, gC);
+    return gC;
+}
+
+float *Kuiper_KB_TransposedGEMM_matmul_f32_atbt_alloc(uint32_t m, uint32_t n,
+                                                      uint32_t k, float *gA,
+                                                      float *gB)
+{
+    float *gC = (float *) KPR_GPU_ALLOC(sizeof(float), m * n);
+    Kuiper_KB_TransposedGEMM_matmul_f32_atbt(m, n, k, gA, gB, gC);
+    return gC;
+}

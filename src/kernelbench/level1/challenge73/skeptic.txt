@@ -1,3 +1,11 @@
+CURRENT AUDIT NOTE (2026-09-03) — POSITIONAL-ABI CORRECTION
+-----------------------------------------------------------
+#73's actual PyTorch operation is groups=1 and output_padding=0.  The nominal
+`groups` positional input binds to an unused model argument and is not passed
+to `nn.ConvTranspose3d`.  The current bridge therefore makes one ordinary
+`ConvT3DGeneral` raw allocating call.  It does not use a grouped kernel or any
+host group slicing/stitching.  Contrary caveats below are superseded.
+
 skeptic.txt — KernelBench L1 #73
 ================================
 

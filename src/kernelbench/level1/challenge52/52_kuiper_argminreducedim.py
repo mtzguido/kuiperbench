@@ -23,7 +23,7 @@ _dst_cu = os.path.join(_build_dir, 'Kuiper_KB_ArgminReduceDim.cu')
 shutil.copyfile(_src_cu, _dst_cu)
 
 kuiper_argmin = load(
-    name="kuiper_argminreducedim_51",
+    name="kuiper_argminreducedim_52",
     sources=[_bridge],
     extra_include_paths=[_build_dir, _include_dir, _kbench_include_dir, _obj_dir],
     extra_cuda_cflags=['-DKUIPER_CFG_TENSORCORES=0'],
@@ -37,6 +37,6 @@ class ModelNew(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.dim == 1 and x.dim() == 3 and x.dtype == torch.float32 and x.is_cuda:
-            return kuiper_argmin.kuiper_argminreduce_dim1(x)
-        return torch.argmin(x, dim=self.dim)
+        if self.dim != 1:
+            raise ValueError("Kuiper argmin-reduction supports dim=1")
+        return kuiper_argmin.kuiper_argminreduce_dim1(x)

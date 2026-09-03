@@ -177,6 +177,54 @@ let convT3d
       convT3d_single kd kh kw sd sh sw pd ph pw dd dh dw
                      x weight bias b oc od oh ow)
 
+(* Grouped ConvTranspose3D, using PyTorch's
+   [(groups*cin_pg), cout_pg, kd, kh, kw] weight layout. *)
+let convT3d_group_input
+  (#et:Type)
+  (#b_n #groups #cin_pg #d_in #h_in #w_in : nat)
+  (x : etensor5 et b_n (groups * cin_pg) d_in h_in w_in)
+  (g : natlt groups)
+  : etensor5 et b_n cin_pg d_in h_in w_in
+  = mkT5 (fun b ic id ih iw ->
+      t5acc x b (g * cin_pg + ic) id ih iw)
+
+let convT3d_group_weight
+  (#et:Type)
+  (#groups #cin_pg #cout_pg #kd #kh #kw : nat)
+  (weight : etensor5 et (groups * cin_pg) cout_pg kd kh kw)
+  (g : natlt groups)
+  : etensor5 et cin_pg cout_pg kd kh kw
+  = mkT5 (fun ic oc kdi khi kwi ->
+      t5acc weight (g * cin_pg + ic) oc kdi khi kwi)
+
+let convT3d_group_bias
+  (#et:Type)
+  (#groups #cout_pg : nat)
+  (bias : Seq.lseq et (groups * cout_pg))
+  (g : natlt groups)
+  : GTot (Seq.lseq et cout_pg)
+  = Seq.init_ghost cout_pg (fun oc -> Seq.index bias (g * cout_pg + oc))
+
+let convT3d_grouped_single
+  (#et:Type) {| scalar et |}
+  (#b_n : nat) (groups cin_pg : pos) (#d_in #h_in #w_in : nat)
+  (cout_pg kd kh kw sd sh sw : pos)
+  (pd ph pw : nat) (dd dh dw : pos)
+  (#d_out #h_out #w_out : nat)
+  (x : etensor5 et b_n (groups * cin_pg) d_in h_in w_in)
+  (weight : etensor5 et (groups * cin_pg) cout_pg kd kh kw)
+  (bias : Seq.lseq et (groups * cout_pg))
+  (b : natlt b_n) (oc : natlt (groups * cout_pg))
+  (od : natlt d_out) (oh : natlt h_out) (ow : natlt w_out)
+  : GTot et
+  = let g : natlt groups = oc / cout_pg in
+    let oc_pg : natlt cout_pg = oc % cout_pg in
+    convT3d_single kd kh kw sd sh sw pd ph pw dd dh dw
+      (convT3d_group_input x g)
+      (convT3d_group_weight weight g)
+      (convT3d_group_bias bias g)
+      b oc_pg od oh ow
+
 val lemma_convT3d_index
   (#et:Type) {| scalar et |}
   (#b_n #cin #d_in #h_in #w_in : nat)

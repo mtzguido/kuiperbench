@@ -1,21 +1,13 @@
 module Kuiper.KB.Conv1DAlloc
 
-(* Self-allocating bridge layer for KernelBench L1 #67/#76 — Conv1D forward
-   (general).  Moves TWO pieces of arithmetic/allocation that used to live in
-   UNVERIFIED C++ inside the verification boundary:
-
-     1. [conv1d_out_dim]: the conv1d output-size division
-        [(n + 2*pad - eff_k) / stride + 1] with dilated kernel span
-        [eff_k = (k-1)*dilation + 1], a VERIFIED extractable SZ-level
-        formula.  The C bridge calls this instead of re-implementing the
-        formula.
-
-     2. [conv1d_general_alloc_f32]: a self-allocating entry point that
-        allocates the [b*cout*l_out] output buffer on the GPU via
-        [alloc0] (extracts to cudaMalloc), runs the verified
-        [Kuiper.KB.Conv1DGeneral.conv1d_general_f32], and returns the
-        freshly-allocated buffer DIRECTLY.  Its post forwards the FULL
-        functional [conv1d_out_at] spec the underlying kernel guarantees. *)
+(* Self-allocating KernelBench L1 #67/#76 Conv1D surface.
+   The ABI-facing [conv1d_raw_alloc_bias_f32] and
+   [conv1d_raw_alloc_zero_f32] entries take raw dimensions, derive the output
+   length (including dilation), create zero bias when needed, allocate the
+   output, run the verified kernel, and return the length with the owned
+   buffer.  The C++ bridge performs no convolution geometry, size validation,
+   or GPU staging; invalid raw dimensions abort at checked Pulse guards.  The
+   lower-level helpers remain internal building blocks. *)
 
 #lang-pulse
 open Kuiper
@@ -25,12 +17,30 @@ open Kuiper.Spec.Conv1D
 open Kuiper.Kernel.Conv1D.Naive
 open Kuiper.KB.Conv1DGeneral
 module SZ = Kuiper.SizeT
-(* (a) Verified, extractable conv1d output-size formula (see .fst).  Conv1d
+
+inline_for_extraction noextract
+let conv1d_out_len
+  (n : nat) (k stride dilation : pos) (pad : nat)
+  : nat
+  = let padded = n + 2 * pad in
+    let eff_k = (k - 1) * dilation + 1 in
+    if eff_k > padded then 0 else (padded - eff_k) / stride + 1
+
+inline_for_extraction noextract
+unfold
+let conv1d_raw_size_req
+  (b cin n cout : nat) (k stride : pos) (pad : nat) (dilation : pos)
+  : prop
+  = let l_out = conv1d_out_len n k stride dilation pad in
+    SZ.fits (n + 2 * pad) /\
+    (k - 1) * dilation + 1 <= n + 2 * pad /\
+    conv1d_size_req b cin n cout k stride dilation l_out
+(* (a) Verified, extractable conv1d output-size formula used by the raw entry
+   (see .fst).  Conv1d
    here supports dilation, so the dilated kernel span is
    [eff_k = (k-1)*dilation + 1] and the output dimension is
    [(n + 2*pad - eff_k) / stride + 1].  The [requires]
-   [(k-1)*dilation + 1 <= n + 2*pad] is exactly the C-side "padded input >=
-   effective kernel" check (so the size_t subtraction does not underflow). *)
+   [(k-1)*dilation + 1 <= n + 2*pad] prevents size_t subtraction underflow. *)
 val conv1d_out_dim (n k stride dilation : szp) (pad : sz)
   : Pure SZ.t
       (requires SZ.fits (SZ.v n + 2 * SZ.v pad) /\
@@ -82,3 +92,55 @@ ensures
             acc1 sy tid ==
             conv1d_out_at b cin l_in cout kk stride pad dilation
                           l_out sx sw sbias tid))
+
+(* Complete public entries.  They derive [l_out], create the zero bias when
+   needed, allocate the result, and return its verified length with the
+   buffer.  Thus callers never perform convolution geometry or GPU staging. *)
+fn conv1d_raw_alloc_bias_f32
+  (b cin l_in cout kk stride : szp) (pad : sz) (dilation : szp)
+  (gx : array1 f32 (l1_forward (b * cin * l_in)) { is_global gx })
+  (gw : array1 f32 (l1_forward (cout * cin * kk)) { is_global gw })
+  (gbias : array1 f32 (l1_forward cout) { is_global gbias })
+  (#fx #fw #fb : perm)
+  (#sx : chest1 f32 (b * cin * l_in))
+  (#sw : chest1 f32 (cout * cin * kk))
+  (#sbias : chest1 f32 cout)
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw) **
+    on gpu_loc (gbias |-> Frac fb sbias)
+  returns r :
+    (lo : szp { SZ.v lo == conv1d_out_len l_in kk stride dilation pad }
+     & array1 f32 (l1_forward (b * cout * lo)))
+  ensures
+    exists* (sy : chest1 f32 (b * cout * (dfst r))).
+      on gpu_loc ((dsnd r) |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * (dfst r)}).
+        acc1 sy tid ==
+          conv1d_out_at b cin l_in cout kk stride pad dilation (dfst r)
+            sx sw sbias tid)
+
+fn conv1d_raw_alloc_zero_f32
+  (b cin l_in cout kk stride : szp) (pad : sz) (dilation : szp)
+  (gx : array1 f32 (l1_forward (b * cin * l_in)) { is_global gx })
+  (gw : array1 f32 (l1_forward (cout * cin * kk)) { is_global gw })
+  (#fx #fw : perm)
+  (#sx : chest1 f32 (b * cin * l_in))
+  (#sw : chest1 f32 (cout * cin * kk))
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw)
+  returns r :
+    (lo : szp { SZ.v lo == conv1d_out_len l_in kk stride dilation pad }
+     & array1 f32 (l1_forward (b * cout * lo)))
+  ensures
+    exists* (sy : chest1 f32 (b * cout * (dfst r))).
+      on gpu_loc ((dsnd r) |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * (dfst r)}).
+        acc1 sy tid ==
+          conv1d_out_at b cin l_in cout kk stride pad dilation (dfst r)
+            sx sw (mk1 (fun _ -> (zero #f32))) tid)

@@ -27,12 +27,4 @@ class ModelNew(nn.Module):
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         # KernelBench reference: torch.nn.functional.cross_entropy(predictions, targets)
         # which computes mean_b ( -log_softmax(predictions[b])[targets[b]] ).
-        if (predictions.is_cuda and targets.is_cuda
-                and predictions.dtype == torch.float32
-                and predictions.dim() == 2
-                and targets.dim() == 1
-                and predictions.size(0) == targets.size(0)):
-            return kuiper_crossentropy.kuiper_crossentropy(
-                predictions.contiguous(), targets.contiguous())
-        # Fallback for shapes outside the verified path.
-        return torch.nn.functional.cross_entropy(predictions, targets)
+        return kuiper_crossentropy.kuiper_crossentropy(predictions, targets)

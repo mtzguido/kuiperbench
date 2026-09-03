@@ -3,92 +3,53 @@ SKEPTIC — KernelBench L1 #100 Hinge Loss
 
 Scope
 -----
-Kuiper.Spec.HingeLoss + Kuiper.KB.HingeLoss + bridge / Python wrapper
-under src/kernelbench/level1/challenge100/.
+Kuiper.Spec.HingeLoss, Kuiper.KB.HingeLoss, and the challenge100 loader and
+C++ bridge.
 
-Spec faithfulness
------------------
-The verified entry point [hinge_loss_fw_f32] establishes
-[hinge_post n inv_n sp st sout']: there exists a host-side scalar
-[s] approximating the real-arithmetic sum of the f32 sequence
-[lseq_map2 hinge_step sp st] (where [hinge_step p t = max(0, 1 - p*t)])
-such that [sout' @! 0 == mul s inv_n].  The bridge supplies
-[inv_n = 1.0f / (B*N)] verbatim, matching PyTorch's
-[torch.mean(...)] modulo the harness fp tolerance.
+Verified top-level contract
+---------------------------
+The public entry [hinge_loss_broadcast_f32] consumes the canonical contiguous
+GPU inputs directly:
 
-The reference computes [mean(max(0, 1 - predictions * targets))]
-where [targets] of shape (N,) broadcasts across the (B, N)
-[predictions] tensor.  The Python wrapper materialises this
-broadcast via [targets.repeat(B)] (which produces the flat layout
-[result[i*N + j] = targets[j]]) before calling the verified kernel,
-which then operates on two equal-length flat 1-D float32 tensors.
-The verified slice is the elementwise + reduce-mean pipeline; the
-broadcast itself is done by torch (out of scope).
+  predictions : (B,N), row-major
+  targets     : (N,)
 
-Pipeline (3 GPU launches inside the verified kernel):
-  1. [Map.map_gpu2] elementwise: predictions[i] := max(0, 1-p[i]*t[i])
-  2. [HRed.reduce] (id pre-map): tree-reduces predictions to host scalar [s]
-  3. [Map.map_gpu] over the length-1 output: output[0] := s * inv_n
+It preserves both inputs and returns ownership of a fresh one-element GPU
+buffer.  Its real-valued postcondition is exactly
+
+  mean_{0 <= i < B, 0 <= j < N}
+    max(0, 1 - predictions[i,j] * targets[j]).
+
+Thus the target broadcast, pointwise hinge operation, reduction, and mean are
+one verified composition.  There is no host-side [targets.repeat(B)] and no
+Python fallback.
+
+Implementation shape
+--------------------
+Kuiper allocates a private row-major (B,N) scratch buffer and copies
+[predictions] into it, so neither public input is mutated.  A verified ghost
+transpose reinterprets the same storage as column-major (N,B).  The package
+[RowBroadcast] kernel then applies each [targets[j]] to logical row j; physical
+cell (j,i) in that view is exactly row-major prediction cell (i,j).  No
+broadcast tensor is materialized.
+
+The resulting storage is viewed flat and passed to [HReduce.reduce].  Kuiper
+performs the f32 division by B*N, allocates the one-element output, and writes
+the mean to it.  The C++ bridge only checks the canonical contiguous ABI and
+verified size bounds, makes one Kuiper call, and wraps the returned pointer
+with a [cudaFree] deleter.
+
+Approximation and edge conditions
+---------------------------------
+The proof relates every f32 multiply/subtract/fmax to
+[real_hinge_step], carries that relation through the explicit broadcast and
+sum, and relates the final f32 division to [real_hinge_broadcast].  B and N are
+strictly positive.  The bridge also enforces the generated uint32 ABI,
+[B*N <= max_blocks*max_threads], and [(B*N)+max_threads] fitting uint32 as
+required by the reduction implementation.
 
 Inherited debt
 --------------
-None new.  Inherits the [magic ()] [kpre_sendable] / [kpost_sendable]
-fields of the underlying [map_gpu2] / [reduce] / [map_gpu] kernel
-descriptors — the same legacy debt every plain [kernel_desc] kernel
-in tree carries.  HingeLoss adds zero new
-[magic ()] / [admit ()] / [assume pure].
-
-Approximation choice
---------------------
-The spec uses [%~] approximation only on the floating-point
-summation step (matching Kuiper.Spec.Frobenius / SumReduceDim).
-The elementwise [hinge_step] is computed bit-exactly in f32; we
-treat the sequence [lseq_map2 hinge_step sp st] as the deterministic
-input to [rsum].  We do NOT define a real-arithmetic version of
-[hinge_step] — that would require new [%~] lemmas for [sub], [fmax]
-and the floating-typeclass instance, which the codebase does not
-yet expose.
-
-The host-side [mul s inv_n] is bit-exact (single f32 multiply); the
-spec pins that exactly via [==] rather than [%~].
-
-Edge cases
-----------
-- All-zero / all-negative input row: hinge_step returns 0 for every
-  cell with [p*t >= 1]; sum is exact (or near-exact); output is the
-  exact PyTorch value.
-- Non-finite inputs (NaN/Inf): propagate through fmax/sub/mul; the
-  spec is still satisfied because the existential is on a
-  floating-point witness (no precondition forbids NaN).
-- Empty tensor (N = 0): ruled out at the type level (szp on n).
-- Large shapes: bounded by [N <= max_blocks * max_threads = 2^31]
-  and [N + max_threads fits in u32].  Harness shape (B, N) =
-  (32768, 32768) → flat N_total = 2^30, comfortably inside.
-
-Performance
------------
-3 GPU launches.  Memory: predictions buffer is mutated in-place;
-the broadcast targets buffer (allocated by torch.repeat) is read-
-only (Frac perm); a fresh 1-cell output is allocated by torch.
-
-Follow-ups
-----------
-- The targets [.repeat(B)] in Python materialises an N_total-element
-  buffer purely to feed our flat-1D kernel.  A dedicated 2-D kernel
-  that reads [targets[j]] for each (i, j) without materialising the
-  broadcast would cut GPU memory by ~4 GB for the harness shape.
-  Out of scope here.
-- Lifting [hinge_step] to a [%~]-relation between f32 and real (so
-  the spec can be stated purely in real arithmetic) would require
-  extending Kuiper.Approximates with [%~] lemmas for [sub], [fmax],
-  and [zero/one]/[real] correspondence.  Tracked as future work.
-
-Extraction note
----------------
-Karamel's typeclass-instance projection currently fails to inline
-[zero] / [one] of the [scalar] typeclass into [F32.zero] / [F32.one]
-(the projected dictionary fields are emitted as
-[(float)(void *)0U]).  We work around this by spelling the f32
-arithmetic out directly in [hinge_step_f32] (in the .fst) and
-proving definitional equality to the polymorphic spec-level
-[hinge_step #f32].  The polymorphic spec is unchanged.
+No new [admit], [assume], or [magic] is introduced.  The implementation uses
+the existing verified Tensor allocation/copy/view APIs, RowBroadcast, HReduce,
+and Map primitives from the pinned Kuiper package and KuiperBench library.

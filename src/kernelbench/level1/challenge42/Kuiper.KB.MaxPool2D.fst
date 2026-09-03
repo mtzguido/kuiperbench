@@ -311,3 +311,39 @@ fn maxpool2d_full_alloc
 let maxpool2d_full_alloc_f32 =
   fun kh kw sh sw ph pw dh dw bc h w #sq input #fIn #sx ->
     maxpool2d_full_alloc kh kw sh sw ph pw dh dw bc h w #sq input #fIn #sx
+
+fn maxpool2d_raw_alloc_f32
+  (k s p d b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) })
+  (h w : szp)
+  (#_ : squash (SZ.fits (SZ.v (b *^ c) * SZ.v h)))
+  (input : array2 f32 (l2_row_major ((b *^ c) * h) w) { is_global input })
+  (#fIn : perm)
+  (#sx : chest2 f32 ((b *^ c) * h) w)
+  norewrite
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
+    pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
+    pure (SZ.fits (SZ.v w + 2 * SZ.v p)) **
+    pure (SZ.fits (SZ.v h + 2 * SZ.v p)) **
+    pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v w + 2 * SZ.v p) **
+    pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v h + 2 * SZ.v p) **
+    pure (SZ.fits ((SZ.v w + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
+    pure (SZ.fits ((SZ.v h + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
+    pure (SZ.fits (SZ.v (b *^ c) * (SZ.v h + 2 * SZ.v p)
+                    * (SZ.v w + 2 * SZ.v p))) **
+    pure (SZ.v (b *^ c) * (SZ.v h + 2 * SZ.v p)
+            * (SZ.v w + 2 * SZ.v p) <= max_blocks * max_threads)
+  returns r :
+    (wo : sz { SZ.v wo == pool_out_len_1d w k s p d /\ SZ.v wo > 0 }
+     & (ho : sz { SZ.v ho == pool_out_len_1d h k s p d /\ SZ.v ho > 0 }
+        & array2 f32 (l2_bcm_pages (b *^ c) wo ho)))
+  ensures
+    on gpu_loc ((dsnd (dsnd r)) |->
+      windowreduce_result reducer_fmax_f32
+        (maxpool2d_mid_view (b *^ c) h w k s p d (dfst r) sx)
+        k s p d (dfst (dsnd r)))
+{
+  maxpool2d_full_alloc_f32 k k s s p p d d (b *^ c) h w input
+}

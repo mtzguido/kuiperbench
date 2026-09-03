@@ -17,10 +17,11 @@ Approach (VERIFIED exclusive scan — no host arithmetic):
   i.e. the exclusive prefix sum, with cell 0 equal to the monoid
   identity (0.0).
 
-  The bridge (kuiper_cumsum_exclusive_bridge.cu) does ONLY the
-  dimension-contract checks (2-D, fp32, CUDA, shape in range) and
-  plumbing (contiguous + empty_like + the single kernel call).  There
-  is NO host-side subtraction or shift.  The previous `Inc - X`
+  The public Pulse entry allocates and returns the output.  The bridge
+  (kuiper_cumsum_exclusive_bridge.cu) does ONLY ABI checks (2-D, fp32,
+  CUDA, contiguous, shape in range), selects the input device, makes one
+  Kuiper call, and wraps the returned allocation.  There is NO host-side
+  copy, output allocation, subtraction, or shift.  The previous `Inc - X`
   elementwise subtraction has been removed entirely; there is zero
   data arithmetic outside the verification boundary.
 
@@ -44,7 +45,7 @@ Floating-point note:
 
 Verification hygiene:
   No assume / assume pure / magic / admit / --admit_smt_queries.
-  z3rlimit <= 100 only on the top-level coercion (60 elsewhere).
+  Every local z3rlimit is at most the repository-wide bound of 60.
   New verified modules:
     - src/lib/kernel/Kuiper.Kernel.Scan1D.RowBlockExcl.{fst,fsti}
         (exclusive row-per-block scan primitive)

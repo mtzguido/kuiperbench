@@ -13,10 +13,13 @@
 //   y[ci,k]   = (x[ci,k] - mean[ci]) / sqrt(var[ci] + eps) * γ[ci] + β[ci]
 //
 // γ and β have shape (C,); they are read with fractional permission.
-// The verified entry point [Kuiper.KB.BatchNorm.batchnorm_fw_f32]
-// orchestrates the per-channel reduction + two-stage affine in place.
+// The exported Kuiper entry derives all flattened geometry, allocates/copies
+// the result, and orchestrates the full operation under one top-level spec.
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAGuard.h>
 #include <cmath>
+#include <cuda_runtime.h>
+#include <limits>
 #include "Kuiper_KB_BatchNorm.h"
 #include "Kuiper_KB_BatchNorm.cu"
 
@@ -33,40 +36,34 @@ torch::Tensor kuiper_batchnorm_cuda(torch::Tensor X, torch::Tensor gamma,
                 gamma.scalar_type() == torch::kFloat32 &&
                 beta.scalar_type() == torch::kFloat32,
                 "kuiper_batchnorm: all tensors must be float32");
-    TORCH_CHECK(X.dim() == 4, "kuiper_batchnorm: X must be 4-D (N,C,H,W)");
-    auto Xc = X.contiguous();
-    auto Gc = gamma.contiguous();
-    auto Bc = beta.contiguous();
-    int64_t N = Xc.size(0);
-    int64_t C = Xc.size(1);
-    int64_t H = Xc.size(2);
-    int64_t W = Xc.size(3);
-    TORCH_CHECK(Gc.numel() == C && Bc.numel() == C,
+    TORCH_CHECK(X.dim() == 4 && X.is_contiguous() && gamma.is_contiguous() &&
+                    beta.is_contiguous(),
+                "kuiper_batchnorm: tensors must be contiguous");
+    int64_t N = X.size(0);
+    int64_t C = X.size(1);
+    int64_t H = X.size(2);
+    int64_t W = X.size(3);
+    TORCH_CHECK(gamma.dim() == 1 && beta.dim() == 1 &&
+                    gamma.size(0) == C && beta.size(0) == C,
                 "kuiper_batchnorm: gamma/beta numel must equal C");
     TORCH_CHECK(N > 0 && C > 0 && H > 0 && W > 0 &&
-                H <= (int64_t)UINT32_MAX / W,
-                "kuiper_batchnorm: H*W exceeds the verified uint32 ABI");
-    int64_t HW = H * W;
-    TORCH_CHECK(N <= (int64_t)UINT32_MAX / HW &&
-                C <= (int64_t)UINT32_MAX / HW,
-                "kuiper_batchnorm: channel/spatial shape exceeds the verified ABI");
-    int64_t NHW = N * HW;
-    int64_t CHW = C * HW;
-    TORCH_CHECK(N <= (int64_t)UINT32_MAX / CHW &&
-                NHW <= KUIPER_MAX_NTHR &&
-                NHW <= (int64_t)UINT32_MAX - 1024,
+                    N <= (int64_t)UINT32_MAX && C <= (int64_t)UINT32_MAX &&
+                    H <= (int64_t)UINT32_MAX && W <= (int64_t)UINT32_MAX &&
+                    X.numel() <= KUIPER_MAX_NTHR,
                 "kuiper_batchnorm: shape out of range");
-    float eps_f = (float)eps;
-    TORCH_CHECK(std::isfinite(eps) && std::isfinite(eps_f) && eps_f > 0.0f,
-                "kuiper_batchnorm: eps must be finite and positive in float32");
-    Kuiper_KB_BatchNorm_batchnorm_fw_f32(
-        (uint32_t)C, (uint32_t)HW, (uint32_t)NHW,
-        eps_f,
-        Xc.data_ptr<float>(), Gc.data_ptr<float>(), Bc.data_ptr<float>());
-    return Xc;
+    TORCH_CHECK(std::isfinite(eps) &&
+                    eps >= std::numeric_limits<float>::denorm_min() &&
+                    eps <= std::numeric_limits<float>::max(),
+                "kuiper_batchnorm: eps must fit the positive float32 range");
+    const at::cuda::CUDAGuard device_guard(X.device());
+    float *out = Kuiper_KB_BatchNorm_batchnorm2d_alloc_f32(
+        (uint32_t)N, (uint32_t)C, (uint32_t)H, (uint32_t)W, eps,
+        X.data_ptr<float>(), gamma.data_ptr<float>(), beta.data_ptr<float>());
+    return torch::from_blob(out, X.sizes(), [](void *p) { cudaFree(p); },
+                            X.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("kuiper_batchnorm", &kuiper_batchnorm_cuda,
-          "Kuiper verified BatchNorm2d: per-channel (x-μ)/σ then γ*+β");
+          "Kuiper verified out-of-place BatchNorm2d");
 }

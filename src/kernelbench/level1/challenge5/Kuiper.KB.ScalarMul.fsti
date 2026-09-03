@@ -4,6 +4,7 @@ module Kuiper.KB.ScalarMul
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Seq.Common
+open Kuiper.Float.Casts
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 inline_for_extraction noextract
 type smul_fw_ty (t:Type0) {| scalar t |} =
@@ -40,3 +41,27 @@ val smul_out_f32 : smul_out_ty f32
 val smul_out_f64 : smul_out_ty f64
 val smul_out_u32 : smul_out_ty u32
 val smul_out_u64 : smul_out_ty u64
+
+fn smul_alloc_f32
+  (cst : f32)
+  (lena : szp { lena <= max_blocks * max_threads })
+  (a : array1 f32 (l1_forward lena) { is_global a })
+  (#sa : chest1 f32 lena)
+  (#fa : perm)
+  norewrite
+  preserves cpu ** on gpu_loc (a |-> Frac fa sa)
+  returns c : array1 f32 (l1_forward lena)
+  ensures on gpu_loc (c |-> chest_map (mul cst) sa)
+
+(* PyBind exposes Python scalars as C [double].  Keep the narrowing inside the
+   verified entry rather than making it unverified bridge semantics. *)
+fn smul_alloc_f64_f32
+  (cst : f64)
+  (lena : szp { lena <= max_blocks * max_threads })
+  (a : array1 f32 (l1_forward lena) { is_global a })
+  (#sa : chest1 f32 lena)
+  (#fa : perm)
+  norewrite
+  preserves cpu ** on gpu_loc (a |-> Frac fa sa)
+  returns c : array1 f32 (l1_forward lena)
+  ensures on gpu_loc (c |-> chest_map (mul (fcast cst)) sa)

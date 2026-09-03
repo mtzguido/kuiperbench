@@ -16,6 +16,8 @@ module SZ = Kuiper.SizeT
 module ML = FStar.Math.Lemmas
 module DW = Kuiper.KB.DepthwiseConv2D
 module CG = Kuiper.KB.Conv2DGeneral
+module Map = Kuiper.Kernel.Map
+module Chest = Kuiper.Chest
 
 let separable_out_dim (n k stride : szp) (pad : sz)
   : Pure SZ.t
@@ -315,5 +317,53 @@ let separable_alloc_f32 =
                     gx gw_dw gbias_dw gw_pw gbias_pw
                     #fx #fwd #fbd #fwp #fbp
                     #sx #sw_dw #sbias_dw #sw_pw #sbias_pw
+
+inline_for_extraction noextract
+let const_zero_f32 (_ : f32) : f32 = zero
+
+let map_const_zero (#n : nat) (s : chest1 f32 n)
+  : Lemma (chest_map const_zero_f32 s == mk1 (fun _ -> zero))
+  = Chest.lemma_equal_intro
+      (chest_map const_zero_f32 s) (mk1 (fun _ -> zero));
+    Chest.ext (chest_map const_zero_f32 s) (mk1 (fun _ -> zero))
+
+fn separable86_alloc_f32
+  (gx : array1 f32 (l1_forward (16 * 64 * 512 * 512)) { is_global gx })
+  (gw_dw : array1 f32 (l1_forward (64 * 1 * 3 * 3)) { is_global gw_dw })
+  (gw_pw : array1 f32 (l1_forward (128 * 64 * 1 * 1)) { is_global gw_pw })
+  (#fx #fwd #fwp : perm)
+  (#sx : chest1 f32 (16 * 64 * 512 * 512))
+  (#sw_dw : chest1 f32 (64 * 1 * 3 * 3))
+  (#sw_pw : chest1 f32 (128 * 64 * 1 * 1))
+  preserves cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
+    on gpu_loc (gw_pw |-> Frac fwp sw_pw)
+  returns gy : array1 f32 (l1_forward (16 * 128 * 512 * 512))
+  ensures exists* (sy : chest1 f32 (16 * 128 * 512 * 512)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < 16 * 128 * 512 * 512}).
+      acc1 sy tid == separable_out_at 16 64 512 512 3 3 1 1
+        128 512 512 sx sw_dw (mk1 (fun _ -> (zero #f32)))
+        sw_pw (mk1 (fun _ -> (zero #f32))) tid)
+{
+  let bias_dw = alloc0 #f32 64sz (l1_forward 64);
+  with edw. assert on gpu_loc (bias_dw |-> edw);
+  Map.map_gpu const_zero_f32 64sz bias_dw;
+  map_const_zero edw;
+  rewrite (on gpu_loc (bias_dw |-> chest_map const_zero_f32 edw))
+       as (on gpu_loc (bias_dw |-> mk1 (fun _ -> (zero #f32))));
+  let bias_pw = alloc0 #f32 128sz (l1_forward 128);
+  with epw. assert on gpu_loc (bias_pw |-> epw);
+  Map.map_gpu const_zero_f32 128sz bias_pw;
+  map_const_zero epw;
+  rewrite (on gpu_loc (bias_pw |-> chest_map const_zero_f32 epw))
+       as (on gpu_loc (bias_pw |-> mk1 (fun _ -> (zero #f32))));
+  let gy = separable_alloc_f32 16sz 64sz 512sz 512sz 3sz 3sz 1sz 1sz
+    128sz 512sz 512sz gx gw_dw bias_dw gw_pw bias_pw;
+  free bias_dw;
+  free bias_pw;
+  gy
+}
 
 inline_for_extraction let () = ()

@@ -21,5 +21,10 @@ Kuiper_KB_AvgPool1D_avgpool1d_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                         uint32_t d, uint32_t bc, uint32_t l,
                                         float *input);
 
+Prims_dtuple2__uint32_t__float_
+Kuiper_KB_AvgPool1D_avgpool1d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
+                                            uint32_t b, uint32_t c, uint32_t l,
+                                            float *input);
+
 #define Kuiper_KB_AvgPool1D_H_DEFINED
 #endif /* Kuiper_KB_AvgPool1D_H */

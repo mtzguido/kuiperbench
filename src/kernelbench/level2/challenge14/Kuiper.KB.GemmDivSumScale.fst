@@ -45,7 +45,7 @@ let final_row_aux
     assert (acc1 (chest_map (mul k) sout) r == mul k (acc1 sout r));
     assert (k %~ to_real k)
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn gemm_div_sum_scale_f32_impl
   (batch : szp)

@@ -5,8 +5,10 @@
 #include <kuiper.h>
 #include <kbench.h>
 
-float Kuiper_KB_MSELoss_mse_loss_fw_f32(uint32_t n, float *predictions,
-                                        float *targets);
+float *Kuiper_KB_MSELoss_mse_scalar_out_f32(float x);
+
+float *Kuiper_KB_MSELoss_mse_loss_fw_f32(uint32_t n, float *predictions,
+                                         float *targets);
 
 #define Kuiper_KB_MSELoss_H_DEFINED
 #endif /* Kuiper_KB_MSELoss_H */

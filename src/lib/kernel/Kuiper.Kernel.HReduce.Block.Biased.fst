@@ -99,7 +99,7 @@ private let stride_length_exact (k n stride off : nat)
 (* Per-thread biased strided sum: identical to [sum_stride_map_2d] from
    [Kuiper.Kernel.HReduce.Block], but takes a bias element that is
    pre-applied to [pre_map] at each step. *)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 200"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 inline_for_extraction noextract
 fn sum_stride_map_2d_biased
   (#et:Type0) {| scalar et, real_like et |}
@@ -651,7 +651,7 @@ fn setup_block_outer
   ()
 }
 
-#push-options "--z3rlimit 100 --fuel 4 --ifuel 4"
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 4"
 ghost
 fn teardown_block_outer
   (#et:Type0) {| scalar et, real_like et |}

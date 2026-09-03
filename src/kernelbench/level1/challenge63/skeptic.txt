@@ -1,3 +1,13 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The fixed challenge-shaped entry `conv2d_square63_alloc_f32` now constructs
+zero bias, allocates the final output, and runs the fully proved kernel under
+one clean postcondition over the original input and weight.  The bridge checks
+the fixed #63 contract, calls that entry once, and wraps its pointer.  It does
+not call cudaMalloc/cudaMemset or supply output storage.  Claims below about an
+`assume pure`, `magic`, admitted views, or bridge-created bias are historical
+and superseded.
+
 Skeptic review — KernelBench L1 #63 (Kuiper.KB.Conv2DSquare)
 ============================================================
 

@@ -65,3 +65,28 @@ void Kuiper_KB_Conv2DSquare_conv2d_square_f32(uint32_t b, uint32_t cin,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+__global__
+/**
+  hoisted when extracting conv2d_square63_alloc_f32
+*/
+static void
+__hoisted_conv2d_square63_alloc_f32_0(float *gbias)
+{
+    if (1024U * blockIdx.x + threadIdx.x < 128U)
+        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+}
+
+float *Kuiper_KB_Conv2DSquare_conv2d_square63_alloc_f32(float *gx, float *gw)
+{
+    float *gbias = (float *) KPR_GPU_ALLOC(sizeof(float), 128U);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_conv2d_square63_alloc_f32_0, 1U, 1024U, 0U, s, gbias);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    float *gy = (float *) KPR_GPU_ALLOC(sizeof(float), 2139103232U);
+    Kuiper_KB_Conv2DSquare_conv2d_square_f32(16U, 16U, 1024U, 128U, 3U, 1022U,
+                                             gx, gw, gbias, gy);
+    MUST(cudaFree(gbias));
+    return gy;
+}

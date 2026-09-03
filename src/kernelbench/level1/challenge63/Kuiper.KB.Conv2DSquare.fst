@@ -7,6 +7,17 @@ open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.Conv2D
 open Kuiper.Kernel.Conv2D.Naive
 module SZ = Kuiper.SizeT
+module Map = Kuiper.Kernel.Map
+module Chest = Kuiper.Chest
+
+inline_for_extraction noextract
+let const_zero_f32 (_ : f32) : f32 = zero
+
+let map_const_zero (#n : nat) (s : chest1 f32 n)
+  : Lemma (chest_map const_zero_f32 s == mk1 (fun _ -> zero))
+  = Chest.lemma_equal_intro
+      (chest_map const_zero_f32 s) (mk1 (fun _ -> zero));
+    Chest.ext (chest_map const_zero_f32 s) (mk1 (fun _ -> zero))
 
 (* Verified, extractable valid-conv output dimension: out = in - k + 1. *)
 let conv2d_square_out_sz
@@ -55,5 +66,37 @@ fn conv2d_square_impl
 }
 
 let conv2d_square_f32 = conv2d_square_impl #f32
+
+fn conv2d_square63_alloc_f32
+  (gx : array1 f32 (l1_forward (16 * 16 * 1024 * 1024)) { is_global gx })
+  (gw : array1 f32 (l1_forward (128 * 16 * 3 * 3)) { is_global gw })
+  (#fx #fw : perm)
+  (#sx : chest1 f32 (16 * 16 * 1024 * 1024))
+  (#sw : chest1 f32 (128 * 16 * 3 * 3))
+  norewrite
+  preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw)
+  returns gy : array1 f32 (l1_forward (16 * 128 * 1022 * 1022))
+  ensures exists* (sy : chest1 f32 (16 * 128 * 1022 * 1022)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < 16 * 128 * 1022 * 1022}).
+      acc1 sy tid == conv2d_out_at 16 16 1024 1024 128 3 3 1 0
+        1022 1022 sx sw (mk1 (fun _ -> (zero #f32))) tid)
+{
+  let gbias = alloc0 #f32 128sz (l1_forward 128sz);
+  with ebias. assert (on gpu_loc (gbias |-> ebias));
+  Map.map_gpu const_zero_f32 128sz gbias;
+  map_const_zero ebias;
+  rewrite (on gpu_loc (gbias |-> chest_map const_zero_f32 ebias))
+       as (on gpu_loc (gbias |-> mk1 (fun _ -> (zero #f32))));
+
+  let gy = alloc0 #f32 (16sz *^ 128sz *^ 1022sz *^ 1022sz)
+    (l1_forward (16sz *^ 128sz *^ 1022sz *^ 1022sz));
+  with ey. assert (on gpu_loc (gy |-> ey));
+  conv2d_square_f32 16sz 16sz 1024sz 128sz 3sz 1022sz
+    gx gw gbias gy;
+  free gbias;
+  gy
+}
 
 inline_for_extraction let () = ()

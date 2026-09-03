@@ -125,3 +125,69 @@ fn spec_atbt
 let matmul_f32_atb = spec_atb f32
 let matmul_f32_abt = spec_abt f32
 let matmul_f32_atbt = spec_atbt f32
+
+fn matmul_f32_atb_alloc
+  (m n k : szp { K.size_req m n k })
+  (gA : tensor f32 (l2_row_major k m) { is_global gA })
+  (gB : tensor f32 (l2_row_major k n) { is_global gB })
+  (rA : chest2 real k m)
+  (rB : chest2 real k n)
+  (#eA : chest2 f32 k m)
+  (#eB : chest2 f32 k n)
+  norewrite
+  preserves cpu ** on gpu_loc (gA |-> eA ** gB |-> eB)
+  requires pure (eA %~ rA /\ eB %~ rB)
+  returns gC : tensor f32 (l2_row_major m n)
+  ensures
+    exists* (eC : chest2 f32 m n).
+      on gpu_loc (gC |-> eC) **
+      pure (eC %~ MS.matmul (mtranspose rA) rB)
+{
+  let gC = alloc0 #f32 (m *^ n) (l2_row_major m n);
+  matmul_f32_atb m n k gA gB gC rA rB;
+  gC
+}
+
+fn matmul_f32_abt_alloc
+  (m n k : szp { K.size_req m n k })
+  (gA : tensor f32 (l2_row_major m k) { is_global gA })
+  (gB : tensor f32 (l2_row_major n k) { is_global gB })
+  (rA : chest2 real m k)
+  (rB : chest2 real n k)
+  (#eA : chest2 f32 m k)
+  (#eB : chest2 f32 n k)
+  norewrite
+  preserves cpu ** on gpu_loc (gA |-> eA ** gB |-> eB)
+  requires pure (eA %~ rA /\ eB %~ rB)
+  returns gC : tensor f32 (l2_row_major m n)
+  ensures
+    exists* (eC : chest2 f32 m n).
+      on gpu_loc (gC |-> eC) **
+      pure (eC %~ MS.matmul rA (mtranspose rB))
+{
+  let gC = alloc0 #f32 (m *^ n) (l2_row_major m n);
+  matmul_f32_abt m n k gA gB gC rA rB;
+  gC
+}
+
+fn matmul_f32_atbt_alloc
+  (m n k : szp { K.size_req m n k })
+  (gA : tensor f32 (l2_row_major k m) { is_global gA })
+  (gB : tensor f32 (l2_row_major n k) { is_global gB })
+  (rA : chest2 real k m)
+  (rB : chest2 real n k)
+  (#eA : chest2 f32 k m)
+  (#eB : chest2 f32 n k)
+  norewrite
+  preserves cpu ** on gpu_loc (gA |-> eA ** gB |-> eB)
+  requires pure (eA %~ rA /\ eB %~ rB)
+  returns gC : tensor f32 (l2_row_major m n)
+  ensures
+    exists* (eC : chest2 f32 m n).
+      on gpu_loc (gC |-> eC) **
+      pure (eC %~ MS.matmul (mtranspose rA) (mtranspose rB))
+{
+  let gC = alloc0 #f32 (m *^ n) (l2_row_major m n);
+  matmul_f32_atbt m n k gA gB gC rA rB;
+  gC
+}

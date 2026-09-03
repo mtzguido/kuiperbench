@@ -1,18 +1,19 @@
 L1 #93 masked_cumsum — Skeptic review
 =====================================
 
-PyTorch semantics: `torch.cumsum(x * mask, dim=1)`.
+PyTorch semantics: `torch.cumsum(x * mask, dim=1)` for a bool mask.
 
-Approach: compute `x_masked = x * mask.float()` with a PyTorch
-elementwise op, then feed the result into the verified Kuiper
-cumsum kernel.
+`Kuiper.KB.MaskedCumSum.masked_cumsum_fw_f32` verifies the complete
+operation. It allocates an f32 GPU scratch tensor, uses the verified map
+kernel to gate each input with the corresponding bool-storage byte, runs the
+verified row-block scan over the gated rows, and frees the scratch. Its direct
+postcondition states that output `(r,i)` approximates the real prefix sum of
+`if mask[r,j] != 0 then to_real(input[r,j]) else 0`.
 
-The "core compute" — the prefix sum — is entirely the verified Kuiper
-kernel.  The masking step is a pure pointwise gate (no reductions,
-no race-prone arithmetic).  This is structurally the same as #91 / #92
-patterns: PyTorch handles the trivial map, Kuiper handles the scan.
-
-No new Kuiper modules / no new admits / no new lemmas.
-
-Bridge correctness: validates that mask shape matches X, that X is
-2-D fp32 CUDA, and that B ≤ 2^21.
+There are no new admits, assumptions, or magic. The Python wrapper has no
+fallback. The entry point allocates and returns its owned GPU result. The
+bridge enforces same-device contiguous CUDA f32 and `torch.bool` inputs, treats
+the mask's one-byte storage as the verified u8 ABI, checks scan/map bounds,
+selects the input device, makes one extracted call, and wraps the pointer with
+a `cudaFree` deleter. It performs no copy, output allocation, mask conversion,
+multiplication, selection, or scan itself.

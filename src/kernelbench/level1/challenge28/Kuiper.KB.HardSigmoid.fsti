@@ -26,3 +26,17 @@ type hsig_fw_ty (t:Type0) {| floating t |} =
 
 val hsig_fw_f32 : hsig_fw_ty f32
 val hsig_fw_f64 : hsig_fw_ty f64
+
+inline_for_extraction noextract
+type hsig_alloc_ty (t:Type0) {| floating t |} =
+  fn (lena : szp { lena <= max_blocks * max_threads })
+     (input : array1 t (l1_forward lena) { is_global input })
+     (#s : chest1 t lena)
+     (#f : perm)
+     norewrite
+     preserves cpu ** on gpu_loc (input |-> Frac f s)
+     returns output : array1 t (l1_forward lena)
+     ensures on gpu_loc (output |-> mk1 (fun i -> hsig_step (acc1 s i)))
+
+val hsig_alloc_f32 : hsig_alloc_ty f32
+val hsig_alloc_f64 : hsig_alloc_ty f64

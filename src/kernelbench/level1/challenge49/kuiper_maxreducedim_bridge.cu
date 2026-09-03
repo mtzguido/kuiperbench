@@ -8,27 +8,13 @@
 // whose imap (r, ci) -> (r/M)*D*M + ci*M + r%M  matches the physical
 // row-major (B, D, M) layout.  Row r = b*M + j carries the length-D
 // slice x[b,:,j].  One launch of [reduce_batched_max_f32] produces
-// y[b*M+j] = max_k x[b,k,j] (bit-exact, since IEEE-754 fmax is
-// associative+commutative on the modeled carrier).
+// y[b*M+j] is the exact deterministic fmax reduction specified by Kuiper;
+// the proof does not assume blanket fmax algebraic laws over NaNs.
 #include <torch/extension.h>
-#include <cmath>
+#include <ATen/cuda/CUDAGuard.h>
+#include <cuda_runtime.h>
 #include "Kuiper_KB_MaxReduceDim.h"
-
-// Rename the [neg_inf] axiom from Kuiper.Math.Fmax to a name we can
-// safely supply.  The Python wrapper has stripped the corresponding
-// host [extern float ...] declaration from the .cu, so the only
-// remaining declaration of [Kuiper_Math_Fmax_neg_inf] is the kernel
-// body's read, which we redirect via the preprocessor to a
-// __device__ float that we define here.
-//
-// IEEE-754 [-INFINITY] is the unique f32 value satisfying
-// [is_neutral_for neg_inf fmaxf] required by Kuiper.Math.Fmax.
-#define Kuiper_Math_Fmax_neg_inf _kuiper_neg_inf_dev
-__device__ float _kuiper_neg_inf_dev = -INFINITY;
-
 #include "Kuiper_KB_MaxReduceDim.cu"
-
-#undef Kuiper_Math_Fmax_neg_inf
 
 // max_blocks * max_threads from Kuiper.Base = 2^21 * 1024 = 2^31
 static constexpr int64_t KUIPER_MAX_BLOCKS  = (int64_t)2097152;
@@ -37,23 +23,30 @@ static constexpr int64_t KUIPER_MAX_THREADS = (int64_t)1024;
 torch::Tensor kuiper_maxreduce_dim1_cuda(torch::Tensor X) {
     TORCH_CHECK(X.is_cuda() && X.scalar_type() == torch::kFloat32 && X.dim() == 3,
                 "kuiper_maxreduce_dim1: expected 3-D float32 CUDA tensor");
-    auto Xc = X.contiguous();
-    int64_t B = Xc.size(0), D = Xc.size(1), M = Xc.size(2);
+    TORCH_CHECK(X.is_contiguous(),
+                "kuiper_maxreduce_dim1: input must be contiguous");
+    int64_t B = X.size(0), D = X.size(1), M = X.size(2);
+    const __int128 BM = (__int128)B * (__int128)M;
+    const __int128 MD = (__int128)M * (__int128)D;
+    const __int128 BMD = BM * (__int128)D;
+    const __int128 D_with_threads =
+        (__int128)D + (__int128)KUIPER_MAX_THREADS;
     TORCH_CHECK(B > 0 && D > 0 && M > 0
                 && B <= (int64_t)UINT32_MAX
                 && D <= (int64_t)UINT32_MAX
                 && M <= (int64_t)UINT32_MAX
-                && B * M <= (int64_t)UINT32_MAX
-                && M * D <= (int64_t)UINT32_MAX
-                && B * M * D <= (int64_t)UINT32_MAX
-                && B * M <= KUIPER_MAX_BLOCKS
-                && D + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX,
+                && BM <= (__int128)UINT32_MAX
+                && MD <= (__int128)UINT32_MAX
+                && BMD <= (__int128)UINT32_MAX
+                && BM <= (__int128)KUIPER_MAX_BLOCKS
+                && D_with_threads <= (__int128)UINT32_MAX,
                 "kuiper_maxreduce_dim1: shape out of range");
-    auto Y = torch::empty({B, M}, Xc.options());
-    Kuiper_KB_MaxReduceDim_maxreduce_dim_fw_f32(
+    const at::cuda::CUDAGuard device_guard(X.device());
+    float *out = Kuiper_KB_MaxReduceDim_maxreduce_dim_alloc_f32(
         (uint32_t)B, (uint32_t)M, (uint32_t)D,
-        Xc.data_ptr<float>(), Y.data_ptr<float>());
-    return Y;
+        X.data_ptr<float>());
+    return torch::from_blob(out, {B, M},
+                            [](void *p) { cudaFree(p); }, X.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

@@ -1,6 +1,29 @@
 
 #include "Kuiper_KB_TripletMarginLoss.h"
 
+float Kuiper_KB_TripletMarginLoss_triplet_default_eps_f32 = 0.000001;
+
+__global__
+/**
+  hoisted when extracting triplet_scalar_out_f32
+*/
+static void
+__hoisted_triplet_scalar_out_f32_0(float x, float *out)
+{
+    if (1024U * blockIdx.x + threadIdx.x < 1U)
+        out[1024U * blockIdx.x + threadIdx.x] = x;
+}
+
+float *Kuiper_KB_TripletMarginLoss_triplet_scalar_out_f32(float x)
+{
+    float *out = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_triplet_scalar_out_f32_0, 1U, 1024U, 0U, s, x, out);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    return out;
+}
+
 __global__
 /**
   hoisted when extracting triplet_fw_f32
@@ -112,11 +135,13 @@ __hoisted_triplet_fw_f32_4(uint32_t b, float *t_dev, float *out)
         *out = *sa1;
 }
 
-float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
-                                                 float margin, float eps,
-                                                 float *anchor, float *positive,
-                                                 float *negative)
+float *Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
+                                                  double margin64,
+                                                  float *anchor,
+                                                  float *positive,
+                                                  float *negative)
 {
+    float margin = (float) margin64;
     float inv_b = 1.0f / (float) (int64_t) (uint64_t) b;
     float *scratch_a = (float *) KPR_GPU_ALLOC(sizeof(float), d);
     float *scratch_b = (float *) KPR_GPU_ALLOC(sizeof(float), d);
@@ -138,7 +163,7 @@ float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
         cudaStream_t s0 = KPR_FRESH_STREAM();
         KPR_KCALL(__hoisted_triplet_fw_f32_0,
                   d / 1024U + (uint32_t) (d % 1024U != 0U), 1024U, 0U, s0, d,
-                  eps, scratch_a, scratch_b);
+                  0.000001, scratch_a, scratch_b);
         MUST(cudaStreamSynchronize(s0));
         MUST(cudaStreamDestroy(s0));
         float *out = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
@@ -161,7 +186,7 @@ float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
         cudaStream_t s2 = KPR_FRESH_STREAM();
         KPR_KCALL(__hoisted_triplet_fw_f32_2,
                   d / 1024U + (uint32_t) (d % 1024U != 0U), 1024U, 0U, s2, d,
-                  eps, scratch_a, scratch_b);
+                  0.000001, scratch_a, scratch_b);
         MUST(cudaStreamSynchronize(s2));
         MUST(cudaStreamDestroy(s2));
         float *out0 = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
@@ -192,5 +217,5 @@ float Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
     MUST(cudaFree(scratch_a));
     MUST(cudaFree(scratch_b));
     MUST(cudaFree(t_dev));
-    return m;
+    return Kuiper_KB_TripletMarginLoss_triplet_scalar_out_f32(m);
 }

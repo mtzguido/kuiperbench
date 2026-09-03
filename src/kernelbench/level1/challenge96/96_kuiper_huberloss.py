@@ -25,12 +25,4 @@ class ModelNew(nn.Module):
         super().__init__()
 
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        if (predictions.is_cuda and targets.is_cuda
-                and predictions.dtype == torch.float32
-                and targets.dtype == torch.float32
-                and predictions.shape == targets.shape):
-            p_flat = predictions.contiguous().view(-1)
-            t_flat = targets.contiguous().view(-1)
-            n = p_flat.numel()
-            return kuiper_huberloss.kuiper_huberloss(p_flat, t_flat)
-        return torch.nn.functional.smooth_l1_loss(predictions, targets)
+        return kuiper_huberloss.kuiper_huberloss(predictions, targets)

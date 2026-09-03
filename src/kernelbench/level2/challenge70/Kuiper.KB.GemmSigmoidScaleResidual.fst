@@ -36,7 +36,7 @@ let gssr_row_aux
     assert (acc1 (chest_map (sig_scale_res sf) sy_b) tid == sig_scale_res sf (acc1 sy_b tid))
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn gemm_sigmoid_scale_residual_f32_impl
   (batch : szp)

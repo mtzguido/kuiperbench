@@ -39,3 +39,12 @@ void Kuiper_KB_MatmulND_matmul_nd_f32(uint32_t n, uint32_t m, uint32_t k,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_MatmulND_matmul_nd_alloc_f32(uint32_t n, uint32_t m,
+                                              uint32_t k, uint32_t l, float *gA,
+                                              float *gB)
+{
+    float *gC = (float *) KPR_GPU_ALLOC(sizeof(float), n * m * l);
+    Kuiper_KB_MatmulND_matmul_nd_f32(n, m, k, l, gA, gB, gC);
+    return gC;
+}

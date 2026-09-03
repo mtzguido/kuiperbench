@@ -17,7 +17,7 @@ module Kuiper.Spec.LayerNorm
    floating intermediates used by the implementation are not exposed as
    existential witnesses.  Its explicit domain requires each real
    [variance + eps] to be positive, exactly the premise needed by the
-   temporary [Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] law proposed
+   temporary [Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] law proposed
    for upstream Kuiper.
 *)
 

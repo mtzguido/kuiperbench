@@ -50,3 +50,17 @@ type frobenius_fw_ty (t:Type0) {| floating t, real_like t |} =
           pure (frobenius_post (chest1_to_seq s) (chest1_to_seq s')))
 
 val frobenius_fw_f32 : frobenius_fw_ty f32
+
+fn frobenius_alloc_f32
+  (lena : szp { lena <= max_blocks * max_threads })
+  (a : array1 f32 (l1_forward lena) { is_global a })
+  (#f : perm)
+  (#s : chest1 f32 lena)
+  preserves cpu ** on gpu_loc (a |-> Frac f s)
+  requires
+    pure (frobenius_sumsq_r (to_real_seq (chest1_to_seq s)) >. 0.0R)
+  returns out : array1 f32 (l1_forward lena)
+  ensures
+    exists* (s' : chest1 f32 lena).
+      on gpu_loc (out |-> s') **
+      pure (frobenius_post (chest1_to_seq s) (chest1_to_seq s'))

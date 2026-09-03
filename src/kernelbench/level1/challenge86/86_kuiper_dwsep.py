@@ -56,12 +56,9 @@ class ModelNew(nn.Module):
         self._dilation = dilation
 
     def forward(self, x):
-        wdw = self.depthwise.weight.contiguous().to(x.device).to(torch.float32)
-        wpw = self.pointwise.weight.contiguous().to(x.device).to(torch.float32)
-        bdw = None if self.depthwise.bias is None else \
-              self.depthwise.bias.contiguous().to(x.device).to(torch.float32)
-        bpw = None if self.pointwise.bias is None else \
-              self.pointwise.bias.contiguous().to(x.device).to(torch.float32)
-        return _module.kuiper_dwsep(x, wdw, wpw, bdw, bpw,
+        return _module.kuiper_dwsep(
+                                    x, self.depthwise.weight,
+                                    self.pointwise.weight,
+                                    self.depthwise.bias, self.pointwise.bias,
                                     int(self._stride), int(self._padding),
                                     int(self._dilation))

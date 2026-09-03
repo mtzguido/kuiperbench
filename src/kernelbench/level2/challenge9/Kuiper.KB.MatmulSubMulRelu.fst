@@ -42,7 +42,7 @@ let msmr_row_aux
     assert (acc1 (chest_map (smr sub_v mul_v) sy_b) tid == smr sub_v mul_v (acc1 sy_b tid))
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn matmul_sub_mul_relu_f32_impl
   (batch : szp)

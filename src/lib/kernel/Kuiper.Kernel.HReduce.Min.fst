@@ -132,7 +132,7 @@ let kpost_batched_min
 
 (* ── Per-thread kernel function ────────────────────────────────────────── *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 inline_for_extraction noextract
 fn kf_batched_min
   (rows : szp)

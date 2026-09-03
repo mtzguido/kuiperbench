@@ -2,6 +2,12 @@ module Kuiper.KB.SeparableConv2D
 
 (* KernelBench L1 #86 — depthwise-separable 2D convolution forward.
 
+   The ABI-facing [separable86_alloc_f32] entry accepts the original input
+   and two weights, derives the extent, creates both zero biases, allocates
+   the intermediate and final outputs, runs both verified kernels, frees the
+   intermediate, and returns the final owned buffer.  The C++ bridge performs
+   only fixed-configuration checks and this one Kuiper call.
+
    This is the COMPOSED entry point that ties the two-call chain
    [pointwise(depthwise(x))] to the *whole* separable-conv functional
    spec [Kuiper.Spec.SeparableConv2D.separable_conv2d], rather than
@@ -139,6 +145,26 @@ ensures
             separable_out_at b c h_in w_in kh kw stride pad
                              cout h_out w_out
                              sx sw_dw sbias_dw sw_pw sbias_pw tid))
+
+fn separable86_alloc_f32
+  (gx : array1 f32 (l1_forward (16 * 64 * 512 * 512)) { is_global gx })
+  (gw_dw : array1 f32 (l1_forward (64 * 1 * 3 * 3)) { is_global gw_dw })
+  (gw_pw : array1 f32 (l1_forward (128 * 64 * 1 * 1)) { is_global gw_pw })
+  (#fx #fwd #fwp : perm)
+  (#sx : chest1 f32 (16 * 64 * 512 * 512))
+  (#sw_dw : chest1 f32 (64 * 1 * 3 * 3))
+  (#sw_pw : chest1 f32 (128 * 64 * 1 * 1))
+  preserves cpu **
+    on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw_dw |-> Frac fwd sw_dw) **
+    on gpu_loc (gw_pw |-> Frac fwp sw_pw)
+  returns gy : array1 f32 (l1_forward (16 * 128 * 512 * 512))
+  ensures exists* (sy : chest1 f32 (16 * 128 * 512 * 512)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < 16 * 128 * 512 * 512}).
+      acc1 sy tid == separable_out_at 16 64 512 512 3 3 1 1
+        128 512 512 sx sw_dw (mk1 (fun _ -> (zero #f32)))
+        sw_pw (mk1 (fun _ -> (zero #f32))) tid)
 
 
 inline_for_extraction let () = ()

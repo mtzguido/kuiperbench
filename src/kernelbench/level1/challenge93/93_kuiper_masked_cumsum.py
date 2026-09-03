@@ -26,7 +26,6 @@ class ModelNew(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        if (self.dim == 1 and x.dim() == 2 and x.dtype == torch.float32
-                and x.is_cuda and mask.is_cuda):
-            return kuiper_ext.kuiper_masked_cumsum_dim1(x, mask)
-        return torch.cumsum(x * mask, dim=self.dim)
+        if self.dim != 1:
+            raise ValueError("Kuiper masked cumsum supports dim=1")
+        return kuiper_ext.kuiper_masked_cumsum_dim1(x, mask)

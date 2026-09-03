@@ -28,5 +28,11 @@ Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32(uint32_t kh, uint32_t kw,
                                              uint32_t bc, uint32_t h,
                                              uint32_t w, float *input);
 
+Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_MaxPool2D_maxpool2d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
+                                            uint32_t d, uint32_t b, uint32_t c,
+                                            uint32_t h, uint32_t w,
+                                            float *input);
+
 #define Kuiper_KB_MaxPool2D_H_DEFINED
 #endif /* Kuiper_KB_MaxPool2D_H */

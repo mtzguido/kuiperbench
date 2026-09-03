@@ -24,6 +24,7 @@ module Kuiper.KB.LayerNorm
 
 #lang-pulse
 open Kuiper
+open Kuiper.Float.Casts
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.LayerNorm
@@ -62,3 +63,34 @@ fn layernorm_fw_f32
        pure (layernorm_post b n eps
                (chest1_to_seq sg) (chest1_to_seq sb)
                (chest1_to_seq sx) (chest1_to_seq sx')))
+
+(* KernelBench-shaped out-of-place entry.  The normalized C*H*W extent and
+   pybind f64-to-f32 epsilon conversion are performed inside Kuiper rather
+   than by the bridge. *)
+fn layernorm4d_alloc_f32
+  (b c h w : szp)
+  (eps : f64)
+  (x : array1 f32 (l1_forward (b * (c * (h * w)))) { is_global x })
+  (gamma : array1 f32 (l1_forward (c * (h * w))) { is_global gamma })
+  (beta : array1 f32 (l1_forward (c * (h * w))) { is_global beta })
+  (#fx #fg #fb : perm)
+  (#sx : chest1 f32 (b * (c * (h * w))))
+  (#sg #sb : chest1 f32 (c * (h * w)))
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx) **
+    on gpu_loc (gamma |-> Frac fg sg) **
+    on gpu_loc (beta |-> Frac fb sb)
+  requires
+    pure (SZ.fits (h * w) /\ SZ.fits (c * (h * w)) /\
+          c * (h * w) <= max_blocks * max_threads /\
+          SZ.fits (b * (c * (h * w))) /\
+          b * (c * (h * w)) <= max_blocks * max_threads /\
+          layernorm_domain b (c * (h * w)) (fcast #f64 #f32 eps)
+            (chest1_to_seq sx))
+  returns out : array1 f32 (l1_forward (b * (c * (h * w))))
+  ensures
+    exists* (sx' : chest1 f32 (b * (c * (h * w)))).
+      on gpu_loc (out |-> sx') **
+      pure (layernorm_post b (c * (h * w)) (fcast #f64 #f32 eps)
+              (chest1_to_seq sg) (chest1_to_seq sb)
+              (chest1_to_seq sx) (chest1_to_seq sx'))

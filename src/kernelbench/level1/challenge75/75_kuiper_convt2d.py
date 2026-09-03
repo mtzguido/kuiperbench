@@ -10,8 +10,7 @@ import torch.nn as nn
 class ModelNew(nn.Module):
     """KB L1 #75: ConvTranspose2D — asymmetric, strided, grouped, padded,
     dilated.  Mirrors the upstream Model.__init__ defaults exactly
-    (notably bias=False).  Uses the host-side groups loop over the
-    Kuiper-verified ConvT2D primitive."""
+    (notably bias=False).  The Kuiper entry computes the full grouped result."""
     def __init__(self, in_channels: int, out_channels: int, kernel_size: tuple,
                  stride: tuple = (1, 1), padding: tuple = (0, 0),
                  dilation: tuple = (1, 1), groups: int = 1,
@@ -24,12 +23,8 @@ class ModelNew(nn.Module):
 
     def forward(self, x):
         ct = self.conv_transpose2d
-        w = ct.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if ct.bias is not None:
-            b = ct.bias.contiguous().to(x.device).to(torch.float32)
         return kuiper_convt2d_grouped(
-            x, w, b,
+            x, ct.weight, ct.bias,
             stride=ct.stride, padding=ct.padding,
             output_padding=ct.output_padding,
             dilation=ct.dilation, groups=ct.groups)

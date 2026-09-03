@@ -26,13 +26,6 @@ class ModelNew(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.dim == 1 and x.dim() == 2 and x.dtype == torch.float32 and x.is_cuda:
-            return kuiper_ext.kuiper_cumsum_exclusive_dim1(x)
-        cumsum = torch.cumsum(
-            x.narrow(dim=self.dim, start=0, length=x.size(self.dim) - 1),
-            dim=self.dim,
-        )
-        return torch.cat(
-            (torch.zeros_like(x.select(self.dim, 0).unsqueeze(self.dim)), cumsum),
-            dim=self.dim,
-        )
+        if self.dim != 1:
+            raise ValueError("Kuiper exclusive cumsum supports dim=1")
+        return kuiper_ext.kuiper_cumsum_exclusive_dim1(x)

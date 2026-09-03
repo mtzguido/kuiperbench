@@ -2,6 +2,7 @@ module Kuiper.KB.MeanVarNorm
 
 #lang-pulse
 open Kuiper
+open Kuiper.Float.Casts
 open Kuiper.Scalars.Ops
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
@@ -9,7 +10,8 @@ open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.MeanVarNorm
 module SZ = Kuiper.SizeT
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
+module TensorCopy = Kuiper.KB.Tensor.Copy
 
 (* Proof-local description of the concrete floating intermediates.  The
    public spec is [row_mean_var_normalized], which contains no numerical
@@ -71,7 +73,7 @@ let row_mean_var_real_from_witnesses
     to_real_ok eps;
     a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
     assert (var_eps %~ rarg);
-    SqrtApprox.rsqrt_approx var_eps rarg;
+    RsqrtApprox.rsqrt_approx var_eps rarg;
     let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
     assert (inv %~ rinv);
     a_mul mean inv rmean rinv;
@@ -579,7 +581,7 @@ let row_mean_var_normalized_intro
    (conjuncts 5,6) at the call site, so the Pulse body needs no intermediate
    assertions -- only the [chest1_to_seq (reveal sx_pre) == chest1_to_seq sx']
    congruence, which fires reliably in the minimal post-[with] context. *)
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 let mv_loop_invariant_step
   (bd b d : nat)
   (sx sx_pre sx_post : Seq.lseq f32 bd)
@@ -834,7 +836,7 @@ inline_for_extraction noextract
    violation) when SizeT arithmetic (SZ.add) and a complex forall containing
    row_mean_var_normalized appear in the same combined query.
    --z3refresh --z3seed 2: match the green L2Norm.l2norm loop. *)
-#push-options "--z3rlimit 300 --z3refresh --z3seed 2"
+#push-options "--z3rlimit 60 --z3refresh --z3seed 2"
 fn mean_var_norm
   (b : szp)
   (d : szp { d <= max_blocks * max_threads /\
@@ -952,3 +954,108 @@ fn mean_var_norm_fw
 }
 
 let mean_var_norm_fw_f32 : mean_var_norm_fw_ty f32 = mean_var_norm_fw
+
+(* Allocate a private result, initialize it from the immutable input with the
+   shared full-tensor copy proof, then run the existing in-place proof on the
+   copy.  This is the common ownership bridge used by the two challenge-shaped
+   public entries below. *)
+#push-options "--z3rlimit 40"
+inline_for_extraction noextract
+fn mean_var_norm_alloc_f32
+  (rows : szp)
+  (d : szp { d <= max_blocks * max_threads /\
+             SZ.fits (rows * d) /\
+             rows * d <= max_blocks * max_threads })
+  (eps : f32)
+  (x : array1 f32 (l1_forward (rows * d)) { is_global x })
+  (#sx : chest1 f32 (rows * d))
+  (#fx : perm)
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx)
+  requires
+    pure (mean_var_domain rows d eps (chest1_to_seq sx))
+  returns out : array1 f32 (l1_forward (rows * d))
+  ensures
+    exists* (sout : chest1 f32 (rows * d)).
+      on gpu_loc (out |-> sout) **
+      pure (mean_var_post rows d eps
+              (chest1_to_seq sx) (chest1_to_seq sout))
+{
+  let n : szp = SZ.(rows *^ d);
+  let out = TensorCopy.copy_alloc n x;
+  mean_var_norm_fw_f32 rows d eps out;
+  out
+}
+#pop-options
+
+fn instancenorm34_alloc_f32
+  (b c h w : szp)
+  (eps : f64)
+  (x : array1 f32 (l1_forward ((b * c) * (h * w))) { is_global x })
+  (#sx : chest1 f32 ((b * c) * (h * w)))
+  (#fx : perm)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx)
+  requires
+    pure (SZ.fits (b * c) /\
+          SZ.fits (h * w) /\
+          SZ.fits ((b * c) * (h * w)) /\
+          h * w <= max_blocks * max_threads /\
+          (b * c) * (h * w) <= max_blocks * max_threads /\
+          mean_var_domain (b * c) (h * w) (fcast #f64 #f32 eps)
+            (chest1_to_seq sx))
+  returns out : array1 f32 (l1_forward ((b * c) * (h * w)))
+  ensures
+    exists* (sout : chest1 f32 ((b * c) * (h * w))).
+      on gpu_loc (out |-> sout) **
+      pure (mean_var_post (b * c) (h * w) (fcast #f64 #f32 eps)
+              (chest1_to_seq sx) (chest1_to_seq sout))
+{
+  let eps32 : f32 = fcast eps;
+  let rows : szp = SZ.(b *^ c);
+  let d : szp = SZ.(h *^ w);
+  mean_var_norm_alloc_f32 rows d eps32 x
+}
+
+fn groupnorm35_alloc_f32
+  (b c h w : szp)
+  (groups : szp { groups <= c /\ c / groups > 0 })
+  (eps : f64)
+  (x : array1 f32
+         (l1_forward ((b * groups) * ((c / groups) * (h * w))))
+       { is_global x })
+  (#sx : chest1 f32 ((b * groups) * ((c / groups) * (h * w))))
+  (#fx : perm)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx)
+  requires
+    pure (groups <= c /\ c % groups == 0 /\
+          SZ.fits (b * groups) /\
+          SZ.fits (h * w) /\
+          SZ.fits ((c / groups) * (h * w)) /\
+          SZ.fits ((b * groups) * ((c / groups) * (h * w))) /\
+          (c / groups) * (h * w) <= max_blocks * max_threads /\
+          (b * groups) * ((c / groups) * (h * w)) <=
+            max_blocks * max_threads /\
+          mean_var_domain (b * groups) ((c / groups) * (h * w))
+            (fcast #f64 #f32 eps)
+            (chest1_to_seq sx))
+  returns out : array1 f32
+    (l1_forward ((b * groups) * ((c / groups) * (h * w))))
+  ensures
+    exists* (sout : chest1 f32
+      ((b * groups) * ((c / groups) * (h * w)))).
+      on gpu_loc (out |-> sout) **
+      pure (mean_var_post (b * groups) ((c / groups) * (h * w))
+              (fcast #f64 #f32 eps)
+              (chest1_to_seq sx) (chest1_to_seq sout))
+{
+  let eps32 : f32 = fcast eps;
+  let rows : szp = SZ.(b *^ groups);
+  let channels_per_group : szp = SZ.(c /^ groups);
+  let hw : szp = SZ.(h *^ w);
+  let d : szp = SZ.(channels_per_group *^ hw);
+  mean_var_norm_alloc_f32 rows d eps32 x
+}

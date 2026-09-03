@@ -9,10 +9,11 @@ open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.L2Norm
 module SZ = Kuiper.SizeT
+module Copy = Kuiper.KB.Tensor.Copy
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 
 (* Pointwise multiplication transports approximation through the final
    row-scaling pass. *)
@@ -232,7 +233,7 @@ let l2_loop_step_lemma
             Seq.slice sx_post (r * d) (r * d + d) ==
             Seq.slice sx_pre  (r * d) (r * d + d)))
       = l2_blit_step_lemma b d sx sx_pre sx_post vi inv sumsq;
-        SqrtApprox.rsqrt_approx sumsq rss;
+        RsqrtApprox.rsqrt_approx sumsq rss;
         to_real_seq_is_approx row;
         frobenius_result_approx inv (FStar.Math.Sqrt.rsqrt rss) row rrow
     in
@@ -339,7 +340,7 @@ let row_normalized_at_r_new
 (* Single combined lemma that re-establishes the host loop invariant after
    one iteration.  Putting everything into one lemma avoids the fragile
    forall-composition of three independent Classical.forall_intro calls. *)
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 let l2_loop_invariant_step
   (b d : nat)
   (sx sx_pre sx_post : Seq.lseq f32 (b * d))
@@ -606,3 +607,25 @@ fn l2norm
 
 let l2norm_fw_f32 : l2norm_fw_ty f32 =
   fun b d x #s -> l2norm b d x #s
+
+fn l2norm_alloc_f32
+  (b : szp)
+  (d : szp { d <= max_blocks * max_threads /\
+             SZ.fits (b * d) /\
+             b * d <= max_blocks * max_threads })
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
+  (#f : perm)
+  (#s : chest1 f32 (b * d))
+  preserves cpu ** on gpu_loc (x |-> Frac f s)
+  requires pure (l2norm_domain b d (chest1_to_seq s))
+  returns out : array1 f32 (l1_forward (b * d))
+  ensures
+    exists* (s' : chest1 f32 (b * d)).
+      on gpu_loc (out |-> s') **
+      pure (l2norm_post b d (chest1_to_seq s) (chest1_to_seq s'))
+{
+  let n : szp = b *^ d;
+  let out = Copy.copy_alloc #f32 n x;
+  l2norm_fw_f32 b d out;
+  out
+}

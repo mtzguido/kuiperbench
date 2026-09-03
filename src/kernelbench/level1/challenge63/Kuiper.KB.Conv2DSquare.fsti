@@ -10,9 +10,10 @@ module Kuiper.KB.Conv2DSquare
    underlying primitive (the primitive itself takes a bias array; we
    pass a runtime-zero bias so the result is the bias-free conv).
 
-   The spec connection back to [Kuiper.Spec.Conv2D.conv2d_out_at]
-   inherits the admitted debt of the underlying primitive and is
-   documented in the module's [skeptic.txt]. *)
+   The public [conv2d_square63_alloc_f32] entry derives the output extent,
+   creates the zero bias and output, and calls the fully proved Conv2D
+   primitive under the same [Kuiper.Spec.Conv2D.conv2d_out_at] functional
+   postcondition. *)
 
 #lang-pulse
 open Kuiper
@@ -61,6 +62,24 @@ fn conv2d_square_f32
               acc1 sy tid ==
               conv2d_out_at b cin h_in h_in cout k k 1 0 h_out h_out
                             sx sw sbias tid))
+
+(* Complete fixed #63 operation: input/weight are the original PyTorch
+   buffers; zero bias, output geometry, allocation, and launch are internal. *)
+fn conv2d_square63_alloc_f32
+  (gx : array1 f32 (l1_forward (16 * 16 * 1024 * 1024)) { is_global gx })
+  (gw : array1 f32 (l1_forward (128 * 16 * 3 * 3)) { is_global gw })
+  (#fx #fw : perm)
+  (#sx : chest1 f32 (16 * 16 * 1024 * 1024))
+  (#sw : chest1 f32 (128 * 16 * 3 * 3))
+  norewrite
+  preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
+    on gpu_loc (gw |-> Frac fw sw)
+  returns gy : array1 f32 (l1_forward (16 * 128 * 1022 * 1022))
+  ensures exists* (sy : chest1 f32 (16 * 128 * 1022 * 1022)).
+    on gpu_loc (gy |-> sy) **
+    pure (forall (tid : nat{tid < 16 * 128 * 1022 * 1022}).
+      acc1 sy tid == conv2d_out_at 16 16 1024 1024 128 3 3 1 0
+        1022 1022 sx sw (mk1 (fun _ -> (zero #f32))) tid)
 
 
 inline_for_extraction let () = ()

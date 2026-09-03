@@ -52,3 +52,29 @@ fn batched_gemm_f32
   ()
 }
 #pop-options
+
+fn batched_gemm_alloc_f32
+  (batch rows shared cols : szp)
+  (a : array3 f32 (l3_batched_row_major batch rows shared) { is_global a })
+  (b : array3 f32 (l3_batched_row_major batch shared cols) { is_global b })
+  (#sa : chest3 f32 batch rows shared)
+  (#sb : chest3 f32 batch shared cols)
+  (#fA #fB : perm)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (a |-> Frac fA sa) **
+    on gpu_loc (b |-> Frac fB sb)
+  requires
+    pure (
+      batch * (rows * cols) <= max_blocks * max_threads /\
+      SZ.fits (batch * (rows * shared)) /\
+      SZ.fits (batch * (shared * cols)) /\
+      SZ.fits (batch * (rows * cols)))
+  returns c : array3 f32 (l3_batched_row_major batch rows cols)
+  ensures on gpu_loc (c |-> batched_matmul sa sb)
+{
+  let c = alloc0 #f32 (batch *^ rows *^ cols)
+    (l3_batched_row_major batch rows cols);
+  batched_gemm_f32 batch rows shared cols a b c;
+  c
+}

@@ -24,10 +24,6 @@ class ModelNew(nn.Module):
         self._groups = groups
 
     def forward(self, x):
-        w = self.conv3d.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if self.conv3d.bias is not None:
-            b = self.conv3d.bias.contiguous().to(x.device).to(torch.float32)
-        return kuiper_conv3d_general(x, w, b,
+        return kuiper_conv3d_general(x, self.conv3d.weight, self.conv3d.bias,
                                      stride=self._stride, padding=self._padding,
                                      dilation=self._dilation, groups=self._groups)

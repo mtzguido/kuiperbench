@@ -1,3 +1,14 @@
+CURRENT STATUS (2026-09-03) — IMPORTANT POSITIONAL-ABI CORRECTION
+-----------------------------------------------------------------
+#73 is not grouped.  KernelBench's nominal `groups` positional value binds to
+the model's unused `output_padding` parameter, and the reference constructor
+does not forward it; the actual operation is groups=1, output_padding=0.  It
+therefore uses the ordinary `ConvT3DGeneral` raw allocating entry, which derives
+all output extents, constructs zero bias, allocates, and launches in one
+verified call.  No grouped specialization, host slicing, stitching, or group
+loop is involved.  All contrary descriptions below are historical and
+superseded.
+
 STATUS — KernelBench L1 #73
 ===========================
 

@@ -49,8 +49,5 @@ class ModelNew(nn.Module):
         self.eps = float(eps)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # gamma, beta are nn.BatchNorm2d's learnable parameters.  Pass them in
-        # contiguous f32 form (one scalar per channel), matching the spec.
-        gamma = self.bn.weight.contiguous().to(x.device).to(torch.float32)
-        beta  = self.bn.bias  .contiguous().to(x.device).to(torch.float32)
-        return kuiper_batchnorm.kuiper_batchnorm(x, gamma, beta, self.eps)
+        return kuiper_batchnorm.kuiper_batchnorm(
+            x, self.bn.weight, self.bn.bias, self.eps)

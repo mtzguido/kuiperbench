@@ -4,10 +4,11 @@ module Kuiper.KB.SDPA
 
      out = softmax((Q @ K^T) / sqrt(D)) @ V        (no mask, no dropout)
 
-   Q, K, V have shape (B, H, S, D); the batch+head dims are flattened to
-   BH = B*H, giving (BH, S, D) tensors.  K is supplied ALREADY TRANSPOSED
-   per page as (BH, D, S) (the host bridge materializes K^T, an unverified
-   PyTorch transpose — same pattern as L1 #17).
+   The public entry and functional specification retain the original
+   (B,H,S,D) row-major tensors.  Inside the verified entry, Kuiper proves the
+   zero-copy collapse (B,H,S,D) -> (B*H,S,D), then proves that the same K bytes
+   can be viewed as a page-wise transposed column-major tensor for the first
+   GEMM.  Neither flattening is delegated to the host bridge.
 
    This module is a verified ORCHESTRATOR.  It does NOT fuse anything; it
    chains four already-verified Kuiper primitives over the SAME GPU buffers:
@@ -31,13 +32,13 @@ module Kuiper.KB.SDPA
    counterparts by the corresponding [%~] laws.  No floating intermediate
    appears in the public functional claim.
 
-   The direct real scale proof uses the temporary [rsqrt_approx]
-   compatibility assumption documented in the repository patch. *)
+   The direct real scale proof uses the temporary
+   [Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] compatibility assumption. *)
 
 #lang-pulse
 open Kuiper
 open Kuiper.Tensor
-open Kuiper.Tensor.Layout.Alg { l3_batched_row_major }
+open Kuiper.Tensor.Layout.Alg { l3_batched_row_major, l4_batched_row_major }
 module SZ = Kuiper.SizeT
 module SM = Kuiper.Spec.Softmax
 module RealSqrt = FStar.Math.Sqrt
@@ -46,6 +47,13 @@ open Kuiper.KB.BatchedGEMM { batched_matmul }
 (* Private extraction helper: the public entry computes this value itself. *)
 inline_for_extraction noextract
 val sdpa_scale_f32 (d : szp) : f32
+
+(* Logical transpose of the last two axes on every batch page. *)
+[@@erasable]
+val transpose_pages
+  (#et : Type) (#bh #rows #cols : nat)
+  (m : chest3 et bh rows cols)
+  : chest3 et bh cols rows
 
 (* Elementwise scalar multiply of a 3-D tensor. *)
 let mscale
@@ -74,49 +82,73 @@ let real_sdpa_scale (d : pos) : real =
 let real_sdpa
   (#bh #s #d : pos)
   (rQ : chest3 real bh s d)
-  (rKT : chest3 real bh d s)
+  (rK : chest3 real bh s d)
   (rV : chest3 real bh s d)
   : chest3 real bh s d =
   batched_matmul
     (softmax_pages
-      (mscale (real_sdpa_scale d) (batched_matmul rQ rKT)))
+      (mscale
+        (real_sdpa_scale d)
+        (batched_matmul rQ (transpose_pages rK))))
     rV
 
+(* Row-major collapse of the original batch and head axes.  The implementation
+   uses this same serialization to reinterpret each Array4 as Array3 without
+   moving data. *)
+let flatten_bh
+  (#et : Type) (#b #h #s #d : nat)
+  (x : chest4 et b h s d)
+  : chest3 et (b * h) s d =
+  from_seq (l3_batched_row_major (b * h) s d)
+    (to_seq (l4_batched_row_major b h s d) x)
+
+let unflatten_bh
+  (#et : Type) (#b #h #s #d : nat)
+  (x : chest3 et (b * h) s d)
+  : chest4 et b h s d =
+  from_seq (l4_batched_row_major b h s d)
+    (to_seq (l3_batched_row_major (b * h) s d) x)
+
+(* Rank-4 top-level semantics.  This states explicitly that every (b,h) page
+   of the original tensors is the corresponding page of the verified batched
+   attention computation. *)
+let real_sdpa4
+  (#b #h #s #d : pos)
+  (rQ : chest4 real b h s d)
+  (rK : chest4 real b h s d)
+  (rV : chest4 real b h s d)
+  : chest4 real b h s d =
+  unflatten_bh (real_sdpa (flatten_bh rQ) (flatten_bh rK) (flatten_bh rV))
+
 fn sdpa_f32
-  (bh s d : szp)
-  (gQ  : array3 f32 (l3_batched_row_major bh s d) { is_global gQ })
-  (gKT : array3 f32 (l3_batched_row_major bh d s) { is_global gKT })
-  (gV  : array3 f32 (l3_batched_row_major bh s d) { is_global gV })
-  (gScores : array3 f32 (l3_batched_row_major bh s s) { is_global gScores })
-  (gOut : array3 f32 (l3_batched_row_major bh s d) { is_global gOut })
-  (#sQ  : chest3 f32 bh s d)
-  (#sKT : chest3 f32 bh d s)
-  (#sV  : chest3 f32 bh s d)
-  (#sScores0 : chest3 f32 bh s s)
-  (#sOut0 : chest3 f32 bh s d)
-  (rQ : erased (chest3 real bh s d))
-  (rKT : erased (chest3 real bh d s))
-  (rV : erased (chest3 real bh s d))
-  (#fQ #fKT #fV : perm)
+  (b h s d : szp)
+  (gQ : array4 f32 (l4_batched_row_major b h s d) { is_global gQ })
+  (gK : array4 f32 (l4_batched_row_major b h s d) { is_global gK })
+  (gV : array4 f32 (l4_batched_row_major b h s d) { is_global gV })
+  (#sQ #sK #sV : chest4 f32 b h s d)
+  (rQ rK rV : erased (chest4 real b h s d))
+  (#fQ #fK #fV : perm)
   preserves
     cpu **
-    on gpu_loc (gQ |-> Frac fQ sQ ** gKT |-> Frac fKT sKT ** gV |-> Frac fV sV) **
-    pure (sQ %~ rQ /\ sKT %~ rKT /\ sV %~ rV)
+    on gpu_loc
+      (gQ |-> Frac fQ sQ **
+       gK |-> Frac fK sK **
+       gV |-> Frac fV sV) **
+    pure (sQ %~ rQ /\ sK %~ rK /\ sV %~ rV)
   requires
-    on gpu_loc (gScores |-> sScores0) **
-    on gpu_loc (gOut |-> sOut0) **
     pure (
+      SZ.fits (b * h) /\
       s * s <= max_blocks * max_threads /\
-      SZ.fits (bh * (s * d)) /\
-      SZ.fits (bh * (d * s)) /\
-      SZ.fits (bh * (s * s)) /\
-      bh * s * s <= max_blocks * max_threads /\
-      bh * s <= max_blocks /\
-      (bh * s) * s <= max_blocks * max_threads /\
-      bh * (s * d) <= max_blocks * max_threads
+      SZ.fits ((b * h) * (s * d)) /\
+      SZ.fits ((b * h) * (d * s)) /\
+      SZ.fits ((b * h) * (s * s)) /\
+      (b * h) * s * s <= max_blocks * max_threads /\
+      (b * h) * s <= max_blocks /\
+      ((b * h) * s) * s <= max_blocks * max_threads /\
+      (b * h) * (s * d) <= max_blocks * max_threads
     )
+  returns gOut : array4 f32 (l4_batched_row_major b h s d)
   ensures
-    (exists* (probs : chest3 f32 bh s s) (eOut : chest3 f32 bh s d).
-      on gpu_loc (gScores |-> probs) **
+    (exists* (eOut : chest4 f32 b h s d).
       on gpu_loc (gOut |-> eOut) **
-      pure (eOut %~ real_sdpa rQ rKT rV))
+      pure (eOut %~ real_sdpa4 rQ rK rV))

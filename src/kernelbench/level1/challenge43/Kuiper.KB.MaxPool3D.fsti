@@ -7,128 +7,230 @@ module Kuiper.KB.MaxPool3D
  * [reducer_fmax_f32] (rid = -inf, rop = fmaxf):
  *
  *   pass 1: per-row max over W axis (B*C*D*H rows of length W)
- *   pass 2: per-row max over H axis (B*C*D*W_out rows of length H,
- *           after a host-side permute)
- *   pass 3: per-row max over D axis (B*C*W_out*H_out rows of length D,
- *           after a second host-side permute)
+ *   pass 2: per-row max over H through a verified strided BCM layout
+ *   pass 3: per-row max over D through a second verified BCM layout
  *
- * Each pass has an exact implementation-order left-fold specification.
- * The C++ bridge composes the passes and the KernelBench oracle checks the
- * resulting 3-D operation; this interface assumes no [fmax] algebra.
- *
- * This .fsti exposes a single extracted entry [maxpool3d_axis_fw_rm_f32]
- * which is the verified per-axis pass; the C++ bridge orchestrates the
- * three calls and the inter-pass permute (PyTorch's transpose+contiguous).
- * The "axis" name reflects that the kernel operates on the *inner*
- * (last) axis of a 2-D row-major view; the bridge supplies whichever
- * axis is currently inner.
+ * The public [maxpool3d_raw_alloc_f32] entry owns the complete composition:
+ * it allocates intermediates, runs all three kernels, performs zero-copy
+ * verified layout recasts between them, frees intermediates, and returns the
+ * final row-major buffer.  Its postcondition is the exact nested sequence of
+ * implementation-order [fmax] folds tied directly to the original input.
+ * The C++ bridge performs checks and invokes this entry exactly once.
  *)
 
 #lang-pulse
 
 open Kuiper
 open Kuiper.Tensor
+open Kuiper.Tensor.Layout { from_seq, to_seq }
 open Kuiper.Tensor.Layout.Alg { l2_row_major }
 open Kuiper.Monoid.Reduce.F32 { reducer_fmax_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
+open Kuiper.Tensor.Layout.BCMPages { l2_bcm_pages }
 module SZ = Kuiper.SizeT
 module EM = Kuiper.EMatrix
 
-(* Verified, extractable 1-D pool output-length formula (see .fst).  Provably
-   equal to the pure spec [pool_out_len_1d]; the C bridge calls this (per axis)
-   instead of re-implementing the formula in unverified C. *)
-val pool_out_len_1d_sz
-  (l k s p d : szp)
-  : Pure SZ.t
-      (requires SZ.fits (SZ.v d * (SZ.v k - 1) + 1) /\
-                SZ.fits (SZ.v l + 2 * SZ.v p))
-      (ensures fun r ->
-         SZ.v r == pool_out_len_1d l k s p d)
-
-(* Verification-facing wrapper type (layout-polymorphic, f32 carrier). *)
+(* Private composition helpers have declarations here only to give their
+   extraction wrappers precise expected types; the bridge calls only the raw
+   entry below. *)
 inline_for_extraction noextract
 fn maxpool3d_axis_fw_f32
   (k s p d : szp)
-(bc : szp { SZ.v bc <= max_blocks * max_threads })
-(l    : szp)
-(l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
-(#lin  : layout2 bc l) {| ctlayout lin  |}
-(#lout : layout2 bc l_out) {| ctlayout lout |}
-(input  : array2 f32 lin  { is_global input  })
-(output : array2 f32 lout { is_global output })
-(#fIn  : perm)
-(#sx   : chest2 f32 bc l)
-(#sout : chest2 f32 bc l_out)
-preserves
- cpu **
- on gpu_loc (input |-> Frac fIn sx)
-requires
- on gpu_loc (output |-> sout) **
- pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
- pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
-ensures
- on gpu_loc (output |->
-   windowreduce_result reducer_fmax_f32 sx
-     k s p d l_out)
+  (bc : szp { SZ.v bc <= max_blocks * max_threads })
+  (l : szp)
+  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
+  (#lin : layout2 bc l) {| ctlayout lin |}
+  (#lout : layout2 bc l_out) {| ctlayout lout |}
+  (input : array2 f32 lin { is_global input })
+  (output : array2 f32 lout { is_global output })
+  (#fIn : perm)
+  (#sx : chest2 f32 bc l)
+  (#sout : chest2 f32 bc l_out)
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    on gpu_loc (output |-> sout) **
+    pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
+    pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
+  ensures
+    on gpu_loc (output |->
+      windowreduce_result reducer_fmax_f32 sx k s p d l_out)
 
-
-(* Concrete-layout extractable entry (l2_row_major). *)
 fn maxpool3d_axis_fw_rm_f32
   (k s p d : szp)
-(bc : szp { SZ.v bc <= max_blocks * max_threads })
-(l    : szp { SZ.fits (SZ.v bc * SZ.v l) })
-(l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d /\
-             SZ.fits (SZ.v bc * SZ.v l_out) })
-(input  : array2 f32 (l2_row_major bc l)     { is_global input  })
-(output : array2 f32 (l2_row_major bc l_out) { is_global output })
-(#fIn  : perm)
-(#sx   : chest2 f32 bc l)
-(#sout : chest2 f32 bc l_out)
-preserves
- cpu **
- on gpu_loc (input |-> Frac fIn sx)
-requires
- on gpu_loc (output |-> sout) **
- pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
- pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
-ensures
- on gpu_loc (output |->
-   windowreduce_result reducer_fmax_f32 sx
-     k s p d l_out)
+  (bc : szp { SZ.v bc <= max_blocks * max_threads })
+  (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
+  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d /\
+                SZ.fits (SZ.v bc * SZ.v l_out) })
+  (input : array2 f32 (l2_row_major bc l) { is_global input })
+  (output : array2 f32 (l2_row_major bc l_out) { is_global output })
+  (#fIn : perm)
+  (#sx : chest2 f32 bc l)
+  (#sout : chest2 f32 bc l_out)
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    on gpu_loc (output |-> sout) **
+    pure (SZ.fits (SZ.v l_out * SZ.v s + SZ.v k * SZ.v d)) **
+    pure (SZ.v bc * SZ.v l_out <= max_blocks * max_threads)
+  ensures
+    on gpu_loc (output |->
+      windowreduce_result reducer_fmax_f32 sx k s p d l_out)
 
-
-(* Self-allocating per-axis pass.  Takes the flattened row count [bc] and the
-   inner axis length [l] (NOT a pre-computed [l_out], NOT a caller buffer);
-   computes [l_out], allocates the [(bc, l_out)] GPU output buffer, fills it,
-   and returns the pair [(l_out, output_buffer)] — ownership passes to the
-   caller.  All preconditions are on the raw axis dims, so the bridge only
-   performs dimension-contract checks and the (unavoidable) inter-pass permute
-   copies; it computes no output length, allocates no pool buffer, and runs no
-   launch loop.  Extracts to a C function returning a
-   [{ uint32_t fst; float *snd; }] struct. *)
 fn maxpool3d_axis_alloc_f32
   (k s p d : szp)
-(bc : szp { SZ.v bc <= max_blocks * max_threads })
-(l : szp { SZ.fits (SZ.v bc * SZ.v l) })
-(input : array2 f32 (l2_row_major bc l) { is_global input })
-(#fIn : perm)
-(#sx  : chest2 f32 bc l)
-preserves
- cpu **
- on gpu_loc (input |-> Frac fIn sx)
-requires
- pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
- pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
- pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
- pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
- pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
- pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-            & array2 f32 (l2_row_major bc lo))
-ensures
- on gpu_loc ((dsnd r) |->
-   windowreduce_result reducer_fmax_f32 sx
-     k s p d (dfst r)) **
- pure (SZ.v (dfst r) ==
-         pool_out_len_1d l k s p d)
+  (bc : szp { SZ.v bc <= max_blocks * max_threads })
+  (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
+  (input : array2 f32 (l2_row_major bc l) { is_global input })
+  (#fIn : perm)
+  (#sx : chest2 f32 bc l)
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
+    pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
+    pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
+    pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
+    pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
+    pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
+  returns r :
+    (lo : sz { SZ.v lo == pool_out_len_1d l k s p d }
+     & array2 f32 (l2_row_major bc lo))
+  ensures
+    on gpu_loc ((dsnd r) |->
+      windowreduce_result reducer_fmax_f32 sx k s p d (dfst r)) **
+    pure (SZ.v (dfst r) == pool_out_len_1d l k s p d)
+
+(* Exact ghost view after the W pass, reinterpreted without copying so H is
+   the inner reduction axis.  Physically the bytes remain row-major
+   (bc,D,H,W_out). *)
+unfold
+let maxpool3d_mid_w_view
+  (bc depth h w : nat)
+  (kw sw : pos) (pw : nat) (dw : pos)
+  (w_out : pos)
+  (sx : chest2 f32 (bc * depth * h) w)
+  : chest2 f32 (bc * depth * w_out) h
+  = from_seq (l2_bcm_pages (bc * depth) w_out h)
+      (to_seq (l2_row_major (bc * depth * h) w_out)
+        (windowreduce_result reducer_fmax_f32 sx
+          kw sw pw dw w_out))
+
+(* Exact ghost view after the H pass, reinterpreted without copying so D is
+   the inner reduction axis.  Physically the bytes are row-major
+   (bc,D,H_out,W_out). *)
+unfold
+let maxpool3d_mid_h_view
+  (bc depth h w : nat)
+  (kh kw sh sw : pos) (ph pw : nat) (dh dw : pos)
+  (w_out h_out : pos)
+  (sx : chest2 f32 (bc * depth * h) w)
+  : chest2 f32 (bc * (h_out * w_out)) depth
+  = from_seq (l2_bcm_pages bc (h_out * w_out) depth)
+      (to_seq (l2_bcm_pages (bc * depth) w_out h_out)
+        (windowreduce_result reducer_fmax_f32
+          (maxpool3d_mid_w_view bc depth h w kw sw pw dw w_out sx)
+          kh sh ph dh h_out))
+
+(* Host validation establishes these arithmetic side conditions as one pure
+   fact.  Keeping them in a named predicate prevents Pulse's separating-
+   conjunction elaborator from duplicating the large dependent layout context
+   once per condition. *)
+unfold
+let maxpool3d_full_pre
+  (kd kh kw sd sh sw : pos) (pd ph pw : nat) (dd dh dw : pos)
+  (bc depth h w : nat) : prop =
+  SZ.fits (dw * (kw - 1) + 1) /\
+  SZ.fits (w + 2 * pw) /\
+  dw * (kw - 1) + 1 <= w + 2 * pw /\
+  SZ.fits (pool_out_len_1d w kw sw pw dw * sw + kw * dw) /\
+  SZ.fits (bc * depth * h * w) /\
+  SZ.fits (bc * depth * h * pool_out_len_1d w kw sw pw dw) /\
+  bc * depth * h * pool_out_len_1d w kw sw pw dw <=
+    max_blocks * max_threads /\
+  SZ.fits (dh * (kh - 1) + 1) /\
+  SZ.fits (h + 2 * ph) /\
+  dh * (kh - 1) + 1 <= h + 2 * ph /\
+  SZ.fits (pool_out_len_1d h kh sh ph dh * sh + kh * dh) /\
+  SZ.fits (bc * depth * pool_out_len_1d w kw sw pw dw * h) /\
+  SZ.fits (bc * depth * pool_out_len_1d w kw sw pw dw *
+    pool_out_len_1d h kh sh ph dh) /\
+  bc * depth * pool_out_len_1d w kw sw pw dw *
+    pool_out_len_1d h kh sh ph dh <= max_blocks * max_threads /\
+  SZ.fits (dd * (kd - 1) + 1) /\
+  SZ.fits (depth + 2 * pd) /\
+  dd * (kd - 1) + 1 <= depth + 2 * pd /\
+  SZ.fits (pool_out_len_1d depth kd sd pd dd * sd + kd * dd) /\
+  SZ.fits (bc * (pool_out_len_1d h kh sh ph dh *
+    pool_out_len_1d w kw sw pw dw) * depth) /\
+  SZ.fits (bc * (pool_out_len_1d h kh sh ph dh *
+    pool_out_len_1d w kw sw pw dw) * pool_out_len_1d depth kd sd pd dd) /\
+  bc * (pool_out_len_1d h kh sh ph dh * pool_out_len_1d w kw sw pw dw) *
+    pool_out_len_1d depth kd sd pd dd <= max_blocks * max_threads
+
+unfold
+let maxpool3d_raw_pre
+  (k s p d b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) })
+  (depth h w : szp) : prop =
+  maxpool3d_full_pre k k k s s s p p p d d d (SZ.v (b *^ c)) depth h w
+
+unfold
+let maxpool3d_full_result
+  (kd kh kw sd sh sw : pos) (pd ph pw : nat) (dd dh dw : pos)
+  (bc depth h w : nat) : Type0 =
+  (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw /\ SZ.v wo > 0 }
+   & (ho : sz { SZ.v ho == pool_out_len_1d h kh sh ph dh /\ SZ.v ho > 0 }
+      & (do_ : sz { SZ.v do_ == pool_out_len_1d depth kd sd pd dd /\
+                    SZ.v do_ > 0 }
+         & array2 f32 (l2_bcm_pages bc (ho * wo) do_))))
+
+unfold
+let maxpool3d_raw_result
+  (k s p d b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) })
+  (depth h w : szp) : Type0 =
+  maxpool3d_full_result k k k s s s p p p d d d
+    (SZ.v (b *^ c)) depth h w
+
+unfold
+let maxpool3d_full_post
+  (kd kh kw sd sh sw : pos) (pd ph pw : nat) (dd dh dw : pos)
+  (bc depth h w : nat)
+  (sx : chest2 f32 (bc * depth * h) w)
+  (r : maxpool3d_full_result kd kh kw sd sh sw pd ph pw dd dh dw
+    bc depth h w) : slprop =
+  on gpu_loc ((dsnd (dsnd (dsnd r))) |->
+    windowreduce_result reducer_fmax_f32
+      (maxpool3d_mid_h_view bc depth h w kh kw sh sw ph pw dh dw
+        (dfst r) (dfst (dsnd r)) sx)
+      kd sd pd dd (dfst (dsnd (dsnd r))))
+
+unfold
+let maxpool3d_raw_post
+  (k s p d b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) })
+  (depth h w : szp)
+  (sx : chest2 f32 (b * c * depth * h) w)
+  (r : maxpool3d_raw_result k s p d b c depth h w) : slprop =
+  maxpool3d_full_post k k k s s s p p p d d d
+    (SZ.v (b *^ c)) depth h w sx r
+
+(* KernelBench-shaped entry: derives [bc = b*c] and duplicates the scalar
+   pooling parameters across D/H/W inside Kuiper. *)
+fn maxpool3d_raw_alloc_f32
+  (k s p d b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) })
+  (depth h w : szp)
+  (#sq_bd : squash (SZ.fits (SZ.v b * SZ.v c * SZ.v depth)))
+  (#sq_bdh : squash (SZ.fits (SZ.v b * SZ.v c * SZ.v depth * SZ.v h)))
+  (input : array2 f32 (l2_row_major (b * c * depth * h) w) { is_global input })
+  (#fIn : perm)
+  (#sx : chest2 f32 (b * c * depth * h) w)
+  norewrite
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    pure (maxpool3d_full_pre k k k s s s p p p d d d
+      (SZ.v (b *^ c)) depth h w)
+  returns r : maxpool3d_full_result k k k s s s p p p d d d
+    (SZ.v (b *^ c)) depth h w
+  ensures maxpool3d_full_post k k k s s s p p p d d d
+    (SZ.v (b *^ c)) depth h w sx r

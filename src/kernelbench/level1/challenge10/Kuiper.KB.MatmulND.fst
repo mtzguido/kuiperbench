@@ -225,7 +225,7 @@ fn reshape2to3_eq
 (* The kernel.                                                              *)
 (* ----------------------------------------------------------------------- *)
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn matmul_nd
   (#t:Type0) {| floating t, real_like t, floating_real_like t |}
@@ -305,3 +305,31 @@ fn matmul_nd
 #pop-options
 
 let matmul_nd_f32 = matmul_nd
+
+fn matmul_nd_alloc_f32
+  (n m k l : szp)
+  (gA : array3 f32 (l3_batched_row_major n m k) { is_global gA })
+  (gB : array2 f32 (l2_row_major k l) { is_global gB })
+  (rA : chest2 real (n*m) k)
+  (rB : chest2 real k l)
+  (#eA : chest3 f32 n m k)
+  (#eB : chest2 f32 k l)
+  (#fA #fB : perm)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
+    pure (K.size_req (n*m) l k) **
+    pure (flat3to2 eA %~ rA) **
+    pure (eB %~ rB)
+  returns gC : array3 f32 (l3_batched_row_major n m l)
+  ensures
+    exists* (eC : chest3 f32 n m l).
+      on gpu_loc (gC |-> eC) **
+      pure (flat3to2 eC %~ MS.matmul rA rB)
+{
+  let gC = alloc0 #f32 (n *^ m *^ l)
+    (l3_batched_row_major n m l);
+  matmul_nd_f32 n m k l gA gB gC rA rB;
+  gC
+}

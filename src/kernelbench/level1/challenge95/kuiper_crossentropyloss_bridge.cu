@@ -12,10 +12,12 @@
 // inputs (predictions + targets); its post is
 // [Kuiper.Spec.CrossEntropyLoss.cross_entropy_post].
 //
-// This bridge therefore contains NO host reduction loop.  The only host
-// loop is a pure bounds-check that establishes the kernel's precondition
-// (every target index is in [0, C)); it performs no loss arithmetic.
+// The bridge only validates the verified entry's shape/layout/range
+// preconditions, selects the CUDA device, and transfers ownership of the
+// one-element GPU result returned by Kuiper.
 #include <torch/extension.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <cuda_runtime.h>
 #include "Kuiper_KB_CrossEntropyLoss.h"
 #include "Kuiper_KB_CrossEntropyLoss.cu"
 
@@ -26,49 +28,41 @@ torch::Tensor kuiper_crossentropy_cuda(torch::Tensor predictions,
                                        torch::Tensor targets) {
     TORCH_CHECK(predictions.is_cuda() && targets.is_cuda()
                 && predictions.scalar_type() == torch::kFloat32
-                && (targets.scalar_type() == torch::kInt64
-                    || targets.scalar_type() == torch::kInt32)
+                && targets.scalar_type() == torch::kInt64
                 && predictions.dim() == 2
                 && targets.dim() == 1
                 && predictions.size(0) == targets.size(0),
                 "kuiper_crossentropy: expected (B, C) f32 predictions and (B,) "
-                "int targets on CUDA");
-    auto P = predictions.contiguous();    // not modified (kernel copies rows)
-    auto T = targets.contiguous().to(torch::kInt64);
-    int64_t B = P.size(0);
-    int64_t C = P.size(1);
-    int64_t BC = B * C;
+                "int64 targets on CUDA");
+    TORCH_CHECK(predictions.device() == targets.device(),
+                "kuiper_crossentropy: inputs must be on the same CUDA device");
+    TORCH_CHECK(predictions.is_contiguous() && targets.is_contiguous(),
+                "kuiper_crossentropy: inputs must be contiguous");
+    int64_t B = predictions.size(0);
+    int64_t C = predictions.size(1);
     TORCH_CHECK(B > 0 && C > 0
                 && C  <= KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS
                 && B  <= KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS
                 && C  <= (int64_t)UINT32_MAX
                 && B  <= (int64_t)UINT32_MAX
-                && BC <= (int64_t)UINT32_MAX
+                && B  <= (int64_t)UINT32_MAX / C
                 && B + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX
                 && C + KUIPER_MAX_THREADS <= (int64_t)UINT32_MAX,
                 "kuiper_crossentropy: shape out of range");
 
-    // Bounds-check the targets (establishes the kernel's precondition that
-    // every target index is in [0, C)).  This is a validation pass only --
-    // it computes no part of the loss.
-    auto T_cpu = T.to(torch::kCPU);
-    const int64_t *Tcpu = T_cpu.data_ptr<int64_t>();
-    for (int64_t b = 0; b < B; ++b) {
-        int64_t tb = Tcpu[b];
-        TORCH_CHECK(tb >= 0 && tb < C, "kuiper_crossentropy: target out of range");
-    }
+    // This reduction is validation only; the loss arithmetic and the
+    // int64-to-index conversion remain inside the verified entrypoint.
+    TORCH_CHECK(targets.ge(0).logical_and(targets.lt(C)).all().item<bool>(),
+                "kuiper_crossentropy: target out of range");
 
-    // Materialize the targets as a contiguous (B,) uint32 device buffer
-    // (the verified entry takes a [size_t]-modeled-as-uint32 index array).
-    auto T32 = T.to(torch::kInt32).contiguous();
-    uint32_t *Tp = reinterpret_cast<uint32_t *>(T32.data_ptr<int32_t>());
-
-    float mean = Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(
+    const c10::cuda::CUDAGuard device_guard(predictions.device());
+    float *out = Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(
         (uint32_t)B, (uint32_t)C,
-        P.data_ptr<float>(), Tp);
+        predictions.data_ptr<float>(), targets.data_ptr<int64_t>());
 
-    auto out = torch::tensor(mean, torch::dtype(torch::kFloat32).device(torch::kCPU));
-    return out.to(predictions.device());
+    return torch::from_blob(
+        out, c10::IntArrayRef{}, [](void *p) { cudaFree(p); },
+        predictions.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

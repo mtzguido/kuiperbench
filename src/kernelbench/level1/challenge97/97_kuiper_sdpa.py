@@ -25,10 +25,4 @@ class ModelNew(nn.Module):
         super().__init__()
 
     def forward(self, Q: torch.Tensor, K: torch.Tensor, V: torch.Tensor) -> torch.Tensor:
-        if (Q.is_cuda and K.is_cuda and V.is_cuda
-                and Q.dtype == torch.float32
-                and K.dtype == torch.float32
-                and V.dtype == torch.float32
-                and Q.dim() == 4 and Q.shape == K.shape == V.shape):
-            return kuiper_sdpa.kuiper_sdpa(Q, K, V)
-        return torch.nn.functional.scaled_dot_product_attention(Q, K, V)
+        return kuiper_sdpa.kuiper_sdpa(Q, K, V)

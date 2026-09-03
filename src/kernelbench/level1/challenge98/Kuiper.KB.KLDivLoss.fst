@@ -4,6 +4,7 @@ module Kuiper.KB.KLDivLoss
 open Kuiper
 open Kuiper.Approximates
 open Kuiper.Tensor
+open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.KLDivLoss
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
@@ -102,6 +103,90 @@ fn kl_div_loss
 }
 #pop-options
 
-let kl_div_fw_f32 : kl_fw_ty f32 =
-  fun n batches predictions targets #sp #st rp rt #fb ->
-    kl_div_loss n batches predictions targets #sp #st rp rt #fb
+inline_for_extraction noextract
+fn copy1_f32
+  (n : szp)
+  (src : array1 f32 (l1_forward n) { is_global src })
+  (dst : array1 f32 (l1_forward n) { is_global dst })
+  (#ss #sd : chest1 f32 n)
+  (#f : perm)
+  preserves cpu ** on gpu_loc (src |-> Frac f ss)
+  requires on gpu_loc (dst |-> sd)
+  ensures on gpu_loc (dst |-> ss)
+{
+  map_loc gpu_loc
+    #(dst |-> sd)
+    #(core dst |-> to_seq (l1_forward n) sd)
+    fn _ { tensor_concr dst; };
+  map_loc gpu_loc
+    #(src |-> Frac f ss)
+    #(core src |-> Frac f (to_seq (l1_forward n) ss))
+    fn _ { tensor_concr src; };
+  gpu_memcpy_device_to_device (core dst) (core src) n;
+  map_loc gpu_loc
+    #(core src |-> Frac f (to_seq (l1_forward n) ss))
+    #(src |-> Frac f ss)
+    fn _ {
+      tensor_abs (l1_forward n) (core src);
+      rewrite (from_array (l1_forward n) (core src) |-> Frac f ss)
+        as (src |-> Frac f ss);
+    };
+  map_loc gpu_loc
+    #(core dst |-> to_seq (l1_forward n) ss)
+    #(dst |-> ss)
+    fn _ {
+      tensor_abs (l1_forward n) (core dst);
+      rewrite (from_array (l1_forward n) (core dst) |-> ss)
+        as (dst |-> ss);
+    }
+}
+
+fn kl_scalar_out_f32
+  (x : f32)
+  preserves cpu
+  returns out : array1 f32 (l1_forward 1)
+  ensures
+    exists* (sout : chest1 f32 1).
+      on gpu_loc (out |-> sout) ** pure (acc1 sout 0 == x)
+{
+  let out = alloc0 #f32 1sz (l1_forward 1);
+  Map.map_gpu (fun _ -> x) 1sz out;
+  with sout. assert on gpu_loc (out |-> sout);
+  assert pure (acc1 sout 0 == x);
+  out
+}
+
+#push-options "--z3rlimit 40"
+fn kl_div_fw_f32
+  (n : szp {n <= max_blocks * max_threads})
+  (batches : szp)
+  (predictions : array1 f32 (l1_forward n) { is_global predictions })
+  (targets     : array1 f32 (l1_forward n) { is_global targets })
+  (#sp #st : chest1 f32 n)
+  (rp rt : erased (lseq real n))
+  (#fp #ft : perm)
+  norewrite
+  preserves
+    cpu **
+    on gpu_loc (predictions |-> Frac fp sp) **
+    on gpu_loc (targets |-> Frac ft st) **
+    pure (sp %~ seq_to_chest1 rp /\ st %~ seq_to_chest1 rt)
+  requires
+    pure (positive_seq n rp /\ positive_seq n rt)
+  returns out : array1 f32 (l1_forward 1)
+  ensures
+    exists* (sout : chest1 f32 1).
+      on gpu_loc (out |-> sout) **
+      pure (acc1 sout 0 %~ real_kl n batches rp rt)
+{
+  let scratch = alloc0 #f32 n (l1_forward n);
+  copy1_f32 n predictions scratch;
+  let res = kl_div_loss #f32 n batches scratch targets #sp #st rp rt #ft;
+  with scratch'. assert on gpu_loc (scratch |-> scratch');
+  free scratch;
+  let out = kl_scalar_out_f32 res;
+  with sout. assert on gpu_loc (out |-> sout);
+  assert pure (acc1 sout 0 %~ real_kl n batches rp rt);
+  out
+}
+#pop-options

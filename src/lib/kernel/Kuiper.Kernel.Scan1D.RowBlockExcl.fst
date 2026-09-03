@@ -154,7 +154,7 @@ let cell_at_iter
 (* z3rlimit > 40: the per-block kernel proof (forall+ extract/restore
  * trade plumbing + the loop invariant) mirrors the inclusive sibling
  * [Kuiper.Kernel.Scan1D.RowBlock.kf], which uses the same budget. *)
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 inline_for_extraction noextract
 fn kf
   (#et : Type0) {| scalar et |}

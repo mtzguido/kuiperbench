@@ -18,7 +18,7 @@ reciprocal; it is not an unchecked caller argument.
 
 The public precondition [mean_var_domain] requires each real
 [var + eps] to be positive.  This is the exact domain on which the temporary
-[Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] assumption connects floating
+[Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] assumption connects floating
 [rsqrt] to [FStar.Math.Sqrt.rsqrt].  That compatibility law is proposed for
 upstream Kuiper and is the numerical proof's explicit local trust debt.
 

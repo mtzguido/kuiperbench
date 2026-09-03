@@ -1,3 +1,13 @@
+CURRENT STATUS (2026-09-03)
+---------------------------
+The current fixed entry is `separable86_alloc_f32`.  It constructs both zero
+biases, allocates the depthwise intermediate and final result, runs both
+kernels, frees the intermediate, and proves one top-level separable-convolution
+postcondition over the original tensors.  The bridge checks the canonical #86
+shapes, calls that entry once, and wraps its pointer; it computes no output
+extent and stages no bias.  Contrary helper/bias/two-call wording below is
+superseded.
+
 UPDATED 2026-06-14: #86 now routes through a VERIFIED COMPOSED Pulse
 entry, Kuiper.KB.SeparableConv2D.separable_alloc_f32 (new module in this
 dir; verifies with ./fstar.sh, ADMIT-free, no admit/assume/magic,

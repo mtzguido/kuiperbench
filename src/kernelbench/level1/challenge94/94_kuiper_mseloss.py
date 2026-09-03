@@ -25,11 +25,4 @@ class ModelNew(nn.Module):
         super().__init__()
 
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
-        if (predictions.is_cuda and targets.is_cuda
-                and predictions.dtype == torch.float32
-                and targets.dtype == torch.float32
-                and predictions.shape == targets.shape):
-            p_flat = predictions.contiguous().view(-1)
-            t_flat = targets.contiguous().view(-1)
-            return kuiper_mseloss.kuiper_mseloss(p_flat, t_flat)
-        return torch.mean((predictions - targets) ** 2)
+        return kuiper_mseloss.kuiper_mseloss(predictions, targets)

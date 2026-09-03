@@ -305,3 +305,35 @@ fn avgpool1d_alloc
 let avgpool1d_alloc_f32 =
   fun k s p d bc l input #fIn #sx ->
     avgpool1d_alloc k s p d bc l input #fIn #sx
+
+fn avgpool1d_raw_alloc_f32
+  (k s p b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) /\
+             SZ.v b * SZ.v c <= max_blocks * max_threads })
+  (l : szp { SZ.fits (SZ.v (b *^ c) * SZ.v l) })
+  (input : array2 f32 (l2_row_major (b *^ c) l) { is_global input })
+  (#fIn : perm)
+  (#sx : chest2 f32 (b *^ c) l)
+  norewrite
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    pure (SZ.fits (1 * (SZ.v k - 1) + 1)) **
+    pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
+    pure (1 * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
+    pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * 1)) **
+    pure (SZ.fits (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p))) **
+    pure (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p)
+            <= max_blocks * max_threads)
+  returns r :
+    (lo : sz { SZ.v lo == pool_out_len_1d l k s p 1 }
+     & array2 f32 (l2_row_major (b *^ c) lo))
+  ensures
+    on gpu_loc ((dsnd r) |->
+      mk2 (fun (i:natlt (b *^ c)) (j:natlt (dfst r)) ->
+        mul (avgpool_recip_f32 k)
+          (acc2 (windowreduce_result reducer_fadd_f32 sx
+            k s p 1 (dfst r)) i j))) **
+    pure (SZ.v (dfst r) == pool_out_len_1d l k s p 1)
+{
+  avgpool1d_alloc_f32 k s p 1sz (b *^ c) l input
+}

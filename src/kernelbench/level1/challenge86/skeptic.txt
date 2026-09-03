@@ -1,3 +1,12 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+`separable86_alloc_f32` is now the sole challenge-facing operation.  It owns
+zero-bias construction, intermediate/final allocation, both kernel calls, and
+the complete composition proof.  The bridge performs fixed checks, one call,
+and pointer wrapping only.  Older mentions below of `separable_alloc_f32`, a
+separate extent helper, bridge bias scratch, or a two-call composition are
+historical and superseded.
+
 Skeptic review — KernelBench L1 #86 (Kuiper.KB depthwise-separable Conv2D)
 ============================================================================
 

@@ -10,6 +10,8 @@
 // blocks (1 thread / block, sequential within a row).  Total work
 // O(B * D), parallelism = B blocks.
 #include <torch/extension.h>
+#include <ATen/cuda/CUDAGuard.h>
+#include <cuda_runtime.h>
 #include "Kuiper_KB_CumSum.h"
 #include "Kuiper_KB_CumSum.cu"
 
@@ -17,21 +19,21 @@
 static constexpr int64_t KUIPER_MAX_BLOCKS = (int64_t)2097152;
 
 torch::Tensor kuiper_cumsum_dim1_cuda(torch::Tensor X) {
-    TORCH_CHECK(X.is_cuda() && X.scalar_type() == torch::kFloat32 && X.dim() == 2,
-                "kuiper_cumsum_dim1: expected 2-D float32 CUDA tensor");
-    auto Xc = X.contiguous();
-    int64_t B = Xc.size(0), D = Xc.size(1);
+    TORCH_CHECK(X.is_cuda() && X.scalar_type() == torch::kFloat32 &&
+                    X.dim() == 2 && X.is_contiguous(),
+                "kuiper_cumsum_dim1: expected contiguous 2-D float32 CUDA tensor");
+    int64_t B = X.size(0), D = X.size(1);
     TORCH_CHECK(B > 0 && D > 0
                 && B <= (int64_t)UINT32_MAX
                 && D <= (int64_t)UINT32_MAX
-                && B * D <= (int64_t)UINT32_MAX
+                && (__int128) B * D <= UINT32_MAX
                 && B <= KUIPER_MAX_BLOCKS,
                 "kuiper_cumsum_dim1: shape out of range");
-    auto Y = torch::empty_like(Xc);
-    Kuiper_KB_CumSum_cumsum_fw_f32(
-        (uint32_t)B, (uint32_t)D,
-        Xc.data_ptr<float>(), Y.data_ptr<float>());
-    return Y;
+    const at::cuda::CUDAGuard device_guard(X.device());
+    float *out = Kuiper_KB_CumSum_cumsum_alloc_f32(
+        (uint32_t)B, (uint32_t)D, X.data_ptr<float>());
+    return torch::from_blob(out, X.sizes(), [](void *p) { cudaFree(p); },
+                            X.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

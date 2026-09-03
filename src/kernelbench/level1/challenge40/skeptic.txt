@@ -17,7 +17,7 @@ the bridge does not supply it.
 
 The public [layernorm_domain] precondition requires every real
 [var + eps] to be positive.  On that domain, the temporary
-[Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] assumption connects the float
+[Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] assumption connects the float
 [rsqrt] operation to [FStar.Math.Sqrt.rsqrt].  This compatibility law is
 proposed for upstream Kuiper and is the numerical proof's explicit local
 trust debt.

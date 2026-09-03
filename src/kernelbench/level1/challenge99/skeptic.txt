@@ -32,12 +32,11 @@ current documentation.
 - The public entry point computes the f32 reciprocal from the batch size and
   multiplies the final reduction by it; callers cannot supply a mismatched
   scale.
-- The C++ bridge supplies the pinned PyTorch default `eps=1.0e-6f` to the
-  verified entry point.
+- The verified entry supplies the pinned PyTorch default `eps=1.0e-6f`.
 
 The extracted ABI is:
 
-    triplet_fw_f32(B, D, margin, eps, anchor, positive, negative)
+    triplet_fw_f32(B, D, margin_f64, anchor, positive, negative)
 
 and the bridge uses that order.
 
@@ -51,13 +50,11 @@ boundary explicit and ensures the submitted model has only one semantic path.
 ## Trust and performance qualifications
 
 The challenge module contains no `assume`, `admit`, or `magic`, but it uses
-three compatibility/shared components with explicit repository-level trust
+shared components with explicit repository-level trust
 obligations:
 
-- `Kuiper.KB.Compat.SqrtApprox.sqrt_approx` is a temporary local `assume val`
-  for the missing floating/real square-root approximation law. The proposed
-  upstream change is `patches/kuiper-sqrt-approx.patch`; it uses
-  `FStar.Math.Sqrt.sqrt` and has been checked against the pinned package.
+- The floating/real square-root approximation law is now supplied by the
+  selected Kuiper package and targets `FStar.Math.Sqrt.sqrt` directly.
 
 - `Kuiper.KB.Compat.Array.gpu_memcpy_device_to_device'` currently has an
   admitted proof of its exact offset-copy postcondition.

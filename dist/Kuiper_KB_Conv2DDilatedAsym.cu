@@ -77,3 +77,31 @@ void Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym_f32(
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+__global__
+/**
+  hoisted when extracting conv2d_dilated_asym80_alloc_f32
+*/
+static void
+__hoisted_conv2d_dilated_asym80_alloc_f32_0(float *gbias)
+{
+    if (1024U * blockIdx.x + threadIdx.x < 64U)
+        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+}
+
+float *Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym80_alloc_f32(float *gx,
+                                                                   float *gw)
+{
+    float *gbias = (float *) KPR_GPU_ALLOC(sizeof(float), 64U);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_conv2d_dilated_asym80_alloc_f32_0, 1U, 1024U, 0U, s,
+              gbias);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    float *gy = (float *) KPR_GPU_ALLOC(sizeof(float), 129007616U);
+    Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym_f32(
+        8U, 32U, 512U, 512U, 64U, 5U, 9U, 1U, 1U, 2U, 4U, 2U, 3U, 508U, 496U,
+        gx, gw, gbias, gy);
+    MUST(cudaFree(gbias));
+    return gy;
+}

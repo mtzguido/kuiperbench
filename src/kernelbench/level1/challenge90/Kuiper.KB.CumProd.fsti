@@ -53,5 +53,16 @@ fn cumprod_fw_f32
        on gpu_loc (output |-> sy) **
        pure (cumprod_post b d sx sy))
 
+fn cumprod_alloc_f32
+  (b : szp { b <= max_blocks })
+  (d : szp { SZ.fits (SZ.v b * SZ.v d) })
+  (input : array2 f32 (l2_row_major b d) { is_global input })
+  (#sx : chest2 f32 b d)
+  preserves cpu ** on gpu_loc (input |-> sx)
+  returns output : array2 f32 (l2_row_major b d)
+  ensures
+    exists* (sy : chest2 f32 b d).
+      on gpu_loc (output |-> sy) ** pure (cumprod_post b d sx sy)
+
 
 inline_for_extraction let () = ()

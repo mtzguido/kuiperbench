@@ -49,7 +49,7 @@ val cimap_fits (n : nat) (c hw : pos) (ci k : nat)
                     SZ.fits (q * (c * hw) + ci * hw + rem)))
 
 (* Concrete ctlayout instance for use in Pulse kernels. *)
-#push-options "--z3rlimit 400 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 inline_for_extraction noextract
 instance c_l2_bcm_channels
   (n  : erased nat)

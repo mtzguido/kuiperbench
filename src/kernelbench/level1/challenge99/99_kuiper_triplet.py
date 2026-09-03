@@ -27,7 +27,7 @@ class ModelNew(nn.Module):
 
     def forward(self, anchor: torch.Tensor, positive: torch.Tensor, negative: torch.Tensor) -> torch.Tensor:
         return kuiper_triplet.kuiper_triplet(
-            anchor.contiguous(),
-            positive.contiguous(),
-            negative.contiguous(),
+            anchor,
+            positive,
+            negative,
             self.margin)

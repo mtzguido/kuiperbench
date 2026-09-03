@@ -13,5 +13,7 @@ void Kuiper_KB_Conv2DSquare_conv2d_square_f32(uint32_t b, uint32_t cin,
                                               float *gx, float *gw,
                                               float *gbias, float *gy);
 
+float *Kuiper_KB_Conv2DSquare_conv2d_square63_alloc_f32(float *gx, float *gw);
+
 #define Kuiper_KB_Conv2DSquare_H_DEFINED
 #endif /* Kuiper_KB_Conv2DSquare_H */

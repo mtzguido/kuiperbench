@@ -78,3 +78,17 @@ void Kuiper_KB_RMSNorm_rmsnorm_fw(uint32_t b, uint32_t hw, uint32_t c,
 void (*Kuiper_KB_RMSNorm_rmsnorm_fw_f32)(uint32_t x0, uint32_t x1, uint32_t x2,
                                          float x3, float *x4) =
     Kuiper_KB_RMSNorm_rmsnorm_fw;
+
+float *Kuiper_KB_RMSNorm_rmsnorm4d_alloc_f32(uint32_t b, uint32_t c, uint32_t h,
+                                             uint32_t w, double eps, float *x)
+{
+    float eps32 = (float) eps;
+    uint32_t hw = h * w;
+    uint32_t elems = b * hw * c;
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), elems);
+    MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * elems,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_RMSNorm_rmsnorm_fw_f32(b, hw, c, eps32, out);
+    return out;
+}

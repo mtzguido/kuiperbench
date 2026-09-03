@@ -49,8 +49,5 @@ class ModelNew(nn.Module):
         self.eps = float(eps)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # gamma, beta are nn.LayerNorm's learnable parameters.  Pass them in
-        # contiguous f32 form, matching the verified spec.
-        gamma = self.ln.weight.contiguous().to(x.device).to(torch.float32)
-        beta  = self.ln.bias  .contiguous().to(x.device).to(torch.float32)
-        return kuiper_layernorm.kuiper_layernorm(x, gamma, beta, self.eps)
+        return kuiper_layernorm.kuiper_layernorm(
+            x, self.ln.weight, self.ln.bias, self.eps)

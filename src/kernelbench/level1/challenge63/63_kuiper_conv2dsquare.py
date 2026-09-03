@@ -58,5 +58,5 @@ class ModelNew(nn.Module):
                                 dilation=dilation, groups=groups, bias=bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        w = self.conv2d.weight.contiguous().to(x.device).to(torch.float32)
-        return kuiper_conv2d_square.kuiper_conv2d_square(x, w)
+        return kuiper_conv2d_square.kuiper_conv2d_square(
+            x, self.conv2d.weight)

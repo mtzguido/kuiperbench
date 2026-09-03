@@ -15,6 +15,7 @@ open Kuiper.Tensor.Layout.Alg { l1_forward, l2_row_major, c_l2_row_major }
 open Kuiper.Spec.L1Norm
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
+module Copy = Kuiper.KB.Tensor.Copy
 module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
 module RowScale = Kuiper.Kernel.RowScale
@@ -94,7 +95,7 @@ let l1norm_post_aux
     in
     Classical.forall_intro aux
 
-#push-options "--z3rlimit 80"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn l1norm_fw_f32_impl
   (b : szp)
@@ -175,3 +176,26 @@ fn l1norm_fw
 }
 
 let l1norm_fw_f32 = l1norm_fw
+
+fn l1norm_alloc_f32
+  (b : szp)
+  (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
+  (x : array2 f32 (l2_row_major b d) { is_global x })
+  (#f : perm)
+  (#sx : chest2 f32 b d)
+  preserves cpu ** on gpu_loc (x |-> Frac f sx)
+  requires
+    pure (SZ.v b > 0 /\
+          SZ.v b * SZ.v d <= max_blocks * max_threads /\
+          l1norm_domain sx)
+  returns out : array2 f32 (l2_row_major b d)
+  ensures
+    exists* (sx' : chest2 f32 b d).
+      on gpu_loc (out |-> sx') **
+      pure (l1norm_post b d sx sx')
+{
+  let n : szp = b *^ d;
+  let out = Copy.copy_alloc #f32 n x;
+  l1norm_fw_f32 b d out;
+  out
+}

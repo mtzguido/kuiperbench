@@ -51,5 +51,5 @@ class ModelNew(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return kuiper_maxpool1d.kuiper_maxpool1d(
-            x.contiguous(), self.kernel_size, self.stride,
+            x, self.kernel_size, self.stride,
             self.padding, self.dilation)
