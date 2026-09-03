@@ -94,47 +94,6 @@ let pool_out_len_1d_ub (l k s p d : nat)
       assert ((padded - kspan) / s <= padded - kspan)
     end
 
-(* Internal self-allocating per-axis pass used by the complete composition. *)
-inline_for_extraction noextract
-fn maxpool3d_axis_alloc
-  (k s p d : szp)
-  (bc : szp { SZ.v bc <= max_blocks * max_threads })
-  (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
-  (input : array2 f32 (l2_row_major bc l) { is_global input })
-  (#fIn : perm)
-  (#sx  : chest2 f32 bc l)
-  preserves
-    cpu **
-    on gpu_loc (input |-> Frac fIn sx)
-  requires
-    pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
-    pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
-    pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
-    pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
-    pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
-    pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-               & array2 f32 (l2_row_major bc lo))
-  ensures
-    on gpu_loc ((dsnd r) |->
-      windowreduce_result reducer_fmax_f32 sx
-        k s p d (dfst r)) **
-    pure (SZ.v (dfst r) ==
-            pool_out_len_1d l k s p d)
-{
-  let l_out = pool_out_len_1d_sz l k s p d;
-  pool_out_len_1d_ub l k s p d;
-  ML.lemma_mult_le_left bc l_out (SZ.v l + 2 * SZ.v p);
-  ML.lemma_mult_le_right s l_out (SZ.v l + 2 * SZ.v p);
-  let output = alloc0 #f32 (bc *^ l_out) (l2_row_major bc l_out);
-  maxpool3d_axis_fw_rm_f32 k s p d bc l l_out input output;
-  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
-}
-
-let maxpool3d_axis_alloc_f32 =
-  fun k s p d bc l input #fIn #sx ->
-    maxpool3d_axis_alloc k s p d bc l input #fIn #sx
-
 (* A fitting window and positive stride produce a nonempty output axis. *)
 let pool_out_len_1d_pos (l k s p d : nat)
   : Lemma (requires k >= 1 /\ s >= 1 /\ d >= 1 /\ d * (k - 1) + 1 <= l + 2 * p)
@@ -200,18 +159,17 @@ fn maxpool3d_full_alloc_f32
   let do0 = pool_out_len_1d_sz depth kd sd pd dd;
   pool_out_len_1d_pos depth kd sd pd dd;
   let do_ : (x:sz { SZ.v x == pool_out_len_1d depth kd sd pd dd /\ SZ.v x > 0 }) = do0;
-  let how : szp = ho *^ wo;
-  let rows_d : szp = bc *^ how;
+  let rows_d = bc *^ (ho *^ wo);
   let out = alloc0 #f32 (rows_d *^ do_)
-    (l2_bcm_pages (SZ.v bc) (SZ.v how) (SZ.v do_));
+    (l2_bcm_pages (SZ.v bc) (SZ.v ho * SZ.v wo) (SZ.v do_));
   maxpool3d_axis_fw #f32 reducer_fmax_f32 kd sd pd dd rows_d depth do_
-    #(l2_bcm_pages (SZ.v bc) (SZ.v how) (SZ.v depth))
-    #(c_l2_bcm_pages (FStar.Ghost.hide (SZ.v bc)) how depth)
-    #(l2_bcm_pages (SZ.v bc) (SZ.v how) (SZ.v do_))
-    #(c_l2_bcm_pages (FStar.Ghost.hide (SZ.v bc)) how do_)
+    #(l2_bcm_pages (SZ.v bc) (SZ.v ho * SZ.v wo) (SZ.v depth))
+    #(c_l2_bcm_pages (FStar.Ghost.hide (SZ.v bc)) (ho *^ wo) depth)
+    #(l2_bcm_pages (SZ.v bc) (SZ.v ho * SZ.v wo) (SZ.v do_))
+    #(c_l2_bcm_pages (FStar.Ghost.hide (SZ.v bc)) (ho *^ wo) do_)
     mid_d_in out;
   free mid_d_in;
-  (| wo, (| ho, (| do_, out |) |) |)
+  { w_out = wo; h_out = ho; d_out = do_; output = out }
 }
 #pop-options
 
@@ -230,10 +188,12 @@ fn maxpool3d_raw_alloc_f32
     pure (maxpool3d_full_pre k k k s s s p p p d d d
       (SZ.v (b *^ c)) depth h w)
   returns r : maxpool3d_full_result k k k s s s p p p d d d
-    (SZ.v (b *^ c)) depth h w
+    (b *^ c) depth h w
   ensures maxpool3d_full_post k k k s s s p p p d d d
-    (SZ.v (b *^ c)) depth h w sx r
+    (b *^ c) depth h w sx r
 {
-  maxpool3d_full_alloc_f32 k k k s s s p p p d d d
-    (b *^ c) depth h w #sq_bd #sq_bdh input #fIn #sx
+  let r = maxpool3d_full_alloc_f32 k k k s s s p p p d d d
+    (b *^ c) depth h w #sq_bd #sq_bdh input #fIn #sx;
+  prod4_rotate (SZ.v (b *^ c)) (SZ.v depth) (SZ.v r.w_out) (SZ.v r.h_out);
+  r
 }

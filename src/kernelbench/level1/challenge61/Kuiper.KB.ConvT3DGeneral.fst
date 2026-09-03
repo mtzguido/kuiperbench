@@ -273,7 +273,7 @@ fn convt3d_raw_alloc_bias_f32
   let gy = convt3d_general_alloc b cin d_in h_in w_in cout kd kh kw
     sd sh sw pd ph pw dd dh dw d_out h_out w_out gx gw gbias
     #fx #fw #fb #sx #sw_l #sbias;
-  (| d_out, (| h_out, (| w_out, gy |) |) |)
+  { d_out = d_out; h_out = h_out; w_out = w_out; output = gy }
 }
 
 fn convt3d_raw_alloc_zero_f32
@@ -321,7 +321,7 @@ fn convt3d_raw_alloc_zero_f32
     sd sh sw pd ph pw dd dh dw d_out h_out w_out gx gw gbias
     #fx #fw #_ #sx #sw_l #(mk1 (fun _ -> (zero #f32)));
   free gbias;
-  (| d_out, (| h_out, (| w_out, gy |) |) |)
+  { d_out = d_out; h_out = h_out; w_out = w_out; output = gy }
 }
 
 inline_for_extraction let () = ()

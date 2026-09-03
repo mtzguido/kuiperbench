@@ -85,20 +85,6 @@ void Kuiper_KB_AvgPool2D_avgpool2d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-Prims_dtuple2__uint32_t__float_
-Kuiper_KB_AvgPool2D_avgpool2d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
-                                             uint32_t d, uint32_t bc,
-                                             uint32_t l, float *input)
-{
-    uint32_t l_out = Kuiper_KB_AvgPool2D_pool_out_len_1d_sz(l, k, s, p, d);
-    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), bc * l_out);
-    Kuiper_KB_AvgPool2D_avgpool2d_axis_fw_rm_f32(k, s, p, d, bc, l, l_out,
-                                                 input, output);
-    smul_fw_f32(Kuiper_KB_AvgPool2D_avgpool_recip_f32(k), bc * l_out, output);
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
-                                                           .snd = output});
-}
-
 __global__
 /**
   hoisted when extracting avgpool2d_half_alloc

@@ -103,7 +103,7 @@ __hoisted_convt1d_general_alloc_f32_0(uint32_t cout, float *gbias)
         gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
 }
 
-Prims_dtuple2__uint32_t__float_
+Kuiper_KB_ConvT1DGeneral_convt1d_alloc_result
 Kuiper_KB_ConvT1DGeneral_convt1d_general_alloc_f32(
     uint32_t b, uint32_t cin, uint32_t l_in, uint32_t cout, uint32_t k,
     uint32_t s, uint32_t p, uint32_t opad, uint32_t d, float *gx, float *gw)
@@ -157,6 +157,6 @@ Kuiper_KB_ConvT1DGeneral_convt1d_general_alloc_f32(
         convt2d_general_alloc_f32(b, cin, 1U, l_in, cout, 1U, k, 1U, s, 0U, p,
                                   1U, d, 1U, l_out1, gx, gw, gbias);
     MUST(cudaFree(gbias));
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out1,
-                                                           .snd = gy});
+    return (KRML_CLITERAL(Kuiper_KB_ConvT1DGeneral_convt1d_alloc_result){
+        .l_out = l_out1, .output = gy});
 }

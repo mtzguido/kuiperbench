@@ -192,15 +192,12 @@ fn dwconv2d_raw_alloc_bias_f32
   norewrite
   preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) ** on gpu_loc (gbias |-> Frac fb sbias)
-  returns r :
-    (ho : szp { SZ.v ho == dwconv2d_out_len h_in kh stride pad } &
-     (wo : szp { SZ.v wo == dwconv2d_out_len w_in kw stride pad } &
-      array1 f32 (l1_forward (b * c * ho * wo))))
-  ensures exists* (sy : chest1 f32 (b * c * (dfst r) * (dfst (dsnd r)))).
-    on gpu_loc ((dsnd (dsnd r)) |-> sy) **
-    pure (forall (tid : nat{tid < b * c * (dfst r) * (dfst (dsnd r))}).
+  returns r : dwconv2d_raw_result b c h_in w_in kh kw stride pad
+  ensures exists* (sy : chest1 f32 (b * c * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * c * r.h_out * r.w_out}).
       acc1 sy tid == dwconv2d_out_at b c h_in w_in kh kw stride pad
-        (dfst r) (dfst (dsnd r)) sx sw sbias tid)
+        r.h_out r.w_out sx sw sbias tid)
 {
   guard_dwconv2d_raw_size b c h_in w_in kh kw stride pad;
   let h0 = dwconv2d_out_dim h_in kh stride pad;
@@ -211,7 +208,7 @@ fn dwconv2d_raw_alloc_bias_f32
   let w_out : szp = w0;
   let gy = dwconv2d_alloc_f32 b c h_in w_in kh kw stride pad
     h_out w_out gx gw gbias;
-  (| h_out, (| w_out, gy |) |)
+  { h_out = h_out; w_out = w_out; output = gy }
 }
 
 fn dwconv2d_raw_alloc_zero_f32
@@ -224,15 +221,12 @@ fn dwconv2d_raw_alloc_zero_f32
   norewrite
   preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw)
-  returns r :
-    (ho : szp { SZ.v ho == dwconv2d_out_len h_in kh stride pad } &
-     (wo : szp { SZ.v wo == dwconv2d_out_len w_in kw stride pad } &
-      array1 f32 (l1_forward (b * c * ho * wo))))
-  ensures exists* (sy : chest1 f32 (b * c * (dfst r) * (dfst (dsnd r)))).
-    on gpu_loc ((dsnd (dsnd r)) |-> sy) **
-    pure (forall (tid : nat{tid < b * c * (dfst r) * (dfst (dsnd r))}).
+  returns r : dwconv2d_raw_result b c h_in w_in kh kw stride pad
+  ensures exists* (sy : chest1 f32 (b * c * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * c * r.h_out * r.w_out}).
       acc1 sy tid == dwconv2d_out_at b c h_in w_in kh kw stride pad
-        (dfst r) (dfst (dsnd r)) sx sw (mk1 (fun _ -> (zero #f32))) tid)
+        r.h_out r.w_out sx sw (mk1 (fun _ -> (zero #f32))) tid)
 {
   guard_dwconv2d_raw_size b c h_in w_in kh kw stride pad;
   let gbias = alloc0 #f32 c (l1_forward c);

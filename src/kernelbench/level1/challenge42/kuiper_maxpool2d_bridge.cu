@@ -20,23 +20,12 @@
 // There is NO physical transpose: the inter-pass permute+contiguous copies
 // that used to live in this bridge (and were NOT verified by Kuiper) are gone.
 // The call allocates the intermediate, frees it after pass 2, and returns
-// (W_out, (H_out, device_ptr)) where device_ptr is already the row-major
+// a named {W_out, H_out, device_ptr} result where device_ptr is already the row-major
 // (B, C, H_out, W_out) result.  This bridge does NO arithmetic that feeds the
 // kernel and NO output allocation; it only checks dimension contracts.
 #include <torch/extension.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
-
-// The extracted entry projects the inner pass-1 dtuple with FStar.Pervasives's
-// generic dfst/dsnd, whose monomorphic definitions live in the dropped Prims/
-// FStar namespaces.  They are plain struct-field projections; provide them as
-// macros (pure ABI shims, no kernel logic) before including the extracted code.
-#ifndef FStar_Pervasives_dfst
-#  define FStar_Pervasives_dfst(x) ((x).fst)
-#endif
-#ifndef FStar_Pervasives_dsnd
-#  define FStar_Pervasives_dsnd(x) ((x).snd)
-#endif
 
 #include "Kuiper_KB_MaxPool2D.h"
 #include "Kuiper_KB_MaxPool2D.cu"
@@ -93,16 +82,16 @@ torch::Tensor kuiper_maxpool2d_cuda(torch::Tensor X,
     // ── Single verified, transpose-free 2-D max pool. ────────────────
     // The same scalar (k,s,p,d) is used for both axes: kh=kw, sh=sw, etc.
     const c10::cuda::CUDAGuard device_guard(X.device());
-    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r =
+    Kuiper_KB_MaxPool2D_maxpool2d_full_result r =
         Kuiper_KB_MaxPool2D_maxpool2d_raw_alloc_f32(
             (uint32_t)kernel_size, (uint32_t)stride,
             (uint32_t)padding, (uint32_t)dilation,
             (uint32_t)B, (uint32_t)C, (uint32_t)H, (uint32_t)W,
             X.data_ptr<float>());
 
-    int64_t W_out = (int64_t)r.fst;
-    int64_t H_out = (int64_t)r.snd.fst;
-    float *out_ptr = r.snd.snd;
+    int64_t W_out = (int64_t)r.w_out;
+    int64_t H_out = (int64_t)r.h_out;
+    float *out_ptr = r.output;
 
     // out_ptr is already the row-major (B, C, H_out, W_out) result -- no
     // permute needed.  Wrap it in a tensor owning the cudaMalloc'd buffer.

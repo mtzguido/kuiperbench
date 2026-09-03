@@ -57,7 +57,7 @@ void Kuiper_KB_MaxPool1D_maxpool1d_fw_rm_f32(uint32_t k, uint32_t s, uint32_t p,
     }
 }
 
-Prims_dtuple2__uint32_t__float_
+Kuiper_KB_MaxPool1D_maxpool1d_alloc_result
 Kuiper_KB_MaxPool1D_maxpool1d_alloc_f32(uint32_t b, uint32_t c, uint32_t l,
                                         uint32_t k, uint32_t s, uint32_t p,
                                         uint32_t d, float *input)
@@ -66,6 +66,6 @@ Kuiper_KB_MaxPool1D_maxpool1d_alloc_f32(uint32_t b, uint32_t c, uint32_t l,
     float *output = (float *) KPR_GPU_ALLOC(sizeof(float), b * c * l_out);
     Kuiper_KB_MaxPool1D_maxpool1d_fw_rm_f32(k, s, p, d, b * c, l, l_out, input,
                                             output);
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
-                                                           .snd = output});
+    return (KRML_CLITERAL(Kuiper_KB_MaxPool1D_maxpool1d_alloc_result){
+        .l_out = l_out, .output = output});
 }

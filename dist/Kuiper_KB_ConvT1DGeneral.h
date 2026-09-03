@@ -5,7 +5,12 @@
 #include <kuiper.h>
 #include <kbench.h>
 
-Prims_dtuple2__uint32_t__float_
+typedef struct Kuiper_KB_ConvT1DGeneral_convt1d_alloc_result_s {
+    uint32_t l_out;
+    float *output;
+} Kuiper_KB_ConvT1DGeneral_convt1d_alloc_result;
+
+Kuiper_KB_ConvT1DGeneral_convt1d_alloc_result
 Kuiper_KB_ConvT1DGeneral_convt1d_general_alloc_f32(
     uint32_t b, uint32_t cin, uint32_t l_in, uint32_t cout, uint32_t k,
     uint32_t s, uint32_t p, uint32_t opad, uint32_t d, float *gx, float *gw);

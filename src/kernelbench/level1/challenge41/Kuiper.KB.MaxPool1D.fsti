@@ -11,6 +11,12 @@ open Kuiper.Spec.Pool1D { pool_out_len_1d }
 module SZ = Kuiper.SizeT
 module EM = Kuiper.EMatrix
 
+noeq type maxpool1d_alloc_result
+  (b c l k s p d : szp) = {
+  l_out : lo:sz { SZ.v lo == pool_out_len_1d l k s p d };
+  output : array2 f32 (l2_row_major (b * c) l_out);
+}
+
 (* Verified, extractable 1-D pool output-length formula (see .fst).  Provably
    equal to the pure spec [pool_out_len_1d]; the C bridge calls this instead
    of re-implementing the formula in unverified C. *)
@@ -76,11 +82,10 @@ ensures
 
 (* Self-allocating entry point.  Takes ONLY the raw PyTorch dims and the input
    tensor; computes [l_out], allocates the GPU output buffer, fills it, and
-   returns the pair [(l_out, output_buffer)] — the buffer's ownership passes to
+   returns both in a named result record — the buffer's ownership passes to
    the caller.  All preconditions are stated on the raw dimensions ([l + 2p]
    etc.), so the unverified bridge only performs dimension-contract checks: it
-   computes nothing that feeds the kernel and allocates nothing.  Extracts to a
-   C function returning a [{ uint32_t fst; float *snd; }] struct. *)
+   computes nothing that feeds the kernel and allocates nothing. *)
 fn maxpool1d_alloc_f32
   (b : szp)
 (c : szp { SZ.fits (SZ.v b * SZ.v c) /\
@@ -100,11 +105,10 @@ requires
  pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
  pure (SZ.fits (SZ.v b * SZ.v c * (SZ.v l + 2 * SZ.v p))) **
  pure (SZ.v b * SZ.v c * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-            & array2 f32 (l2_row_major (b * c) lo))
+returns r : maxpool1d_alloc_result b c l k s p d
 ensures
- on gpu_loc ((dsnd r) |->
+ on gpu_loc (r.output |->
    windowreduce_result reducer_fmax_f32 sx
-     k s p d (dfst r)) **
- pure (SZ.v (dfst r) ==
+     k s p d r.l_out) **
+ pure (SZ.v r.l_out ==
          pool_out_len_1d l k s p d)

@@ -7,19 +7,13 @@ module Kuiper.KB.MaxPool2D
  * [reducer_fmax_f32] (rid = -inf, rop = fmaxf):
  *
  *   pass 1: per-row max over W axis (B*C*H rows of length W)
- *   pass 2: per-row max over H axis (B*C*W_out rows of length H,
- *           after a host-side (B,C,H,W_out) -> (B,C,W_out,H) permute)
+ *   pass 2: per-row max over H axis (B*C*W_out rows of length H), using a
+ *           verified zero-copy BCM-pages layout recast
  *
  * Each pass has an exact implementation-order left-fold specification.
- * The C++ bridge composes the passes and the KernelBench oracle checks the
- * resulting 2-D operation; this interface assumes no [fmax] algebra.
- *
- * This .fsti exposes a single extracted entry [maxpool2d_axis_fw_rm_f32]
- * which is the verified per-axis pass; the C++ bridge orchestrates the
- * two calls and the inter-pass permute (PyTorch's transpose+contiguous).
- * The "axis" name reflects that the kernel operates on the *inner*
- * (last) axis of a 2-D row-major view; the bridge supplies whichever
- * axis is currently inner.
+ * The public raw entry owns the complete two-pass composition, including
+ * allocation, the layout recast, and cleanup.  The C++ bridge only checks
+ * the raw dimension contract and calls it once; no [fmax] algebra is assumed.
  *)
 
 #lang-pulse
@@ -34,6 +28,15 @@ open Kuiper.Spec.Pool1D { pool_out_len_1d }
 open Kuiper.Tensor.Layout.BCMPages { l2_bcm_pages }
 module SZ = Kuiper.SizeT
 module EM = Kuiper.EMatrix
+
+noeq type maxpool2d_full_result
+  (kh kw sh sw ph pw dh dw bc h w : szp) = {
+  w_out : wo:sz { SZ.v wo == pool_out_len_1d w kw sw pw dw /\
+                  SZ.v wo > 0 };
+  h_out : ho:sz { SZ.v ho == pool_out_len_1d h kh sh ph dh /\
+                  SZ.v ho > 0 };
+  output : array2 f32 (l2_bcm_pages bc w_out h_out);
+}
 
 (* Verified, extractable 1-D pool output-length formula (see .fst).  Provably
    equal to the pure spec [pool_out_len_1d]; the C bridge calls this (per axis)
@@ -114,43 +117,6 @@ ensures
      k s p d l_out)
 
 
-(* Self-allocating per-axis pass.  Takes the flattened row count [bc] and the
-   inner axis length [l] (NOT a pre-computed [l_out], NOT a caller buffer);
-   computes [l_out], allocates the [(bc, l_out)] GPU output buffer, fills it,
-   and returns the pair [(l_out, output_buffer)] — ownership passes to the
-   caller.  All preconditions are on the raw axis dims, so the bridge only
-   performs dimension-contract checks and the (unavoidable) inter-pass permute
-   copies; it computes no output length and allocates no pool buffer.  Extracts
-   to a C function returning a [{ uint32_t fst; float *snd; }] struct. *)
-fn maxpool2d_axis_alloc_f32
-  (k s p d : szp)
-(bc : szp { SZ.v bc <= max_blocks * max_threads })
-(l : szp { SZ.fits (SZ.v bc * SZ.v l) })
-(input : array2 f32 (l2_row_major bc l) { is_global input })
-(#fIn : perm)
-(#sx  : chest2 f32 bc l)
-preserves
- cpu **
- on gpu_loc (input |-> Frac fIn sx)
-requires
- pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
- pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
- pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
- pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
- pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
- pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-            & array2 f32 (l2_row_major bc lo))
-ensures
- on gpu_loc ((dsnd r) |->
-   windowreduce_result reducer_fmax_f32 sx
-     k s p d (dfst r)) **
- pure (SZ.v (dfst r) ==
-         pool_out_len_1d l k s p d) **
- pure (is_global (dsnd r)) **
- pure (is_full_array (core (dsnd r)))
-
-
 (* ── Single verified, transpose-free 2-D max-pool entry ──────────────
 
    [maxpool2d_full_alloc_f32] folds the WHOLE separable 2-D max pool into
@@ -159,7 +125,7 @@ ensures
    [windowreduce] passes in the C++ bridge.
 
    Input is a row-major (B*C*H, W) view ([bc = B*C], inner = W).  The
-   returned (W_out, H_out, buffer) triple's buffer is physically the
+   returned record's buffer is physically the
    row-major (B*C, H_out, W_out) result.  Its post composes both passes:
    [maxpool2d_mid_view] is exactly the width-pass result viewed as
    (B*C*W_out, H), and the returned buffer is its height-pass result. *)
@@ -184,16 +150,12 @@ requires
  pure (SZ.fits (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw))) **
  pure (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw)
          <= max_blocks * max_threads)
-returns r : (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw
-                      /\ SZ.v wo > 0 }
-            & (ho : sz { SZ.v ho == pool_out_len_1d h kh sh ph dh
-                         /\ SZ.v ho > 0 }
-               & array2 f32 (l2_bcm_pages bc wo ho)))
+returns r : maxpool2d_full_result kh kw sh sw ph pw dh dw bc h w
 ensures
- on gpu_loc ((dsnd (dsnd r)) |->
+ on gpu_loc (r.output |->
    windowreduce_result reducer_fmax_f32
-     (maxpool2d_mid_view bc h w kw sw pw dw (dfst r) sx)
-     kh sh ph dh (dfst (dsnd r)))
+     (maxpool2d_mid_view bc h w kw sw pw dw r.w_out sx)
+     kh sh ph dh r.h_out)
 
 (* KernelBench-shaped entry: derives [bc = b*c] and duplicates the scalar
    pooling parameters across H/W inside Kuiper. *)
@@ -220,12 +182,9 @@ fn maxpool2d_raw_alloc_f32
                     * (SZ.v w + 2 * SZ.v p))) **
     pure (SZ.v (b *^ c) * (SZ.v h + 2 * SZ.v p)
             * (SZ.v w + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r :
-    (wo : sz { SZ.v wo == pool_out_len_1d w k s p d /\ SZ.v wo > 0 }
-     & (ho : sz { SZ.v ho == pool_out_len_1d h k s p d /\ SZ.v ho > 0 }
-        & array2 f32 (l2_bcm_pages (b *^ c) wo ho)))
+  returns r : maxpool2d_full_result k k s s p p d d (b *^ c) h w
   ensures
-    on gpu_loc ((dsnd (dsnd r)) |->
+    on gpu_loc (r.output |->
       windowreduce_result reducer_fmax_f32
-        (maxpool2d_mid_view (b *^ c) h w k s p d (dfst r) sx)
-        k s p d (dfst (dsnd r)))
+        (maxpool2d_mid_view (b *^ c) h w k s p d r.w_out sx)
+        k s p d r.h_out)

@@ -47,7 +47,7 @@ static torch::Tensor kuiper_dwconv2d_cuda(torch::Tensor X, torch::Tensor W,
     }
 
     const c10::cuda::CUDAGuard device_guard(X.device());
-    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r;
+    Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_result r;
     if (has_bias) {
         r = Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_alloc_bias_f32(
             (uint32_t) B, (uint32_t) C, (uint32_t) Hin, (uint32_t) Win,
@@ -62,7 +62,7 @@ static torch::Tensor kuiper_dwconv2d_cuda(torch::Tensor X, torch::Tensor W,
     }
 
     return torch::from_blob(
-        r.snd.snd, {B, C, (int64_t) r.fst, (int64_t) r.snd.fst},
+        r.output, {B, C, (int64_t) r.h_out, (int64_t) r.w_out},
         [](void *p) { cudaFree(p); }, X.options());
 }
 

@@ -4,13 +4,6 @@
 #include <cstdint>
 #include <c10/cuda/CUDAGuard.h>
 
-#ifndef FStar_Pervasives_dfst
-#define FStar_Pervasives_dfst(x) ((x).fst)
-#endif
-#ifndef FStar_Pervasives_dsnd
-#define FStar_Pervasives_dsnd(x) ((x).snd)
-#endif
-
 #include "Kuiper_KB_MaxPool3D.h"
 #include "Kuiper_KB_MaxPool3D.cu"
 
@@ -80,8 +73,8 @@ torch::Tensor kuiper_maxpool3d_cuda(torch::Tensor X, int64_t kernel_size,
         X.data_ptr<float>());
 
     return torch::from_blob(
-        r.snd.snd.snd,
-        {B, C, (int64_t) r.snd.snd.fst, (int64_t) r.snd.fst, (int64_t) r.fst},
+        r.output,
+        {B, C, (int64_t) r.d_out, (int64_t) r.h_out, (int64_t) r.w_out},
         [](void *q) { cudaFree(q); }, X.options());
 }
 

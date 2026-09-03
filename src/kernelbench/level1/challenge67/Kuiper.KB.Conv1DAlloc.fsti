@@ -35,6 +35,12 @@ let conv1d_raw_size_req
     SZ.fits (n + 2 * pad) /\
     (k - 1) * dilation + 1 <= n + 2 * pad /\
     conv1d_size_req b cin n cout k stride dilation l_out
+
+noeq type conv1d_raw_result
+  (b cin l_in cout kk stride : szp) (pad : sz) (dilation : szp) = {
+  l_out : lo:szp { SZ.v lo == conv1d_out_len l_in kk stride dilation pad };
+  output : array1 f32 (l1_forward (b * cout * l_out));
+}
 (* (a) Verified, extractable conv1d output-size formula used by the raw entry
    (see .fst).  Conv1d
    here supports dilation, so the dilated kernel span is
@@ -111,15 +117,13 @@ fn conv1d_raw_alloc_bias_f32
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
     on gpu_loc (gbias |-> Frac fb sbias)
-  returns r :
-    (lo : szp { SZ.v lo == conv1d_out_len l_in kk stride dilation pad }
-     & array1 f32 (l1_forward (b * cout * lo)))
+  returns r : conv1d_raw_result b cin l_in cout kk stride pad dilation
   ensures
-    exists* (sy : chest1 f32 (b * cout * (dfst r))).
-      on gpu_loc ((dsnd r) |-> sy) **
-      pure (forall (tid : nat{tid < b * cout * (dfst r)}).
+    exists* (sy : chest1 f32 (b * cout * r.l_out)).
+      on gpu_loc (r.output |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * r.l_out}).
         acc1 sy tid ==
-          conv1d_out_at b cin l_in cout kk stride pad dilation (dfst r)
+          conv1d_out_at b cin l_in cout kk stride pad dilation r.l_out
             sx sw sbias tid)
 
 fn conv1d_raw_alloc_zero_f32
@@ -134,13 +138,11 @@ fn conv1d_raw_alloc_zero_f32
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw)
-  returns r :
-    (lo : szp { SZ.v lo == conv1d_out_len l_in kk stride dilation pad }
-     & array1 f32 (l1_forward (b * cout * lo)))
+  returns r : conv1d_raw_result b cin l_in cout kk stride pad dilation
   ensures
-    exists* (sy : chest1 f32 (b * cout * (dfst r))).
-      on gpu_loc ((dsnd r) |-> sy) **
-      pure (forall (tid : nat{tid < b * cout * (dfst r)}).
+    exists* (sy : chest1 f32 (b * cout * r.l_out)).
+      on gpu_loc (r.output |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * r.l_out}).
         acc1 sy tid ==
-          conv1d_out_at b cin l_in cout kk stride pad dilation (dfst r)
+          conv1d_out_at b cin l_in cout kk stride pad dilation r.l_out
             sx sw (mk1 (fun _ -> (zero #f32))) tid)

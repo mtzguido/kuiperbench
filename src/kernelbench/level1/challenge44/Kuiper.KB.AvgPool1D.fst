@@ -254,15 +254,14 @@ fn avgpool1d_alloc
     pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
     pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-               & array2 f32 (l2_row_major bc lo))
+  returns r : avgpool1d_alloc_result k s p d bc l
   ensures
-    on gpu_loc ((dsnd r) |->
-      mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
+    on gpu_loc (r.output |->
+      mk2 (fun (i:natlt bc) (j:natlt r.l_out) ->
         mul (avgpool_recip_f32 k)
             (acc2 (windowreduce_result reducer_fadd_f32 sx
-                       k s p d (dfst r)) i j))) **
-    pure (SZ.v (dfst r) ==
+                       k s p d r.l_out) i j))) **
+    pure (SZ.v r.l_out ==
             pool_out_len_1d l k s p d)
 {
   let l_out = pool_out_len_1d_sz l k s p d;
@@ -308,7 +307,7 @@ fn avgpool1d_alloc
          mul (avgpool_recip_f32 k)
              (acc2 (windowreduce_result reducer_fadd_f32 sx
                         k s p d l_out) i j))));
-  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
+  { l_out = l_out; output = output }
 }
 
 let avgpool1d_alloc_f32 =
@@ -333,16 +332,14 @@ fn avgpool1d_raw_alloc_f32
     pure (SZ.fits (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p)
             <= max_blocks * max_threads)
-  returns r :
-    (lo : sz { SZ.v lo == pool_out_len_1d l k s p 1 }
-     & array2 f32 (l2_row_major (b *^ c) lo))
+  returns r : avgpool1d_alloc_result k s p 1sz (b *^ c) l
   ensures
-    on gpu_loc ((dsnd r) |->
-      mk2 (fun (i:natlt (b *^ c)) (j:natlt (dfst r)) ->
+    on gpu_loc (r.output |->
+      mk2 (fun (i:natlt (b *^ c)) (j:natlt r.l_out) ->
         mul (avgpool_recip_f32 k)
           (acc2 (windowreduce_result reducer_fadd_f32 sx
-            k s p 1 (dfst r)) i j))) **
-    pure (SZ.v (dfst r) == pool_out_len_1d l k s p 1)
+            k s p 1 r.l_out) i j))) **
+    pure (SZ.v r.l_out == pool_out_len_1d l k s p 1)
 {
   avgpool1d_alloc_f32 k s p 1sz (b *^ c) l input
 }

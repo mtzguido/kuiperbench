@@ -8,13 +8,6 @@
 #include <cstdint>
 #include <c10/cuda/CUDAGuard.h>
 
-#ifndef FStar_Pervasives_dfst
-#define FStar_Pervasives_dfst(x) ((x).fst)
-#endif
-#ifndef FStar_Pervasives_dsnd
-#define FStar_Pervasives_dsnd(x) ((x).snd)
-#endif
-
 #include "Kuiper_KB_AvgPool2D.h"
 #include "Kuiper_KB_AvgPool2D.cu"
 

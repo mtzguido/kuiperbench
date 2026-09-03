@@ -31,28 +31,31 @@ let reverse_inner_bij (b d : nat)
         let r, (i, ()) = x in ());
     }
 
+(* Compute the reversed row-major physical offset directly.  Going through
+   [ctlayout_bij] would first construct a reversed coordinate pair and then
+   immediately flatten it, leaving an anonymous tuple in extracted CUDA. *)
 inline_for_extraction noextract
-let reverse_inner_conc (b d : szp)
+let reverse_inner_cimap
+  (b : szp) (d : szp { SZ.fits (SZ.v b * SZ.v d) })
   (x : conc (b @| d @| INil))
-  : Tot (conc (b @| d @| INil))
-  = let r, (i, ()) = x in
-    ((SZ.(r +^ 0sz) <: szlt b),
-      ((SZ.(d -^ 1sz -^ i) <: szlt d), ()))
-
-let reverse_inner_conc_correct (b d : szp)
-  (x : conc (b @| d @| INil))
-  : (up (reverse_inner_conc b d x) == (reverse_inner_bij b d).gg (up x))
-  = ()
+  : r:SZ.t {
+      SZ.v r ==
+        (tlayout_bij (reverse_inner_bij (SZ.v b) (SZ.v d))
+          (l2_row_major b d)).imap.f (up x) }
+  = let row, (col, ()) = x in
+    SZ.(row *^ d +^ (d -^ 1sz -^ col))
 
 inline_for_extraction noextract
-let c_reverse_inner_layout
-  (#b : szp) (#d : szp)
-  (l : layout2 (SZ.v b) (SZ.v d)) {| ctlayout l |}
-  : ctlayout (tlayout_bij (reverse_inner_bij (SZ.v b) (SZ.v d)) l)
-  = ctlayout_bij (reverse_inner_bij (SZ.v b) (SZ.v d))
-      (reverse_inner_conc b d)
-      (reverse_inner_conc_correct b d)
-      l
+instance c_reverse_inner_layout
+  (#b : szp) (#d : szp { SZ.fits (SZ.v b * SZ.v d) })
+  : ctlayout
+      (tlayout_bij (reverse_inner_bij (SZ.v b) (SZ.v d))
+        (l2_row_major b d))
+  = {
+      ulen_fits = ();
+      all_fit = ();
+      cimap = reverse_inner_cimap b d;
+    }
 
 let reverse_rows_chest (#t : Type0) (#b #d : nat)
   (s : chest2 t b d)
@@ -164,10 +167,10 @@ fn cumsum_reverse_fw_f32_impl
   scan1d_inclusive_rowblock #f32 reducer_fadd_f32 b d
     #(tlayout_bij (reverse_inner_bij (SZ.v b) (SZ.v d))
         (l2_row_major b d))
-    #(c_reverse_inner_layout #b #d (l2_row_major b d))
+    #(c_reverse_inner_layout #b #d)
     #(tlayout_bij (reverse_inner_bij (SZ.v b) (SZ.v d))
         (l2_row_major b d))
-    #(c_reverse_inner_layout #b #d (l2_row_major b d))
+    #(c_reverse_inner_layout #b #d)
     input_r output_r;
 
   Pulse.Lib.Forall.elim_forall

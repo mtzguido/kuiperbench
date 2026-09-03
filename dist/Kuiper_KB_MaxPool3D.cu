@@ -59,19 +59,6 @@ void Kuiper_KB_MaxPool3D_maxpool3d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-Prims_dtuple2__uint32_t__float_
-Kuiper_KB_MaxPool3D_maxpool3d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
-                                             uint32_t d, uint32_t bc,
-                                             uint32_t l, float *input)
-{
-    uint32_t l_out = Kuiper_KB_MaxPool3D_pool_out_len_1d_sz(l, k, s, p, d);
-    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), bc * l_out);
-    Kuiper_KB_MaxPool3D_maxpool3d_axis_fw_rm_f32(k, s, p, d, bc, l, l_out,
-                                                 input, output);
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
-                                                           .snd = output});
-}
-
 __global__
 /**
   hoisted when extracting maxpool3d_raw_alloc_f32
@@ -109,9 +96,9 @@ __global__
 */
 static void
 __hoisted_maxpool3d_raw_alloc_f32_1(uint32_t k, uint32_t s, uint32_t p,
-                                    uint32_t d, uint32_t depth, float *mid_d_in,
-                                    uint32_t do_, uint32_t how, uint32_t rows_d,
-                                    float *out)
+                                    uint32_t d, uint32_t depth, uint32_t wo,
+                                    uint32_t ho, float *mid_d_in, uint32_t do_,
+                                    uint32_t rows_d, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < rows_d * do_) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / do_;
@@ -126,11 +113,12 @@ __hoisted_maxpool3d_raw_alloc_f32_1(uint32_t k, uint32_t s, uint32_t p,
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - p;
-            float raw = mid_d_in[r_sz / how * depth * how + dpos_ref * how +
-                                 r_sz % how];
+            float raw = mid_d_in[r_sz / (ho * wo) * depth * ho * wo +
+                                 dpos_ref * ho * wo + r_sz % (ho * wo)];
             acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
         }
-        out[r_sz / how * do_ * how + j_sz * how + r_sz % how] = acc;
+        out[r_sz / (ho * wo) * do_ * ho * wo + j_sz * ho * wo +
+            r_sz % (ho * wo)] = acc;
     }
 }
 
@@ -161,19 +149,19 @@ Kuiper_KB_MaxPool3D_maxpool3d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
     MUST(cudaFree(mid_h_in));
     float *mid_d_in = mid_h;
     uint32_t do_ = Kuiper_KB_MaxPool3D_pool_out_len_1d_sz(depth, k, s, p, d);
-    uint32_t how = ho * wo;
-    uint32_t rows_d = b * c * how;
+    uint32_t rows_d = b * c * ho * wo;
     float *out = (float *) KPR_GPU_ALLOC(sizeof(float), rows_d * do_);
     if (do_ != 0U) {
         cudaStream_t s1 = KPR_FRESH_STREAM();
-        KPR_KCALL(
-            __hoisted_maxpool3d_raw_alloc_f32_1,
-            rows_d * do_ / 1024U + (uint32_t) (rows_d * do_ % 1024U != 0U),
-            1024U, 0U, s1, k, s, p, d, depth, mid_d_in, do_, how, rows_d, out);
+        KPR_KCALL(__hoisted_maxpool3d_raw_alloc_f32_1,
+                  rows_d * do_ / 1024U +
+                      (uint32_t) (rows_d * do_ % 1024U != 0U),
+                  1024U, 0U, s1, k, s, p, d, depth, wo, ho, mid_d_in, do_,
+                  rows_d, out);
         MUST(cudaStreamSynchronize(s1));
         MUST(cudaStreamDestroy(s1));
     }
     MUST(cudaFree(mid_d_in));
     return (KRML_CLITERAL(Kuiper_KB_MaxPool3D_maxpool3d_full_result){
-        .fst = wo, .snd = {.fst = ho, .snd = {.fst = do_, .snd = out}}});
+        .w_out = wo, .h_out = ho, .d_out = do_, .output = out});
 }

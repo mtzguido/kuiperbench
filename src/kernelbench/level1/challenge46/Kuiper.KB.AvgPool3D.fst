@@ -228,15 +228,14 @@ fn avgpool3d_axis_alloc
     pure (SZ.v bc *
             pool_out_len_1d l k s p d
           <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-               & array2 f32 (l2_row_major bc lo))
+  returns r : avgpool3d_axis_alloc_result k s p d bc l
   ensures
-    on gpu_loc ((dsnd r) |->
-      mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
+    on gpu_loc (r.output |->
+      mk2 (fun (i:natlt bc) (j:natlt r.l_out) ->
         mul (avgpool_recip_f32 k)
             (acc2 (windowreduce_result reducer_fadd_f32 sx
-                       k s p d (dfst r)) i j))) **
-    pure (SZ.v (dfst r) ==
+                       k s p d r.l_out) i j))) **
+    pure (SZ.v r.l_out ==
             pool_out_len_1d l k s p d)
 {
   let l_out = pool_out_len_1d_sz l k s p d;
@@ -279,7 +278,7 @@ fn avgpool3d_axis_alloc
          mul (avgpool_recip_f32 k)
              (acc2 (windowreduce_result reducer_fadd_f32 sx
                         k s p d l_out) i j))));
-  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
+  { l_out = l_out; output = output }
 }
 
 let avgpool3d_axis_alloc_f32 =
@@ -512,7 +511,7 @@ fn avgpool3d_full_alloc_f32
     (SZ.v w) kd kh kw (SZ.v sd) (SZ.v sh) (SZ.v sw) (SZ.v pd)
     (SZ.v ph) (SZ.v pw) (SZ.v dd) (SZ.v dh) (SZ.v dw)
     (SZ.v wo) (SZ.v ho) (SZ.v do_) out #sx #1.0R);
-  (| wo, (| ho, (| do_, out |) |) |)
+  { w_out = wo; h_out = ho; d_out = do_; full_output = out }
 }
 #pop-options
 
@@ -531,10 +530,10 @@ fn avgpool3d_raw_alloc_f32
   requires
     pure (avgpool3d_full_pre k k k s s s p p p 1 1 1
       (SZ.v (b *^ c)) depth h w)
-  returns r : avgpool3d_full_result k k k s s s p p p 1 1 1
-    (SZ.v (b *^ c)) depth h w
-  ensures avgpool3d_full_post k k k s s s p p p 1 1 1
-    (SZ.v (b *^ c)) depth h w sx r
+  returns r : avgpool3d_full_result k k k s s s p p p 1sz 1sz 1sz
+    (b *^ c) depth h w
+  ensures avgpool3d_full_post k k k s s s p p p 1sz 1sz 1sz
+    (b *^ c) depth h w sx r
 {
   avgpool3d_full_alloc_f32 k k k s s s p p p 1sz 1sz 1sz
     (b *^ c) depth h w #sq_bd #sq_bdh input #fIn #sx

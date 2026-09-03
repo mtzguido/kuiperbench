@@ -82,7 +82,7 @@ float *Kuiper_KB_Conv2DAlloc_conv2d_general_alloc_f32(
     return gy;
 }
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_Conv2DAlloc_conv2d_raw_result
 Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_bias_f32(uint32_t b, uint32_t cin,
                                                 uint32_t h_in, uint32_t w_in,
                                                 uint32_t cout, uint32_t kh,
@@ -143,13 +143,12 @@ Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_bias_f32(uint32_t b, uint32_t cin,
         Kuiper_KB_Conv2DAlloc_conv2d_out_dim(h_in, kh, stride, pad);
     uint32_t w_out =
         Kuiper_KB_Conv2DAlloc_conv2d_out_dim(w_in, kw, stride, pad);
-    return (
-        KRML_CLITERAL(Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_){
-            .fst = h_out0,
-            .snd = {.fst = w_out,
-                    .snd = Kuiper_KB_Conv2DAlloc_conv2d_general_alloc_f32(
-                        b, cin, h_in, w_in, cout, kh, kw, stride, pad, h_out0,
-                        w_out, gx, gw, gbias)}});
+    return (KRML_CLITERAL(Kuiper_KB_Conv2DAlloc_conv2d_raw_result){
+        .h_out = h_out0,
+        .w_out = w_out,
+        .output = Kuiper_KB_Conv2DAlloc_conv2d_general_alloc_f32(
+            b, cin, h_in, w_in, cout, kh, kw, stride, pad, h_out0, w_out, gx,
+            gw, gbias)});
 }
 
 __global__
@@ -163,7 +162,7 @@ __hoisted_conv2d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
         gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
 }
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_Conv2DAlloc_conv2d_raw_result
 Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_zero_f32(uint32_t b, uint32_t cin,
                                                 uint32_t h_in, uint32_t w_in,
                                                 uint32_t cout, uint32_t kh,
@@ -227,7 +226,7 @@ Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_zero_f32(uint32_t b, uint32_t cin,
               cout, gbias);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
-    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r =
+    Kuiper_KB_Conv2DAlloc_conv2d_raw_result r =
         Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_bias_f32(
             b, cin, h_in, w_in, cout, kh, kw, stride, pad, gx, gw, gbias);
     MUST(cudaFree(gbias));

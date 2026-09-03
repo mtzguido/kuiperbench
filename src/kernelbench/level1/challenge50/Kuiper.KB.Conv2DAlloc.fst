@@ -156,18 +156,15 @@ fn conv2d_raw_alloc_bias_f32
     cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
     on gpu_loc (gbias |-> Frac fb sbias)
-  returns r :
-    (ho : szp { SZ.v ho == conv2d_out_len h_in kh stride pad } &
-     (wo : szp { SZ.v wo == conv2d_out_len w_in kw stride pad } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : conv2d_raw_result b cin h_in w_in cout kh kw stride pad
   ensures
     exists* (sy : chest1 f32
-      (b * cout * (dfst r) * (dfst (dsnd r)))).
-      on gpu_loc ((dsnd (dsnd r)) |-> sy) **
+      (b * cout * r.h_out * r.w_out)).
+      on gpu_loc (r.output |-> sy) **
       pure (forall (tid : nat{
-        tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+        tid < b * cout * r.h_out * r.w_out}).
         acc1 sy tid == conv2d_out_at b cin h_in w_in cout kh kw stride pad
-          (dfst r) (dfst (dsnd r)) sx sw sbias tid)
+          r.h_out r.w_out sx sw sbias tid)
 {
   guard_conv2d_raw_size b cin h_in w_in cout kh kw stride pad;
   let h0 = conv2d_out_dim h_in kh stride pad;
@@ -178,7 +175,7 @@ fn conv2d_raw_alloc_bias_f32
   let w_out : szp = w0;
   let gy = conv2d_general_alloc_f32 b cin h_in w_in cout kh kw stride pad
     h_out w_out gx gw gbias;
-  (| h_out, (| w_out, gy |) |)
+  { h_out = h_out; w_out = w_out; output = gy }
 }
 
 fn conv2d_raw_alloc_zero_f32
@@ -192,18 +189,15 @@ fn conv2d_raw_alloc_zero_f32
   preserves
     cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw)
-  returns r :
-    (ho : szp { SZ.v ho == conv2d_out_len h_in kh stride pad } &
-     (wo : szp { SZ.v wo == conv2d_out_len w_in kw stride pad } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : conv2d_raw_result b cin h_in w_in cout kh kw stride pad
   ensures
     exists* (sy : chest1 f32
-      (b * cout * (dfst r) * (dfst (dsnd r)))).
-      on gpu_loc ((dsnd (dsnd r)) |-> sy) **
+      (b * cout * r.h_out * r.w_out)).
+      on gpu_loc (r.output |-> sy) **
       pure (forall (tid : nat{
-        tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+        tid < b * cout * r.h_out * r.w_out}).
         acc1 sy tid == conv2d_out_at b cin h_in w_in cout kh kw stride pad
-          (dfst r) (dfst (dsnd r)) sx sw
+          r.h_out r.w_out sx sw
           (mk1 (fun _ -> (zero #f32))) tid)
 {
   guard_conv2d_raw_size b cin h_in w_in cout kh kw stride pad;

@@ -194,7 +194,7 @@ fn conv3d_raw_alloc_bias_f32
   let gy = conv3d_general_alloc b cin d_in h_in w_in cout kd kh kw
     stride pad d_out h_out w_out gx gw gbias
     #fx #fw #fb #sx #sw #sbias;
-  (| d_out, (| h_out, (| w_out, gy |) |) |)
+  { d_out = d_out; h_out = h_out; w_out = w_out; output = gy }
 }
 
 fn conv3d_raw_alloc_zero_f32
@@ -224,7 +224,7 @@ fn conv3d_raw_alloc_zero_f32
 
   (* Spell out the dimension proof and call the allocation core directly.
      Routing through [conv3d_raw_alloc_bias_f32] would force Pulse to
-     elaborate its nested dependent-pair postcondition only to project the
+     elaborate its dependent result postcondition only to project the
      same three dimensions again. *)
   let d0 = conv3d_out_dim d_in kd stride pad;
   let h0 = conv3d_out_dim h_in kh stride pad;
@@ -239,5 +239,5 @@ fn conv3d_raw_alloc_zero_f32
     stride pad d_out h_out w_out gx gw gbias
     #fx #fw #_ #sx #sw #(mk1 (fun _ -> (zero #f32)));
   free gbias;
-  (| d_out, (| h_out, (| w_out, gy |) |) |)
+  { d_out = d_out; h_out = h_out; w_out = w_out; output = gy }
 }
