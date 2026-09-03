@@ -22,8 +22,10 @@ val pool_out_len_1d_sz
          SZ.v r == pool_out_len_1d l k s p d)
 
 (* Verified, extractable reciprocal 1/k as f32 (see .fst); the average-pool
-   divisor is computed inside the verification boundary. *)
-val avgpool_recip_f32 (k : szp) : f32
+   divisor is computed inside the verification boundary and related directly
+   to its real value. *)
+val avgpool_recip_f32 (k : szp)
+  : r:f32 { r %~ (1.0R /. FStar.Real.of_int (SZ.v k)) }
 
 (* Verification-facing wrapper type (layout-polymorphic, f32 carrier). *)
 inline_for_extraction noextract

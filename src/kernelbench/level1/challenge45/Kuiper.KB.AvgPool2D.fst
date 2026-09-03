@@ -36,9 +36,18 @@ let pool_out_len_1d_sz
 (* Verified, extractable reciprocal 1/k as f32 (extracts to
    1.0f / (float)(int64_t)(uint64_t)k); the per-axis average divisor is
    computed inside the verification boundary. *)
-let avgpool_recip_f32 (k : szp) : f32 =
-  div one (of_int (FStar.Int.Cast.uint64_to_int64
-                     (FStar.SizeT.sizet_to_uint64 k)))
+let avgpool_recip_f32 (k : szp)
+  : r:f32 { r %~ (1.0R /. FStar.Real.of_int (SZ.v k)) }
+  = let k_i64 = FStar.Int.Cast.uint64_to_int64
+      (FStar.SizeT.sizet_to_uint64 k) in
+    assert (FStar.Int64.v k_i64 == SZ.v k);
+    of_int_approx #f32 k_i64;
+    assert ((one #f32) %~ 1.0R);
+    div_approx (one #f32) (of_int #f32 k_i64)
+      1.0R (FStar.Real.of_int (SZ.v k));
+    let r : f32 = div (one #f32) (of_int #f32 k_i64) in
+    assert (r %~ (1.0R /. FStar.Real.of_int (SZ.v k)));
+    r
 
 inline_for_extraction noextract
 fn avgpool2d_axis_fw
