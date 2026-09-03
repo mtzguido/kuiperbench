@@ -7,11 +7,11 @@ open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.TripletMarginLoss
 open Kuiper.Seq.Common { (@!) }
+open Kuiper.Float.Casts
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KBMap = Kuiper.KB.Compat.Map
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
 module RealSqrt = FStar.Math.Sqrt
 module Vec = Pulse.Lib.Vec
 module KS = Kuiper.Seq.Common
@@ -409,14 +409,28 @@ fn dist_sq_row
 #pop-options
 
 #push-options "--z3rlimit 40"
+fn triplet_scalar_out_f32
+  (x : f32)
+  preserves cpu
+  returns out : array1 f32 (l1_forward 1)
+  ensures
+    exists* (sout : chest1 f32 1).
+      on gpu_loc (out |-> sout) ** pure (acc1 sout 0 == x)
+{
+  let out = alloc0 #f32 1sz (l1_forward 1);
+  Map.map_gpu (fun _ -> x) 1sz out;
+  with sout. assert on gpu_loc (out |-> sout);
+  assert pure (acc1 sout 0 == x);
+  out
+}
+
 fn triplet_fw_f32
   (b : szp { b <= max_blocks * max_threads /\
              SZ.fits (b + max_threads) })
   (d : szp { d <= max_blocks * max_threads /\
              SZ.fits (d + max_threads) /\
              SZ.fits (b * d) })
-  (margin : f32)
-  (eps : f32)
+  (margin64 : f64)
   (anchor   : array1 f32 (l1_forward (b * d)) { is_global anchor })
   (positive : array1 f32 (l1_forward (b * d)) { is_global positive })
   (negative : array1 f32 (l1_forward (b * d)) { is_global negative })
@@ -435,10 +449,15 @@ fn triplet_fw_f32
             pure (sa %~ seq_to_chest1 ra /\
                   sp %~ seq_to_chest1 rp /\
                   sn %~ seq_to_chest1 rn)
-  returns res : f32
+  returns out : array1 f32 (l1_forward 1)
   ensures
-    pure (triplet_post b d margin eps ra rp rn res)
+    exists* (sout : chest1 f32 1).
+      on gpu_loc (out |-> sout) **
+      pure (triplet_post b d (fcast margin64) triplet_default_eps_f32
+              ra rp rn (acc1 sout 0))
 {
+  let margin : f32 = fcast margin64;
+  let eps : f32 = triplet_default_eps_f32;
   let inv_b = triplet_recip_f32 b;
   let terms : erased (Seq.lseq real b) =
     hide (real_triplet_terms b d (to_real margin) (to_real eps) ra rp rn);
@@ -481,14 +500,14 @@ fn triplet_fw_f32
       (hide (SZ.v i)) ra rp;
     let rsq_ap = real_sq_dist (to_real eps) d (trow ra d i) (trow rp d i);
     real_sq_dist_nonnegative (to_real eps) d (trow ra d i) (trow rp d i);
-    SqrtApprox.sqrt_approx sumsq_p rsq_ap;
+    sqrt_approx sumsq_p rsq_ap;
     let d_ap_r = sqrt sumsq_p;
 
     let sumsq_n = dist_sq_row d eps anchor negative scratch_a scratch_b off
       (hide (SZ.v i)) ra rn;
     let rsq_an = real_sq_dist (to_real eps) d (trow ra d i) (trow rn d i);
     real_sq_dist_nonnegative (to_real eps) d (trow ra d i) (trow rn d i);
-    SqrtApprox.sqrt_approx sumsq_n rsq_an;
+    sqrt_approx sumsq_n rsq_an;
     let d_an_r = sqrt sumsq_n;
 
     (* ── margin step + store ────────────────────────────────────── *)
@@ -544,6 +563,9 @@ fn triplet_fw_f32
   free scratch_a;
   free scratch_b;
   free t_dev;
-  m;
+  let out = triplet_scalar_out_f32 m;
+  with sout. assert on gpu_loc (out |-> sout);
+  assert pure (triplet_post b d margin eps ra rp rn (acc1 sout 0));
+  out
 }
 #pop-options

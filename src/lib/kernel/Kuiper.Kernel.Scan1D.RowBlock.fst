@@ -165,7 +165,7 @@ let cell_at_iter
          then scan_inclusive_at m (ematrix_row sx bid) c
          else acc2 sout bid c)
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 inline_for_extraction noextract
 fn kf
   (#et : Type0) {| scalar et |}

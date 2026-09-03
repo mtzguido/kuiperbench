@@ -5,7 +5,11 @@ open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.TripletMarginLoss
+open Kuiper.Float.Casts
 module SZ = Kuiper.SizeT
+
+inline_for_extraction
+let triplet_default_eps_f32 : f32 = of_literal "0.000001"
 
 fn triplet_fw_f32
     (b : szp { b <= max_blocks * max_threads /\
@@ -13,7 +17,7 @@ fn triplet_fw_f32
     (d : szp { d <= max_blocks * max_threads /\
                SZ.fits (d + max_threads) /\
                SZ.fits (b * d) })
-    (margin eps : f32)
+    (margin : f64)
     (anchor   : array1 f32 (l1_forward (b * d)) { is_global anchor })
     (positive : array1 f32 (l1_forward (b * d)) { is_global positive })
     (negative : array1 f32 (l1_forward (b * d)) { is_global negative })
@@ -28,6 +32,9 @@ fn triplet_fw_f32
               pure (sa %~ seq_to_chest1 ra /\
                     sp %~ seq_to_chest1 rp /\
                     sn %~ seq_to_chest1 rn)
-    returns res : f32
+    returns out : array1 f32 (l1_forward 1)
     ensures
-      pure (triplet_post b d margin eps ra rp rn res)
+      exists* (sout : chest1 f32 1).
+        on gpu_loc (out |-> sout) **
+        pure (triplet_post b d (fcast margin) triplet_default_eps_f32
+                ra rp rn (acc1 sout 0))

@@ -36,11 +36,9 @@ What could hide bugs
 * `prod_is_approx`/`prod_is_approx'` are new (added to
   `Kuiper.Approximates`). They mirror `sum_is_approx` and are proved
   by induction using the existing `a_mul` lemma in the `real_like`
-  class. No new axioms; pure proof. As a side-effect on SMT context,
-  adding them perturbed L2Norm.fst's `assert (r == vi)` after `if r <
-  vi`; mitigated by `--z3rlimit 100 --z3refresh --split_queries
-  always` + an explicit `assert (~ (r < vi))` nudge. Result remains
-  fully proved.
+  class. No new axioms; pure proof. An explicit branch fact in L2Norm
+  keeps the corresponding nonlinear obligation within the repository's
+  z3rlimit-60 bound. Result remains fully proved.
 * PyTorch `torch.cumprod` and the bridge produce values that match
   within fp32 atol/rtol = 1e-4 (KernelBench's
   `get_tolerance_for_precision`). Long product chains amplify

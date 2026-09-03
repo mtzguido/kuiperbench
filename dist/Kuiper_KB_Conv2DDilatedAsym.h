@@ -15,5 +15,8 @@ void Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym_f32(
     uint32_t pw, uint32_t dh, uint32_t dw, uint32_t h_out, uint32_t w_out,
     float *gx, float *gw, float *gbias, float *gy);
 
+float *Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym80_alloc_f32(float *gx,
+                                                                   float *gw);
+
 #define Kuiper_KB_Conv2DDilatedAsym_H_DEFINED
 #endif /* Kuiper_KB_Conv2DDilatedAsym_H */

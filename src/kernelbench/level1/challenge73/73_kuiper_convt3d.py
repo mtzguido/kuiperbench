@@ -8,9 +8,12 @@ import torch.nn as nn
 
 
 class ModelNew(nn.Module):
-    """KB L1 #73: ConvTranspose3D, asymmetric input + square kernel + grouped.
-    Mirrors the upstream Model.__init__ defaults exactly (notably bias=False).
-    Note: upstream Model omits output_padding from the underlying call (uses default)."""
+    """KB L1 #73: ConvTranspose3D with the upstream positional-argument ABI.
+
+    KernelBench passes its nominal ``groups`` value as ``output_padding``;
+    because the reference does not forward that argument to ConvTranspose3d,
+    the operation actually uses groups=1 and output_padding=0.
+    """
     def __init__(self, in_channels: int, out_channels: int, kernel_size: int,
                  stride: int = 1, padding: int = 0, output_padding: int = 0,
                  groups: int = 1, bias: bool = False):
@@ -23,12 +26,8 @@ class ModelNew(nn.Module):
 
     def forward(self, x):
         ct = self.conv_transpose3d
-        w = ct.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if ct.bias is not None:
-            b = ct.bias.contiguous().to(x.device).to(torch.float32)
         return kuiper_convt3d_general(
-            x, w, b,
+            x, ct.weight, ct.bias,
             stride=ct.stride, padding=ct.padding,
             output_padding=ct.output_padding,
             dilation=ct.dilation, groups=ct.groups)

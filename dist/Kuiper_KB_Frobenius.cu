@@ -60,3 +60,13 @@ void Kuiper_KB_Frobenius_frobenius_fw_f32(uint32_t lena, float *a)
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_Frobenius_frobenius_alloc_f32(uint32_t lena, float *a)
+{
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), lena);
+    MUST(cudaMemcpy(dst, a, (uint32_t) sizeof(float) * lena,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_Frobenius_frobenius_fw_f32(lena, out);
+    return out;
+}

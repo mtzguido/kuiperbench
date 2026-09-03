@@ -21,12 +21,8 @@ class ModelNew(nn.Module):
 
     def forward(self, x):
         ct = self.conv_transpose3d
-        w = ct.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if ct.bias is not None:
-            b = ct.bias.contiguous().to(x.device).to(torch.float32)
         return kuiper_convt3d_general(
-            x, w, b,
+            x, ct.weight, ct.bias,
             stride=ct.stride, padding=ct.padding,
             output_padding=ct.output_padding,
             dilation=ct.dilation, groups=ct.groups)

@@ -11,6 +11,7 @@ module Kuiper.KB.RMSNorm
 
 #lang-pulse
 open Kuiper
+open Kuiper.Float.Casts
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Tensor.Layout.BCMPages
@@ -22,7 +23,8 @@ module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
 module RowScale = Kuiper.Kernel.RowScale
 module KS = Kuiper.Seq.Common
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
+module Copy = Kuiper.KB.Tensor.Copy
 
 (* post_map for inv-rms.  The pre_map for the reduction itself is
    [Kuiper.Spec.RMSNorm.sq_step], reused so that the spec lemmas
@@ -75,7 +77,7 @@ let rmsnorm_row_aux
     assert (rss *. (1.0R /. FStar.Real.of_int c_n) ==
             rss /. FStar.Real.of_int c_n);
     assert (rarg >. 0.0R);
-    SqrtApprox.rsqrt_approx (add (mul sumsq inv_c) eps) rarg;
+    RsqrtApprox.rsqrt_approx (add (mul sumsq inv_c) eps) rarg;
     let rinv = FStar.Math.Sqrt.rsqrt rarg in
     let out = Kuiper.Kernel.RowScale.s_row_scale sfac sx in
     let aux (j:nat{j<c_n}) : Lemma
@@ -110,7 +112,7 @@ let rmsnorm_post_aux
     in
     Classical.forall_intro aux
 
-#push-options "--z3rlimit 80"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn rmsnorm_fw_f32_impl
   (b : szp)
@@ -198,3 +200,36 @@ fn rmsnorm_fw
 }
 
 let rmsnorm_fw_f32 = rmsnorm_fw
+
+fn rmsnorm4d_alloc_f32
+  (b c h w : szp)
+  (eps : f64)
+  (x : array2 f32 (l2_bcm_pages b (h * w) c) { is_global x })
+  (#f : perm)
+  (#sx : chest2 f32 (SZ.v b * (SZ.v h * SZ.v w)) c)
+  preserves cpu ** on gpu_loc (x |-> Frac f sx)
+  requires
+    pure (SZ.v h > 0 /\ SZ.v w > 0 /\ SZ.v c > 0 /\
+          SZ.fits (SZ.v h * SZ.v w) /\
+          SZ.fits (SZ.v b * (SZ.v h * SZ.v w)) /\
+          SZ.fits ((SZ.v h * SZ.v w) * SZ.v c) /\
+          SZ.fits (SZ.v b * ((SZ.v h * SZ.v w) * SZ.v c)) /\
+          SZ.v b * (SZ.v h * SZ.v w) > 0 /\
+          SZ.v b * (SZ.v h * SZ.v w) * SZ.v c <=
+            max_blocks * max_threads /\
+          to_real (fcast #f64 #f32 eps) >. 0.0R)
+  returns out : array2 f32 (l2_bcm_pages b (h * w) c)
+  ensures
+    exists* (sx' : chest2 f32 (SZ.v b * (SZ.v h * SZ.v w)) c).
+      on gpu_loc (out |-> sx') **
+      pure (rmsnorm_post (SZ.v b * (SZ.v h * SZ.v w)) c
+              (fcast #f64 #f32 eps) sx sx')
+{
+  let eps32 : f32 = fcast eps;
+  let hw : szp = h *^ w;
+  let bhw : szp = b *^ hw;
+  let elems : szp = bhw *^ c;
+  let out = Copy.copy_alloc #f32 elems x;
+  rmsnorm_fw_f32 b hw c eps32 out;
+  out
+}

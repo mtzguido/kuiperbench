@@ -1,3 +1,12 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The current #54/#59/#60/#66 boundary uses one of
+`conv3d_raw_alloc_{bias,zero}_f32`.  One verified entry derives all three
+output extents, handles optional zero bias, allocates the output, and runs the
+fully proved Conv3D kernel.  The bridge only validates, calls Kuiper once, and
+wraps the returned result.  Older helper/bias-scratch/debt claims below are
+historical and superseded.
+
 Skeptic review — KernelBench L1 #54/#59/#60/#66 (Kuiper.KB.Conv3DGeneral)
 ==========================================================================
 

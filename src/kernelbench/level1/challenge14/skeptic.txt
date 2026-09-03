@@ -1,3 +1,11 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The public Kuiper entry now allocates the final (N,N) result itself and returns
+it with the matmul/triangular postcondition.  The C++ boundary only validates
+contiguous inputs, calls that entry once, and wraps the returned pointer; it
+does not copy inputs, allocate an output, or reshape a flat Torch allocation.
+Any contrary bridge description below is historical and superseded.
+
 Skeptic review -- KB L1 challenge 14 (triu(A @ B))
 ===================================================
 

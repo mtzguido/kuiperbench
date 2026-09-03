@@ -12,23 +12,19 @@ module Kuiper.Spec.L1Norm
    [chest2 t B D] (NOT a flattened sequence): the postcondition is
    stated over the matrix entries [acc2 sx r j].
 
-   The public per-row spec directly relates each output element to the
-   corresponding real input scaled by [D / sum |x|].  The floating
+   The public per-row spec directly relates each output element to an
+   explicitly supplied real input scaled by [D / sum |x|].  The floating
    reduction and division values remain proof-local.
 
-   The L1 reduction is naturally "sum of absolute values".  The kernel
-   pushes [fabs] directly into the [HReduce.reduce_batched] pre-map, so
-   the device-side per-row reduction is the deterministic left-fold
-   [row_reduce_partial fabs sx r D].  We spec the inner sum as
-   [rsum (to_real_seq (lseq_map fabs row))]: the float values are
-   abs-ed and lifted to reals via [to_real], so the bridge lemma
-   [row_reduce_partial_fabs_approx] needs only [to_real_ok] (no
-   real-side abs axiom).  Mathematically this is exactly the row's
-   L1 norm.
+   The pinned floating interface does not give the primitive [fabs] a real
+   approximation law.  The kernel therefore uses the equivalent branchless
+   expression [fmax x (0 - x)].  Its packaged [sub_approx] and [fmax_approx]
+   laws prove that it approximates [rmax x (0 - x)], the real absolute value,
+   without a local axiom.
 
-   Edge case (all-zero row): sum_abs = 0, scale = D/0 = +inf in
-   IEEE-754, output is NaN-filled.  The PyTorch reference has the
-   same behaviour. *)
+   Rows whose real L1 sum is zero are outside [l1norm_domain], so the real
+   contract intentionally makes no claim about their NaN-producing IEEE-754
+   execution. *)
 
 open Kuiper.Common
 open Kuiper.Real
@@ -42,54 +38,54 @@ module KS = Kuiper.Seq.Common
 module EM = Kuiper.EMatrix
 unfold let f32 = Kuiper.Float32.t
 
-(* Sum of absolute values of a row, lifted to reals.
-   Defined as the sum of [to_real_seq] applied to the elementwise
-   absolute value of the row.  Mathematically this is the row's L1
-   norm; we do not factor through a real-side abs because
-   [Kuiper.Real] does not currently axiomatise one. *)
-let l1_sum_r
-  (#t:Type0) {| scalar t, real_like t, floating t |}
-  (#n : nat)
-  (s : Seq.lseq t n) : GTot real =
-  rsum (to_real_seq (KS.lseq_map (fabs #t) s))
+(* Floating and real absolute-value expressions connected solely by packaged
+   arithmetic approximation laws. *)
+inline_for_extraction
+let l1_abs (#t:Type0) {| scalar t, floating t |} (x : t) : t =
+  fmax x (sub zero x)
 
-let l1_scale_r (#d:pos) (row : Seq.lseq f32 d)
+let l1_abs_r (x : real) : real =
+  rmax x (0.0R -. x)
+
+let l1_sum_r (#n : nat) (s : Seq.lseq real n) : GTot real =
+  rsum (KS.lseq_map l1_abs_r s)
+
+let l1_scale_r (#d:pos) (row : Seq.lseq real d)
   : real =
   let s = l1_sum_r row in
   if s =!= 0.0R then FStar.Real.of_int d /. s else 0.0R
 
-let l1norm_domain (#b:nat) (#d:pos) (sx:chest2 f32 b d) : prop =
-  forall (r:nat). r < b ==> l1_sum_r (EM.ematrix_row sx r) =!= 0.0R
+let l1norm_domain (#b:nat) (#d:pos) (rx:chest2 real b d) : prop =
+  forall (r:nat). r < b ==> l1_sum_r (EM.ematrix_row rx r) =!= 0.0R
 
 (* Per-row predicate: every output directly approximates the
    mathematical L1-normalized input cell. *)
 let row_l1_normalized
   (#b : nat) (#d : pos)
-  (sx : chest2 f32 b d)
+  (rx : chest2 real b d)
   (sx' : chest2 f32 b d)
   (r : natlt b)
   : prop =
-  let row = EM.ematrix_row sx r in
+  let row = EM.ematrix_row rx r in
   forall (j : nat). j < d ==>
-    acc2 sx' r j %~ (to_real (acc2 sx r j) *. l1_scale_r row)
+    acc2 sx' r j %~ (acc2 rx r j *. l1_scale_r row)
 
 (* Whole-tensor spec: every row is L1-normalised with [dim_f]. *)
 let l1norm_post
   (b : nat) (d : pos)
-  (sx : chest2 f32 b d)
+  (rx : chest2 real b d)
   (sx' : chest2 f32 b d)
   : prop =
-  forall (r : nat). r < b ==> row_l1_normalized sx sx' r
+  forall (r : nat). r < b ==> row_l1_normalized rx sx' r
 
-(* Bridge lemma: the deterministic device-side left-fold of absolute
-   values produced by [reduce_batched fabs] approximates the
-   real-valued mathematical L1 norm [l1_sum_r].  Used to discharge the
-   [sum_abs %~ ...] conjunct of [row_l1_normalized] from the exact
-   post-state of [reduce_batched]. *)
-val row_reduce_partial_fabs_approx
-  (#t:Type0) {| scalar t, real_like t, floating t |}
+(* Bridge lemma from a floating row approximating an explicit real row to the
+   real L1 sum. *)
+val row_reduce_partial_l1_abs_approx
+  (#t:Type0)
+  {| scalar t, real_like t, floating t, floating_real_like t |}
   (#rows #cols : nat)
   (sx : chest2 t rows cols)
+  (rx : chest2 real rows cols { sx %~ rx })
   (r : natlt rows)
-  : Lemma (row_reduce_partial (fabs #t) sx r cols
-           %~ l1_sum_r (EM.ematrix_row sx r))
+  : Lemma (row_reduce_partial (l1_abs #t) sx r cols
+           %~ l1_sum_r (EM.ematrix_row rx r))

@@ -16,9 +16,6 @@ class ModelNew(nn.Module):
                                stride=4, padding=2)
 
     def forward(self, x):
-        w = self.conv1.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if self.conv1.bias is not None:
-            b = self.conv1.bias.contiguous().to(x.device).to(torch.float32)
-        return kuiper_conv2d_general(x, w, b, stride=4, padding=2,
+        return kuiper_conv2d_general(x, self.conv1.weight, self.conv1.bias,
+                                     stride=4, padding=2,
                                      dilation=1, groups=1)

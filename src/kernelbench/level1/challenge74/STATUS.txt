@@ -1,3 +1,11 @@
+CURRENT STATUS (2026-09-03)
+---------------------------
+#64/#74/#79 use the challenge-facing `ConvT1DGeneral` allocation entry.  One
+verified call performs the H=Kh=1 embedding, derives the output length,
+constructs zero bias, allocates, and launches, returning length plus pointer.
+The bridge only validates groups=1/bias=False contracts and wraps that result;
+old separate-helper and deferred-phase wording below is superseded.
+
 UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
 test (src/kernelbench/run_test.py 1 74 -> PASS, bit-correct vs the PyTorch
 reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper

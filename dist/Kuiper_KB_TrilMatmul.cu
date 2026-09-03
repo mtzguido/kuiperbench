@@ -31,3 +31,11 @@ void Kuiper_KB_TrilMatmul_tril_matmul_f32(uint32_t n, float *gA, float *gB,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_TrilMatmul_tril_matmul_alloc_f32(uint32_t n, float *gA,
+                                                  float *gB)
+{
+    float *y = (float *) KPR_GPU_ALLOC(sizeof(float), n * n);
+    Kuiper_KB_TrilMatmul_tril_matmul_f32(n, gA, gB, y);
+    return y;
+}

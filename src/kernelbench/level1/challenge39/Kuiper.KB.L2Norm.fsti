@@ -45,3 +45,19 @@ type l2norm_fw_ty (t:Type0) {| scalar t, real_like t, floating t |} =
       pure (l2norm_post b d (chest1_to_seq s) (chest1_to_seq s'))
 
 val l2norm_fw_f32 : l2norm_fw_ty f32
+
+fn l2norm_alloc_f32
+  (b : szp)
+  (d : szp { d <= max_blocks * max_threads /\
+             SZ.fits (b * d) /\
+             b * d <= max_blocks * max_threads })
+  (x : array1 f32 (l1_forward (b * d)) { is_global x })
+  (#f : perm)
+  (#s : chest1 f32 (b * d))
+  preserves cpu ** on gpu_loc (x |-> Frac f s)
+  requires pure (l2norm_domain b d (chest1_to_seq s))
+  returns out : array1 f32 (l1_forward (b * d))
+  ensures
+    exists* (s' : chest1 f32 (b * d)).
+      on gpu_loc (out |-> s') **
+      pure (l2norm_post b d (chest1_to_seq s) (chest1_to_seq s'))

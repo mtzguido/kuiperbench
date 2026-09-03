@@ -1,0 +1,17 @@
+
+#ifndef Kuiper_KB_LogSoftmaxAlloc_H
+#define Kuiper_KB_LogSoftmaxAlloc_H
+
+#include <kuiper.h>
+#include <kbench.h>
+
+float *Kuiper_KB_LogSoftmaxAlloc_logsoftmax_alloc_f32(uint32_t rows,
+                                                      uint32_t cols,
+                                                      float *input);
+
+double *Kuiper_KB_LogSoftmaxAlloc_logsoftmax_alloc_f64(uint32_t rows,
+                                                       uint32_t cols,
+                                                       double *input);
+
+#define Kuiper_KB_LogSoftmaxAlloc_H_DEFINED
+#endif /* Kuiper_KB_LogSoftmaxAlloc_H */

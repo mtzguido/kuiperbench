@@ -21,7 +21,7 @@ let div_by (#t:Type0) {| floating t |} (divisor : t) (v : t) : t = div v divisor
    per-element fact for the flat index [i*out+j], the two pointwise maps
    ([relu] then [div_by divisor]) compose to the desired float expression.
    [bias_add_at_ij] rewrites the flat bias-add entry into [chest2] form. *)
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 let grd_row_aux
   (batch out : nat)
   (divisor : f32)
@@ -42,7 +42,7 @@ let grd_row_aux
             == div_by divisor (acc1 (chest_map relu sy_b) (i * out + j)))
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn gemm_relu_divide_f32_impl
   (batch : szp)

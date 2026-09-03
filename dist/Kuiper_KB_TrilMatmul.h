@@ -8,5 +8,8 @@
 void Kuiper_KB_TrilMatmul_tril_matmul_f32(uint32_t n, float *gA, float *gB,
                                           float *y);
 
+float *Kuiper_KB_TrilMatmul_tril_matmul_alloc_f32(uint32_t n, float *gA,
+                                                  float *gB);
+
 #define Kuiper_KB_TrilMatmul_H_DEFINED
 #endif /* Kuiper_KB_TrilMatmul_H */

@@ -22,5 +22,23 @@ Kuiper_KB_AvgPool3D_avgpool3d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                              uint32_t d, uint32_t bc,
                                              uint32_t l, float *input);
 
+typedef struct Kuiper_KB_AvgPool3D_avgpool3d_full_result_s {
+    uint32_t fst;
+    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ snd;
+} Kuiper_KB_AvgPool3D_avgpool3d_full_result;
+
+Kuiper_KB_AvgPool3D_avgpool3d_full_result
+Kuiper_KB_AvgPool3D_avgpool3d_full_alloc_f32(
+    uint32_t kd, uint32_t kh, uint32_t kw, uint32_t sd, uint32_t sh,
+    uint32_t sw, uint32_t pd, uint32_t ph, uint32_t pw, uint32_t dd,
+    uint32_t dh, uint32_t dw, uint32_t bc, uint32_t depth, uint32_t h,
+    uint32_t w, float *input);
+
+Kuiper_KB_AvgPool3D_avgpool3d_full_result
+Kuiper_KB_AvgPool3D_avgpool3d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
+                                            uint32_t b, uint32_t c,
+                                            uint32_t depth, uint32_t h,
+                                            uint32_t w, float *input);
+
 #define Kuiper_KB_AvgPool3D_H_DEFINED
 #endif /* Kuiper_KB_AvgPool3D_H */

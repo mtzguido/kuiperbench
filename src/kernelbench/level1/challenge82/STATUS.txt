@@ -1,3 +1,11 @@
+CURRENT STATUS (2026-09-03)
+---------------------------
+#82-#85 use `dwconv2d_raw_alloc_{bias,zero}_f32`.  One verified entry derives
+both output extents, constructs zero bias when needed, allocates, and launches
+under the complete depthwise-convolution postcondition.  The shared bridge
+only validates and wraps the returned dimensions/pointer; separate-helper,
+bias-scratch, and deferred-phase wording below is superseded.
+
 UPDATED 2026-06-14: Output spatial size is now computed by the VERIFIED
 helper Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim (F* ensures
 r == (n + 2p - k)/s + 1), and the output buffer is self-allocated by the

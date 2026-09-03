@@ -427,7 +427,7 @@ fn reshape3to4_eq
 (* The kernel.                                                              *)
 (* ----------------------------------------------------------------------- *)
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn matmul4d
   (#t:Type0) {| floating t, real_like t, floating_real_like t |}
@@ -542,3 +542,29 @@ fn matmul4d
 #pop-options
 
 let matmul4d_f32 = matmul4d
+
+fn matmul4d_alloc_f32
+  (b i j l k : szp)
+  (gA : array4 f32 (l4_row_major b i j l) { is_global gA })
+  (gB : array2 f32 (l2_row_major l k) { is_global gB })
+  (rA : chest4 real b i j l)
+  (rB : chest2 real l k)
+  (#eA : chest4 f32 b i j l)
+  (#eB : chest2 f32 l k)
+  (#fA #fB : perm)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
+    pure (SZ.fits (SZ.v b * SZ.v i * SZ.v j * SZ.v k)) **
+    pure (eA %~ rA) ** pure (eB %~ rB)
+  returns gC : array4 f32 (l4_row_major b i j k)
+  ensures
+    exists* (eC : chest4 f32 b i j k).
+      on gpu_loc (gC |-> eC) ** pure (eC %~ ematmul4 rA rB)
+{
+  let gC = alloc0 #f32 (b *^ i *^ j *^ k)
+    (l4_row_major b i j k);
+  matmul4d_f32 b i j l k gA gB gC rA rB;
+  gC
+}

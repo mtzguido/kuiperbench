@@ -25,3 +25,10 @@ void Kuiper_KB_CumProd_cumprod_fw_f32(uint32_t b, uint32_t d, float *input,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_CumProd_cumprod_alloc_f32(uint32_t b, uint32_t d, float *input)
+{
+    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), b * d);
+    Kuiper_KB_CumProd_cumprod_fw_f32(b, d, input, output);
+    return output;
+}

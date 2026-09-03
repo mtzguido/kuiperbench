@@ -10,8 +10,17 @@ open Kuiper.Seq.Common { (@!) }
 module SZ = Kuiper.SizeT
 module LSM = Kuiper.Kernel.LogSoftmax
 module HRed = Kuiper.Kernel.HReduce
+module Map = Kuiper.Kernel.Map
 module Vec = Pulse.Lib.Vec
 module KS = Kuiper.Seq.Common
+module I64 = FStar.Int64
+module U64 = FStar.UInt64
+module Cast = FStar.Int.Cast
+
+(* The package exposes signed 64-bit scalar extraction but does not register
+   its byte width for the generic memcpy helper used by [t_read_1]. *)
+inline_for_extraction noextract
+instance sized_i64 : sized i64 = { size = 8sz; default = 0L }
 
 (* Verified reciprocal 1/B, inlined into the public entry point. *)
 inline_for_extraction noextract
@@ -228,14 +237,14 @@ let sidx (s : Seq.seq f32) (r : nat) : f32 =
 
 (* Total accessor for the target index of row [r] (as a nat). *)
 noextract
-let tgt (#b : nat) (stv : Seq.lseq SZ.t b) (r : nat) : nat =
-  if r < b then SZ.v (stv @! r) else 0
+let tgt (#b : nat) (stv : Seq.lseq i64 b) (r : nat) : nat =
+  if r < b then target_index (stv @! r) else 0
 
 (* For every already-processed row [r < bound], the stored per-row loss
    approximates the genuine real CE term of row [r] at its target. *)
 let ce_carried
   (b : nat) (c : pos) (#n : nat)
-  (rp : Seq.lseq real n) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real n) (stv : Seq.lseq i64 b)
   (vt : Seq.seq f32) (bound : nat)
   : prop =
   forall (r : nat). r < bound ==>
@@ -244,7 +253,7 @@ let ce_carried
 (* Loop-entry witness (vacuous at [bound = 0]). *)
 let ce_inv_init
   (b : nat) (c : pos) (#n : nat)
-  (rp : Seq.lseq real n) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real n) (stv : Seq.lseq i64 b)
   (vt : Seq.seq f32)
   : Lemma (ce_carried b c rp stv vt 0)
   = ()
@@ -253,7 +262,7 @@ let ce_inv_init
    extends the agreement prefix from [< vi] to [< vi+1]. *)
 let ce_prefix_extend
   (b : nat) (c : pos) (#n : nat)
-  (rp : Seq.lseq real n) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real n) (stv : Seq.lseq i64 b)
   (vt vt' : Seq.seq f32) (vi : nat { vi < b }) (newv : f32)
   : Lemma
     (requires
@@ -266,7 +275,7 @@ let ce_prefix_extend
 
 let ce_carried_complete
   (b : pos) (c : pos)
-  (rp : Seq.lseq real (b * c)) (stv : Seq.lseq SZ.t b)
+  (rp : Seq.lseq real (b * c)) (stv : Seq.lseq i64 b)
   (vt : Seq.lseq f32 b)
   : Lemma (requires ce_carried b c rp stv vt b)
           (ensures vt %~ real_cross_entropy_terms b c rp stv)
@@ -283,9 +292,9 @@ fn ce_loss_impl
              SZ.fits (c + max_threads) /\
              SZ.fits (b * c) })
   (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
-  (targets : array1 SZ.t (l1_forward b) { is_global targets })
+  (targets : array1 i64 (l1_forward b) { is_global targets })
   (#sp : chest1 f32 (b * c))
-  (#stv : chest1 SZ.t b)
+  (#stv : chest1 i64 b)
   (rp : erased (Seq.lseq real (b * c)))
   (#fp #ft : perm)
   norewrite
@@ -294,14 +303,16 @@ fn ce_loss_impl
             on gpu_loc (targets |-> Frac ft stv) **
             pure (sp %~ seq_to_chest1 rp)
   requires
-    pure (forall (r : nat). r < SZ.v b ==> SZ.v (acc1 (reveal stv) r) < SZ.v c)
+    pure (forall (r : nat). r < SZ.v b ==>
+            0 <= I64.v (acc1 (reveal stv) r) /\
+            I64.v (acc1 (reveal stv) r) < SZ.v c)
   returns res : f32
   ensures
     pure (cross_entropy_post b c rp
-            (chest1_to_seq (reveal stv) <: Seq.lseq SZ.t b)
+            (chest1_to_seq (reveal stv) <: Seq.lseq i64 b)
             res)
 {
-  let stv_s : erased (Seq.lseq SZ.t b) =
+  let stv_s : erased (Seq.lseq i64 b) =
     hide (chest1_to_seq (reveal stv));
   let inv_b = ce_recip_f32 b;
   let terms : erased (Seq.lseq real b) =
@@ -362,10 +373,17 @@ fn ce_loss_impl
     assert pure (reveal sca' %~ LSM.log_softmax_real (reveal ra));
 
     (* ── gather the (negated) target lane ───────────────────────── *)
-    let ti = t_read_1 targets i 0sz;
+    let ti64 = t_read_1 targets i 0L;
     lem_index_chest1 (reveal stv) i;
-    assert pure (ti == acc1 (reveal stv) i);
-    assert pure (SZ.v ti < SZ.v c);
+    assert pure (ti64 == acc1 (reveal stv) i);
+    assert pure (0 <= I64.v ti64 /\ I64.v ti64 < SZ.v c);
+    assert pure (I64.v ti64 < pow2 64);
+    FStar.Math.Lemmas.small_mod (I64.v ti64) (pow2 64);
+    let tiu64 = Cast.int64_to_uint64 ti64;
+    assert pure (U64.v tiu64 == I64.v ti64);
+    FStar.SizeT.fits_lte (U64.v tiu64) (SZ.v c);
+    let ti = FStar.SizeT.uint64_to_sizet tiu64;
+    assert pure (SZ.v ti == I64.v ti64 /\ SZ.v ti < SZ.v c);
     let v = t_read_1 scratch ti (zero #f32);
     assert pure (v == acc1 (reveal sca') ti);
     (* pointwise: scratch'[ti] approximates log_softmax(...)[ti] *)
@@ -427,8 +445,58 @@ fn ce_loss_impl
 }
 #pop-options
 
+(* Keep scalar materialization in its own extracted function so the one-cell
+   map kernel has a distinct C scope from the log-softmax/map kernels above. *)
+fn ce_scalar_out_f32
+  (x : f32)
+  preserves cpu
+  returns out : array1 f32 (l1_forward 1)
+  ensures
+    exists* (sout : chest1 f32 1).
+      on gpu_loc (out |-> sout) ** pure (acc1 sout 0 == x)
+{
+  let out = alloc0 #f32 1sz (l1_forward 1);
+  Map.map_gpu (fun _ -> x) 1sz out;
+  with sout. assert on gpu_loc (out |-> sout);
+  assert pure (acc1 sout 0 == x);
+  out
+}
+
 #push-options "--z3rlimit 40"
-let ce_loss_fw_f32 : ce_loss_fw_ty =
-  fun b c predictions targets #sp #stv rp #fp #ft ->
-    ce_loss_impl b c predictions targets #sp #stv rp #fp #ft
+fn ce_loss_fw_f32
+  (b : szp { b <= max_blocks * max_threads /\
+             SZ.fits (b + max_threads) })
+  (c : szp { c <= max_blocks * max_threads /\
+             SZ.fits (c + max_threads) /\
+             SZ.fits (b * c) })
+  (predictions : array1 f32 (l1_forward (b * c)) { is_global predictions })
+  (targets : array1 i64 (l1_forward b) { is_global targets })
+  (#sp : chest1 f32 (b * c))
+  (#stv : chest1 i64 b)
+  (rp : erased (Seq.lseq real (b * c)))
+  (#fp #ft : perm)
+  norewrite
+  preserves cpu **
+            on gpu_loc (predictions |-> Frac fp sp) **
+            on gpu_loc (targets |-> Frac ft stv) **
+            pure (sp %~ seq_to_chest1 rp)
+  requires
+    pure (forall (r : nat). r < SZ.v b ==>
+            0 <= I64.v (acc1 (reveal stv) r) /\
+            I64.v (acc1 (reveal stv) r) < SZ.v c)
+  returns out : array1 f32 (l1_forward 1)
+  ensures
+    exists* (sout : chest1 f32 1).
+      on gpu_loc (out |-> sout) **
+      pure (cross_entropy_post b c rp
+              (chest1_to_seq (reveal stv) <: Seq.lseq i64 b)
+              (acc1 sout 0))
+{
+  let res = ce_loss_impl b c predictions targets #sp #stv rp #fp #ft;
+  let out = ce_scalar_out_f32 res;
+  with sout. assert on gpu_loc (out |-> sout);
+  assert pure (cross_entropy_post b c rp
+    (chest1_to_seq (reveal stv) <: Seq.lseq i64 b) (acc1 sout 0));
+  out
+}
 #pop-options

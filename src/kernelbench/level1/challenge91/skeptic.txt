@@ -3,16 +3,19 @@ L1 #91 cumsum_reverse — Skeptic review
 
 PyTorch semantics: `torch.cumsum(x.flip(dim), dim).flip(dim)`.
 
-Approach: the *flips* are pure index permutations (no arithmetic /
-no reductions); only the scan needs verification.  We flip the input
-(PyTorch op), feed into the verified `Kuiper_KB_CumSum_cumsum_fw_f32`,
-then flip the result back.
+`Kuiper.KB.CumSumReverse.cumsum_reverse_fw_f32` verifies the complete
+operation. It applies an inner-coordinate reversal bijection to the input and
+output tensor layouts, calls the verified row-block scan through those views,
+then restores the original output ownership. The layout transformation is
+zero-copy at runtime, but its index mapping and composition with the scan are
+inside the proof.
 
-Core compute (the O(D) prefix-sum loop) runs entirely in the verified
-Kuiper kernel — same as L1 #89.  The host-side flips are pointwise
-PyTorch operations with no race-prone arithmetic.
+The direct postcondition states that output `(r,i)` approximates the real sum
+of the first `D-i` cells of the reversed real input row. There are no new
+admits, assumptions, or magic. The Python wrapper has no fallback.
 
-No new Kuiper modules / no new admits / no new lemmas. The Python
-fallback uses the canonical PyTorch implementation.
-
-Bridge correctness: 2-D row-major fp32, B ≤ 2^21, B*D ≤ UINT32_MAX.
+The entry point allocates and returns its owned GPU result. The bridge checks
+2-D contiguous row-major fp32, B ≤ 2^21, and the checked uint32 product
+bound; selects the input device; makes one extracted call; and wraps the
+returned pointer with a `cudaFree` deleter. It performs no flip, arithmetic,
+copy, or output allocation.

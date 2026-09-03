@@ -72,7 +72,7 @@ let array1_pts_to_slice
   = forall+ (k : nat{i <= k /\ k < j}).
       Cell r ((k, ()) <: abs (sz @| INil)) |-> (s `acc1` (k - i))
 
-#push-options "--z3rlimit 80"
+#push-options "--z3rlimit 60"
 ghost
 fn array1_slice_concat
   (#et : Type0)
@@ -1194,7 +1194,7 @@ let kpost_batched
 
 (* ── Per-thread kernel function ────────────────────────────────────────── *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 inline_for_extraction noextract
 fn kf_batched
   (#et : Type0) {| scalar et |}

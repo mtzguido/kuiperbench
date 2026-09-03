@@ -29,9 +29,6 @@ class ModelNew(nn.Module):
                                 kernel_size=1, stride=1, padding=0, bias=bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        w = self.conv1d.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if self.conv1d.bias is not None:
-            b = self.conv1d.bias.contiguous().to(x.device).to(torch.float32)
-        return kuiper_conv2d_general(x, w, b,
+        return kuiper_conv2d_general(
+            x, self.conv1d.weight, self.conv1d.bias,
                                      stride=1, padding=0, dilation=1, groups=1)

@@ -37,3 +37,22 @@ fn triu_matmul_f32
     (exists* (sy' : chest2 f32 n n).
        on gpu_loc (y |-> sy') **
        pure (sy' %~ MS.matmul rA rB))
+
+fn triu_matmul_alloc_f32
+  (n : szp {
+     SZ.v n * SZ.v n <= max_blocks * max_threads /\
+     SZ.fits (SZ.v n * SZ.v n) })
+  (gA : array2 f32 (l2_row_major n n) { is_global gA })
+  (gB : array2 f32 (l2_row_major n n) { is_global gB })
+  (#sA #sB : chest2 f32 n n)
+  (#rA #rB : chest2 real n n)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (gA |-> sA) ** on gpu_loc (gB |-> sB)
+  requires
+    pure (sA %~ rA /\ sB %~ rB /\
+          TM.is_upper_triangular rA /\ TM.is_upper_triangular rB)
+  returns y : array2 f32 (l2_row_major n n)
+  ensures
+    exists* (sy : chest2 f32 n n).
+      on gpu_loc (y |-> sy) ** pure (sy %~ MS.matmul rA rB)

@@ -19,13 +19,14 @@ __hoisted_cumsum_exclusive_fw_f32_0(uint32_t d, float *input, float *output)
     }
 }
 
-void Kuiper_KB_CumSumExclusive_cumsum_exclusive_fw_f32(uint32_t b, uint32_t d,
-                                                       float *input,
-                                                       float *output)
+float *Kuiper_KB_CumSumExclusive_cumsum_exclusive_fw_f32(uint32_t b, uint32_t d,
+                                                         float *input)
 {
+    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), b * d);
     cudaStream_t s = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_cumsum_exclusive_fw_f32_0, b, 1U, 0U, s, d, input,
               output);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
+    return output;
 }

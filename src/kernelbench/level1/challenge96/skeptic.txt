@@ -1,6 +1,17 @@
 KernelBench L1 #96: Smooth L1 (Huber) Loss
 ==============================================
 
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The public postcondition now directly relates the returned scalar to
+`real_huber n rp rt`.  `huber_loss_fw_f32` preserves both inputs, allocates
+private scratch and the result, performs the pointwise map and reduction, and
+computes the division by `n` inside Kuiper.  The C++ bridge validates the ABI
+and calls this one entry; it neither supplies `inv_n` nor falls back to
+PyTorch.  The older existential-sum, host-reciprocal, and fallback wording
+below is superseded.  The later branchless-step soundness correction remains
+current.
+
 Spec: src/lib/spec/Kuiper.Spec.HuberLoss.fsti  (huber_post)
 
   exists s. s %~ rsum (to_real_seq (lseq_map2 huber_step sp st))

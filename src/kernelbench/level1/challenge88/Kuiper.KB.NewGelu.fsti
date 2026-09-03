@@ -16,6 +16,11 @@ let newgelu_step
   let inner = mul c (add x (mul k x3)) in
   mul (mul half x) (add one (tanh inner))
 
+inline_for_extraction
+let newgelu_default_step (#t:Type0) {| floating t |} (x : t) : t =
+  newgelu_step (of_literal "0.5")
+    (of_literal "0.79788456080286535588") (of_literal "0.044715") x
+
 inline_for_extraction noextract
 type newgelu_fw_ty (t:Type0) {| floating t |} =
   fn (half c k : t)
@@ -28,3 +33,18 @@ type newgelu_fw_ty (t:Type0) {| floating t |} =
 
 val newgelu_fw_f32 : newgelu_fw_ty f32
 val newgelu_fw_f64 : newgelu_fw_ty f64
+
+inline_for_extraction noextract
+type newgelu_alloc_ty (t:Type0) {| floating t |} =
+  fn (lena : szp { lena <= max_blocks * max_threads })
+     (input : array1 t (l1_forward lena) { is_global input })
+     (#s : chest1 t lena)
+     (#f : perm)
+     norewrite
+     preserves cpu ** on gpu_loc (input |-> Frac f s)
+     returns output : array1 t (l1_forward lena)
+     ensures on gpu_loc
+       (output |-> mk1 (fun i -> newgelu_default_step (acc1 s i)))
+
+val newgelu_alloc_f32 : newgelu_alloc_ty f32
+val newgelu_alloc_f64 : newgelu_alloc_ty f64

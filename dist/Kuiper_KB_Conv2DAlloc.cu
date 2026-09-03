@@ -81,3 +81,155 @@ float *Kuiper_KB_Conv2DAlloc_conv2d_general_alloc_f32(
                        w_out, gx, gw, gbias, gy);
     return gy;
 }
+
+Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_bias_f32(uint32_t b, uint32_t cin,
+                                                uint32_t h_in, uint32_t w_in,
+                                                uint32_t cout, uint32_t kh,
+                                                uint32_t kw, uint32_t stride,
+                                                uint32_t pad, float *gx,
+                                                float *gw, float *gbias)
+{
+    KPR_GUARD(pad <= 2147483647U);
+    uint32_t two_pad = 2U * pad;
+    KPR_GUARD(h_in <= 4294967295U - two_pad);
+    uint32_t h_pad = h_in + two_pad;
+    KPR_GUARD(w_in <= 4294967295U - two_pad);
+    uint32_t w_pad = w_in + two_pad;
+    KPR_GUARD(kh <= h_pad);
+    KPR_GUARD(kw <= w_pad);
+    uint32_t h_out =
+        Kuiper_KB_Conv2DAlloc_conv2d_out_dim(h_in, kh, stride, pad);
+    uint32_t w_out0 =
+        Kuiper_KB_Conv2DAlloc_conv2d_out_dim(w_in, kw, stride, pad);
+    KPR_GUARD(cin <= 4294967295U / b);
+    uint32_t xy = b * cin;
+    KPR_GUARD(h_in <= 4294967295U / xy);
+    uint32_t wxy = xy * h_in;
+    KPR_GUARD(w_in <= 4294967295U / wxy);
+    KRML_HOST_IGNORE(wxy * w_in);
+    KPR_GUARD(cin <= 4294967295U / cout);
+    uint32_t xy0 = cout * cin;
+    KPR_GUARD(kh <= 4294967295U / xy0);
+    uint32_t wxy0 = xy0 * kh;
+    KPR_GUARD(kw <= 4294967295U / wxy0);
+    KRML_HOST_IGNORE(wxy0 * kw);
+    KPR_GUARD(kh <= 4294967295U / cin);
+    uint32_t xy1 = cin * kh;
+    KPR_GUARD(kw <= 4294967295U / xy1);
+    KRML_HOST_IGNORE(xy1 * kw);
+    KPR_GUARD(w_out0 <= 4294967295U / h_out);
+    KRML_HOST_IGNORE(h_out * w_out0);
+    KPR_GUARD(h_out <= 4294967295U / cout);
+    uint32_t xy2 = cout * h_out;
+    KPR_GUARD(w_out0 <= 4294967295U / xy2);
+    KRML_HOST_IGNORE(xy2 * w_out0);
+    KPR_GUARD(cout <= 4294967295U / b);
+    uint32_t xy3 = b * cout;
+    KPR_GUARD(h_out <= 4294967295U / xy3);
+    uint32_t wxy1 = xy3 * h_out;
+    KPR_GUARD(w_out0 <= 4294967295U / wxy1);
+    uint32_t ylen = wxy1 * w_out0;
+    KPR_GUARD(stride <= 4294967295U / h_out);
+    uint32_t hs = h_out * stride;
+    KPR_GUARD(hs <= 4294967295U - kh);
+    KRML_HOST_IGNORE(hs + kh);
+    KPR_GUARD(stride <= 4294967295U / w_out0);
+    uint32_t ws = w_out0 * stride;
+    KPR_GUARD(ws <= 4294967295U - kw);
+    KRML_HOST_IGNORE(ws + kw);
+    KPR_GUARD(ylen <= 2147483648U);
+    uint32_t h_out0 =
+        Kuiper_KB_Conv2DAlloc_conv2d_out_dim(h_in, kh, stride, pad);
+    uint32_t w_out =
+        Kuiper_KB_Conv2DAlloc_conv2d_out_dim(w_in, kw, stride, pad);
+    return (
+        KRML_CLITERAL(Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_){
+            .fst = h_out0,
+            .snd = {.fst = w_out,
+                    .snd = Kuiper_KB_Conv2DAlloc_conv2d_general_alloc_f32(
+                        b, cin, h_in, w_in, cout, kh, kw, stride, pad, h_out0,
+                        w_out, gx, gw, gbias)}});
+}
+
+__global__
+/**
+  hoisted when extracting conv2d_raw_alloc_zero_f32
+*/
+static void
+__hoisted_conv2d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
+{
+    if (1024U * blockIdx.x + threadIdx.x < cout)
+        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+}
+
+Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_zero_f32(uint32_t b, uint32_t cin,
+                                                uint32_t h_in, uint32_t w_in,
+                                                uint32_t cout, uint32_t kh,
+                                                uint32_t kw, uint32_t stride,
+                                                uint32_t pad, float *gx,
+                                                float *gw)
+{
+    KPR_GUARD(pad <= 2147483647U);
+    uint32_t two_pad = 2U * pad;
+    KPR_GUARD(h_in <= 4294967295U - two_pad);
+    uint32_t h_pad = h_in + two_pad;
+    KPR_GUARD(w_in <= 4294967295U - two_pad);
+    uint32_t w_pad = w_in + two_pad;
+    KPR_GUARD(kh <= h_pad);
+    KPR_GUARD(kw <= w_pad);
+    uint32_t h_out =
+        Kuiper_KB_Conv2DAlloc_conv2d_out_dim(h_in, kh, stride, pad);
+    uint32_t w_out =
+        Kuiper_KB_Conv2DAlloc_conv2d_out_dim(w_in, kw, stride, pad);
+    KPR_GUARD(cin <= 4294967295U / b);
+    uint32_t xy = b * cin;
+    KPR_GUARD(h_in <= 4294967295U / xy);
+    uint32_t wxy = xy * h_in;
+    KPR_GUARD(w_in <= 4294967295U / wxy);
+    KRML_HOST_IGNORE(wxy * w_in);
+    KPR_GUARD(cin <= 4294967295U / cout);
+    uint32_t xy0 = cout * cin;
+    KPR_GUARD(kh <= 4294967295U / xy0);
+    uint32_t wxy0 = xy0 * kh;
+    KPR_GUARD(kw <= 4294967295U / wxy0);
+    KRML_HOST_IGNORE(wxy0 * kw);
+    KPR_GUARD(kh <= 4294967295U / cin);
+    uint32_t xy1 = cin * kh;
+    KPR_GUARD(kw <= 4294967295U / xy1);
+    KRML_HOST_IGNORE(xy1 * kw);
+    KPR_GUARD(w_out <= 4294967295U / h_out);
+    KRML_HOST_IGNORE(h_out * w_out);
+    KPR_GUARD(h_out <= 4294967295U / cout);
+    uint32_t xy2 = cout * h_out;
+    KPR_GUARD(w_out <= 4294967295U / xy2);
+    KRML_HOST_IGNORE(xy2 * w_out);
+    KPR_GUARD(cout <= 4294967295U / b);
+    uint32_t xy3 = b * cout;
+    KPR_GUARD(h_out <= 4294967295U / xy3);
+    uint32_t wxy1 = xy3 * h_out;
+    KPR_GUARD(w_out <= 4294967295U / wxy1);
+    uint32_t ylen = wxy1 * w_out;
+    KPR_GUARD(stride <= 4294967295U / h_out);
+    uint32_t hs = h_out * stride;
+    KPR_GUARD(hs <= 4294967295U - kh);
+    KRML_HOST_IGNORE(hs + kh);
+    KPR_GUARD(stride <= 4294967295U / w_out);
+    uint32_t ws = w_out * stride;
+    KPR_GUARD(ws <= 4294967295U - kw);
+    KRML_HOST_IGNORE(ws + kw);
+    KPR_GUARD(ylen <= 2147483648U);
+    float *gbias = (float *) KPR_GPU_ALLOC(sizeof(float), cout);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_conv2d_raw_alloc_zero_f32_0,
+              cout / 1024U + (uint32_t) (cout % 1024U != 0U), 1024U, 0U, s,
+              cout, gbias);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r =
+        Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_bias_f32(
+            b, cin, h_in, w_in, cout, kh, kw, stride, pad, gx, gw, gbias);
+    MUST(cudaFree(gbias));
+    return r;
+}

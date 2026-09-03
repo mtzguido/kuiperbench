@@ -3,19 +3,17 @@ Skeptic review — KB L1 challenge 2 (matmul wrapper)
 
 Verified component
 ------------------
-Klas.GEMM.Naive3.g_matmul_f32_rrr (or BlockTiling2D for #1/#2):
+Klas.GEMM.Naive3.g_matmul_f32_rrr:
 the GEMM kernel is verified end-to-end in
-src/klas/Klas.GEMM.Naive3.fst (resp. Klas.GEMM.BlockTiling2D /
-its Inst module).  Kahan-style summation in Naive3 keeps the
-column-reduction error O(eps) regardless of K, which is why we
-use it for every challenge except #1/#2 (where rows/cols/K are
-multiples of 128/128/32 and the BlockTiling2D variant verifies +
-extracts cleanly).  No assume / admit / magic in the kernel
-proofs themselves.
+src/klas/Klas.GEMM.Naive3.fst. Kahan-style summation in Naive3 keeps
+the column-reduction error O(eps) regardless of K. No assume / admit /
+magic is added by this challenge.
 
 Unverified glue in the .cu bridge
 ---------------------------------
-Standard matmul (M,N,K) all multiples of BlockTiling2D tile sizes already, no padding needed.  Bridge is a straight Klas_GEMM_BlockTiling2D call with alpha=1,beta=0.
+The bridge checks dtype/device/layout and Naive3's size bounds, allocates the
+exact (M,N) result, and makes one Naive3 call. It performs no tile rounding,
+padding, or output slicing; Naive3 has no tile-alignment precondition.
 
 Result
 ------

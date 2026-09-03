@@ -15,5 +15,8 @@ float *Kuiper_KB_SeparableConv2D_separable_alloc_f32(
     uint32_t w_out, float *gx, float *gw_dw, float *gbias_dw, float *gw_pw,
     float *gbias_pw);
 
+float *Kuiper_KB_SeparableConv2D_separable86_alloc_f32(float *gx, float *gw_dw,
+                                                       float *gw_pw);
+
 #define Kuiper_KB_SeparableConv2D_H_DEFINED
 #endif /* Kuiper_KB_SeparableConv2D_H */

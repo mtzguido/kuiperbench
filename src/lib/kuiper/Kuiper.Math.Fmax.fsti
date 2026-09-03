@@ -15,9 +15,10 @@ open Kuiper.Float32
 module Seq = FStar.Seq
 module SC  = Kuiper.Seq.Common
 
-(* Fold seed.  This is not claimed to be neutral over NaNs. *)
+(* Fold seed.  [of_literal] extracts as the CUDA constant rather than an
+   external host symbol.  This is not claimed to be neutral over NaNs. *)
 inline_for_extraction noextract
-let neg_inf : f32 = neg infinity
+let neg_inf : f32 = of_literal "-INFINITY"
 
 (* Fold-fmax over a sequence, with [neg_inf] as the seed. *)
 let seq_fmax (s : Seq.seq f32) : GTot f32 =

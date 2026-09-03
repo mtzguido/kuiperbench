@@ -180,7 +180,7 @@ fn read_w_tap
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 (* Local helper: partial conv1d sum over the linearised (ic, k) index up to
    [to], with all parameters explicit.  Used as the loop-invariant predicate
@@ -492,7 +492,7 @@ fn conv1d_naive_teardown
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 
 inline_for_extraction noextract
 let kdesc

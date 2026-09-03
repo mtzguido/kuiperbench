@@ -3,6 +3,27 @@
 
 __global__
 /**
+  hoisted when extracting ce_scalar_out_f32
+*/
+static void
+__hoisted_ce_scalar_out_f32_0(float x, float *out)
+{
+    if (1024U * blockIdx.x + threadIdx.x < 1U)
+        out[1024U * blockIdx.x + threadIdx.x] = x;
+}
+
+float *Kuiper_KB_CrossEntropyLoss_ce_scalar_out_f32(float x)
+{
+    float *out = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_ce_scalar_out_f32_0, 1U, 1024U, 0U, s, x, out);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    return out;
+}
+
+__global__
+/**
   hoisted when extracting ce_loss_fw_f32
 */
 static void
@@ -70,9 +91,9 @@ __hoisted_ce_loss_fw_f32_2(uint32_t b, float *t_dev, float *out)
         *out = *sa;
 }
 
-float Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
-                                                float *predictions,
-                                                uint32_t *targets)
+float *Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
+                                                 float *predictions,
+                                                 int64_t *targets)
 {
     float inv_b = 1.0f / (float) (int64_t) (uint64_t) b;
     float *scratch = (float *) KPR_GPU_ALLOC(sizeof(float), c);
@@ -113,13 +134,13 @@ float Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
         float *tmp0 = (float *) KRML_HOST_MALLOC(sizeof(float));
         if (tmp0 != NULL)
             *tmp0 = 0.0f;
-        uint32_t *tmp = (uint32_t *) KRML_HOST_CALLOC(1U, sizeof(uint32_t));
-        MUST(cudaMemcpy(tmp, targets + i, (uint32_t) sizeof(uint32_t),
+        int64_t *tmp = (int64_t *) KRML_HOST_CALLOC(1U, sizeof(int64_t));
+        MUST(cudaMemcpy(tmp, targets + i, (uint32_t) sizeof(int64_t),
                         cudaMemcpyDeviceToHost));
-        uint32_t x = *tmp;
+        int64_t x = *tmp;
         KRML_HOST_FREE(tmp);
-        MUST(cudaMemcpy(tmp0, scratch + x, (uint32_t) sizeof(float),
-                        cudaMemcpyDeviceToHost));
+        MUST(cudaMemcpy(tmp0, scratch + (uint32_t) (uint64_t) x,
+                        (uint32_t) sizeof(float), cudaMemcpyDeviceToHost));
         float x0 = *tmp0;
         KRML_HOST_FREE(tmp0);
         t_host[i] = 0.0f - x0;
@@ -139,5 +160,5 @@ float Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
     KRML_HOST_FREE(t_host);
     MUST(cudaFree(scratch));
     MUST(cudaFree(t_dev));
-    return m;
+    return Kuiper_KB_CrossEntropyLoss_ce_scalar_out_f32(m);
 }

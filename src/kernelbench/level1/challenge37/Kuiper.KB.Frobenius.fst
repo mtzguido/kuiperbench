@@ -10,7 +10,8 @@ open Kuiper.Spec.Frobenius
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
+module Copy = Kuiper.KB.Tensor.Copy
 
 (* Pointwise approximation: [square x %~ sq_step_r r] whenever
    [x %~ r].  Direct consequence of [a_mul]. *)
@@ -101,7 +102,7 @@ fn frobenius
   to_real_chest_to_seq (reveal va);
   let rss = frobenius_sumsq_r (to_real_seq (chest1_to_seq (reveal va)));
   assert pure (sumsq %~ rss);
-  SqrtApprox.rsqrt_approx sumsq rss;
+  RsqrtApprox.rsqrt_approx sumsq rss;
   to_real_seq_is_approx (chest1_to_seq (reveal va));
   frobenius_result_approx inv_norm (FStar.Math.Sqrt.rsqrt rss)
     (chest1_to_seq (reveal va))
@@ -110,3 +111,22 @@ fn frobenius
 }
 
 let frobenius_fw_f32 : frobenius_fw_ty f32 = frobenius
+
+fn frobenius_alloc_f32
+  (lena : szp { lena <= max_blocks * max_threads })
+  (a : array1 f32 (l1_forward lena) { is_global a })
+  (#f : perm)
+  (#s : chest1 f32 lena)
+  preserves cpu ** on gpu_loc (a |-> Frac f s)
+  requires
+    pure (frobenius_sumsq_r (to_real_seq (chest1_to_seq s)) >. 0.0R)
+  returns out : array1 f32 (l1_forward lena)
+  ensures
+    exists* (s' : chest1 f32 lena).
+      on gpu_loc (out |-> s') **
+      pure (frobenius_post (chest1_to_seq s) (chest1_to_seq s'))
+{
+  let out = Copy.copy_alloc #f32 lena a;
+  frobenius_fw_f32 lena out;
+  out
+}

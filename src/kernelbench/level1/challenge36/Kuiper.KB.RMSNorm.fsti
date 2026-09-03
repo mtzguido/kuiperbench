@@ -18,11 +18,12 @@ module Kuiper.KB.RMSNorm
      2. map_gpu (s ↦ rsqrt(s/C+ε)) -- inv_rms per row
      3. row_scale                   -- in-place scale each row
 
-   The square-root approximation law is supplied by the temporary local
-   compatibility assumption documented in patches/kuiper-sqrt-approx.md. *)
+   The reciprocal-square-root approximation law is supplied by the temporary
+   local [Kuiper.KB.Compat.RsqrtApprox] compatibility assumption. *)
 
 #lang-pulse
 open Kuiper
+open Kuiper.Float.Casts
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.BCMPages
 open Kuiper.Spec.RMSNorm
@@ -56,3 +57,30 @@ fn rmsnorm_fw_f32
     (exists* (sx' : chest2 f32 (SZ.v b * SZ.v hw) c).
        on gpu_loc (x |-> sx') **
        pure (rmsnorm_post (SZ.v b * SZ.v hw) c eps sx sx'))
+
+(* KernelBench-shaped out-of-place entry.  It accepts the original NCHW
+   dimensions, converts the pybind f64 epsilon to f32, and derives the
+   flattened spatial view inside Kuiper. *)
+fn rmsnorm4d_alloc_f32
+  (b c h w : szp)
+  (eps : f64)
+  (x : array2 f32 (l2_bcm_pages b (h * w) c) { is_global x })
+  (#f : perm)
+  (#sx : chest2 f32 (SZ.v b * (SZ.v h * SZ.v w)) c)
+  preserves cpu ** on gpu_loc (x |-> Frac f sx)
+  requires
+    pure (SZ.v h > 0 /\ SZ.v w > 0 /\ SZ.v c > 0 /\
+          SZ.fits (SZ.v h * SZ.v w) /\
+          SZ.fits (SZ.v b * (SZ.v h * SZ.v w)) /\
+          SZ.fits ((SZ.v h * SZ.v w) * SZ.v c) /\
+          SZ.fits (SZ.v b * ((SZ.v h * SZ.v w) * SZ.v c)) /\
+          SZ.v b * (SZ.v h * SZ.v w) > 0 /\
+          SZ.v b * (SZ.v h * SZ.v w) * SZ.v c <=
+            max_blocks * max_threads /\
+          to_real (fcast #f64 #f32 eps) >. 0.0R)
+  returns out : array2 f32 (l2_bcm_pages b (h * w) c)
+  ensures
+    exists* (sx' : chest2 f32 (SZ.v b * (SZ.v h * SZ.v w)) c).
+      on gpu_loc (out |-> sx') **
+      pure (rmsnorm_post (SZ.v b * (SZ.v h * SZ.v w)) c
+              (fcast #f64 #f32 eps) sx sx')

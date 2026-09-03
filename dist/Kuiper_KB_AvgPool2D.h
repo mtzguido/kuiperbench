@@ -22,5 +22,11 @@ Kuiper_KB_AvgPool2D_avgpool2d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                              uint32_t d, uint32_t bc,
                                              uint32_t l, float *input);
 
+float *Kuiper_KB_AvgPool2D_avgpool2d_half_alloc(uint32_t bc, uint32_t h,
+                                                uint32_t w, float *input);
+
+float *Kuiper_KB_AvgPool2D_avgpool2d_full_alloc_f32(float *input0,
+                                                    float *input1);
+
 #define Kuiper_KB_AvgPool2D_H_DEFINED
 #endif /* Kuiper_KB_AvgPool2D_H */

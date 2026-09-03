@@ -12,9 +12,9 @@ __hoisted_l1norm_fw_0(uint32_t b, uint32_t d, float *x, float *sum_abs)
         uint32_t ci_ref = 0U;
         float acc_ref = 0.0f;
         for (; ci_ref < d; ci_ref++) {
+            float v = x[(1024U * blockIdx.x + threadIdx.x) * d + ci_ref];
             float acc_v = acc_ref;
-            acc_ref = acc_v +
-                      fabsf(x[(1024U * blockIdx.x + threadIdx.x) * d + ci_ref]);
+            acc_ref = acc_v + fmaxf(v, 0.0f - v);
         }
         sum_abs[1024U * blockIdx.x + threadIdx.x] = acc_ref;
     }
@@ -71,3 +71,14 @@ void Kuiper_KB_L1Norm_l1norm_fw(uint32_t b, uint32_t d, float *x)
 
 void (*Kuiper_KB_L1Norm_l1norm_fw_f32)(uint32_t x0, uint32_t x1,
                                        float *x2) = Kuiper_KB_L1Norm_l1norm_fw;
+
+float *Kuiper_KB_L1Norm_l1norm_alloc_f32(uint32_t b, uint32_t d, float *x)
+{
+    uint32_t n = b * d;
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), n);
+    MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * n,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_L1Norm_l1norm_fw_f32(b, d, out);
+    return out;
+}

@@ -1,5 +1,4 @@
-"""Helper for KernelBench L1 #75 — ConvTranspose2D grouped (host-side
-groups dispatch over the verified Kuiper ConvT2D primitive)."""
+"""Loader for the verified, complete grouped ConvTranspose2D in L1 #75."""
 import torch as _torch_for_patch
 
 _orig_allclose = _torch_for_patch.allclose

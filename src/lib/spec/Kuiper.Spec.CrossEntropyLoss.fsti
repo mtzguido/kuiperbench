@@ -32,7 +32,15 @@ open Kuiper.Float32
 open Kuiper.Kernel.LogSoftmax { log_softmax_real }
 module Seq = FStar.Seq
 module SZ = Kuiper.SizeT
+module I64 = FStar.Int64
 unfold let f32 = Kuiper.Float32.t
+unfold type i64 = FStar.Int64.t
+
+(* Interpret a signed target as an index.  The defensive negative branch
+   keeps the real function total; the verified entry requires every target
+   to lie in [0, num_classes), as does the supported PyTorch operation. *)
+let target_index (t : i64) : nat =
+  if I64.v t >= 0 then I64.v t else 0
 
 (* Row [r] (a contiguous block of [c] reals) of a flat [n]-element
    row-major (B*C) predictions buffer.  Defensive guard keeps it
@@ -54,15 +62,15 @@ let real_cross_entropy_terms
   (batches : pos)
   (num_classes : pos)
   (rp : Seq.lseq real (batches * num_classes))
-  (st : Seq.lseq SZ.t batches)
+  (st : Seq.lseq i64 batches)
   : Seq.lseq real batches =
-  Seq.init batches (fun r -> ce_term_r num_classes rp r (SZ.v (st @! r)))
+  Seq.init batches (fun r -> ce_term_r num_classes rp r (target_index (st @! r)))
 
 let real_cross_entropy
   (batches : pos)
   (num_classes : pos)
   (rp : Seq.lseq real (batches * num_classes))
-  (st : Seq.lseq SZ.t batches)
+  (st : Seq.lseq i64 batches)
   : real =
   rsum (real_cross_entropy_terms batches num_classes rp st)
     /. FStar.Real.of_int batches
@@ -71,7 +79,7 @@ val real_cross_entropy_mul
   (batches : pos)
   (num_classes : pos)
   (rp : Seq.lseq real (batches * num_classes))
-  (st : Seq.lseq SZ.t batches)
+  (st : Seq.lseq i64 batches)
   : Lemma
       (real_cross_entropy batches num_classes rp st ==
        rsum (real_cross_entropy_terms batches num_classes rp st) *.
@@ -82,7 +90,7 @@ let cross_entropy_post
   (batches : pos)
   (num_classes : pos)
   (rp : Seq.lseq real (batches * num_classes))
-  (st : Seq.lseq SZ.t batches)
+  (st : Seq.lseq i64 batches)
   (res : f32)
   : prop =
   res %~ real_cross_entropy batches num_classes rp st

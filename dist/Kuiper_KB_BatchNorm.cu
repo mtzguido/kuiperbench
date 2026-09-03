@@ -3,11 +3,11 @@
 
 __global__
 /**
-  hoisted when extracting batchnorm_fw
+  hoisted when extracting batchnorm_fw_f32
 */
 static void
-__hoisted_batchnorm_fw_0(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                         uint32_t i, float *out)
+__hoisted_batchnorm_fw_f32_0(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
+                             uint32_t i, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = 0.0f;
@@ -33,11 +33,11 @@ __hoisted_batchnorm_fw_0(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
 
 __global__
 /**
-  hoisted when extracting batchnorm_fw
+  hoisted when extracting batchnorm_fw_f32
 */
 static void
-__hoisted_batchnorm_fw_1(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                         uint32_t i, float *out)
+__hoisted_batchnorm_fw_f32_1(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
+                             uint32_t i, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = 0.0f;
@@ -64,11 +64,11 @@ __hoisted_batchnorm_fw_1(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
 
 __global__
 /**
-  hoisted when extracting batchnorm_fw
+  hoisted when extracting batchnorm_fw_f32
 */
 static void
-__hoisted_batchnorm_fw_2(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                         uint32_t i, float inv, float neg_mean_inv)
+__hoisted_batchnorm_fw_f32_2(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
+                             uint32_t i, float inv, float neg_mean_inv)
 {
     if (1024U * blockIdx.x + threadIdx.x < nhw)
         x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
@@ -81,11 +81,11 @@ __hoisted_batchnorm_fw_2(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
 
 __global__
 /**
-  hoisted when extracting batchnorm_fw
+  hoisted when extracting batchnorm_fw_f32
 */
 static void
-__hoisted_batchnorm_fw_3(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                         uint32_t i, float g_c, float b_c)
+__hoisted_batchnorm_fw_f32_3(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
+                             uint32_t i, float g_c, float b_c)
 {
     if (1024U * blockIdx.x + threadIdx.x < nhw)
         x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
@@ -96,9 +96,9 @@ __hoisted_batchnorm_fw_3(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
             b_c;
 }
 
-void Kuiper_KB_BatchNorm_batchnorm_fw(uint32_t c, uint32_t hw, uint32_t nhw,
-                                      float eps, float *x, float *gamma,
-                                      float *beta)
+void Kuiper_KB_BatchNorm_batchnorm_fw_f32(uint32_t c, uint32_t hw, uint32_t nhw,
+                                          float eps, float *x, float *gamma,
+                                          float *beta)
 {
     float inv_n = 1.0f / (float) (int64_t) (uint64_t) nhw;
     uint32_t idx = 0U;
@@ -123,8 +123,8 @@ void Kuiper_KB_BatchNorm_batchnorm_fw(uint32_t c, uint32_t hw, uint32_t nhw,
         float *out0 = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
         cudaStream_t s0 = KPR_FRESH_STREAM();
         KPR_SHMEM_FITS(4096U);
-        KPR_KCALL(__hoisted_batchnorm_fw_0, 1U, 1024U, 4096U, s0, c, hw, nhw, x,
-                  i, out0);
+        KPR_KCALL(__hoisted_batchnorm_fw_f32_0, 1U, 1024U, 4096U, s0, c, hw,
+                  nhw, x, i, out0);
         MUST(cudaStreamSynchronize(s0));
         MUST(cudaStreamDestroy(s0));
         float hout = 0.0f;
@@ -134,8 +134,8 @@ void Kuiper_KB_BatchNorm_batchnorm_fw(uint32_t c, uint32_t hw, uint32_t nhw,
         float *out = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);
         cudaStream_t s1 = KPR_FRESH_STREAM();
         KPR_SHMEM_FITS(4096U);
-        KPR_KCALL(__hoisted_batchnorm_fw_1, 1U, 1024U, 4096U, s1, c, hw, nhw, x,
-                  i, out);
+        KPR_KCALL(__hoisted_batchnorm_fw_f32_1, 1U, 1024U, 4096U, s1, c, hw,
+                  nhw, x, i, out);
         MUST(cudaStreamSynchronize(s1));
         MUST(cudaStreamDestroy(s1));
         float hout0 = 0.0f;
@@ -144,13 +144,13 @@ void Kuiper_KB_BatchNorm_batchnorm_fw(uint32_t c, uint32_t hw, uint32_t nhw,
         float inv = rsqrtf(hout0 * inv_n - mean * mean + eps);
         float neg_mean_inv = 0.0f - mean * inv;
         cudaStream_t s = KPR_FRESH_STREAM();
-        KPR_KCALL(__hoisted_batchnorm_fw_2,
+        KPR_KCALL(__hoisted_batchnorm_fw_f32_2,
                   nhw / 1024U + (uint32_t) (nhw % 1024U != 0U), 1024U, 0U, s, c,
                   hw, nhw, x, i, inv, neg_mean_inv);
         MUST(cudaStreamSynchronize(s));
         MUST(cudaStreamDestroy(s));
         cudaStream_t s2 = KPR_FRESH_STREAM();
-        KPR_KCALL(__hoisted_batchnorm_fw_3,
+        KPR_KCALL(__hoisted_batchnorm_fw_f32_3,
                   nhw / 1024U + (uint32_t) (nhw % 1024U != 0U), 1024U, 0U, s2,
                   c, hw, nhw, x, i, g_c, b_c);
         MUST(cudaStreamSynchronize(s2));
@@ -158,6 +158,19 @@ void Kuiper_KB_BatchNorm_batchnorm_fw(uint32_t c, uint32_t hw, uint32_t nhw,
     }
 }
 
-void (*Kuiper_KB_BatchNorm_batchnorm_fw_f32)(
-    uint32_t x0, uint32_t x1, uint32_t x2, float x3, float *x4, float *x5,
-    float *x6) = Kuiper_KB_BatchNorm_batchnorm_fw;
+float *Kuiper_KB_BatchNorm_batchnorm2d_alloc_f32(uint32_t n, uint32_t c,
+                                                 uint32_t h, uint32_t w,
+                                                 double eps, float *x,
+                                                 float *gamma, float *beta)
+{
+    uint32_t hw = h * w;
+    uint32_t nhw = n * hw;
+    uint32_t elems = c * nhw;
+    float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), elems);
+    MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * elems,
+                    cudaMemcpyDeviceToDevice));
+    float *out = dst;
+    Kuiper_KB_BatchNorm_batchnorm_fw_f32(c, hw, nhw, (float) eps, out, gamma,
+                                         beta);
+    return out;
+}

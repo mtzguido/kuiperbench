@@ -2,37 +2,35 @@ Skeptic review — KB L1Norm (#38) functional spec
 ================================================
 
 (a) Does the spec correspond to mathematical row-wise L1
-normalisation? YES, modulo a documented real-arithmetic choice.  The
+normalisation? YES.  The
 PyTorch reference is y = x / mean(|x|, dim=1) = x * D / sum(|x|,
 dim=1).  The input is modelled as a chest2 t B D (the (B,D)
 row-major matrix, layout l2_row_major), NOT a flattened sequence.
-The post [l1norm_post b d sx sx'] directly states, for every cell,
-that the floating output approximates the corresponding real input
+The caller supplies an erased real matrix [rx] with [sx %~ rx].  The
+post [l1norm_post b d rx sx'] directly states, for every cell, that
+the floating output approximates the corresponding real input
 scaled by D / ||row||_1.  The reduction and division intermediates do
 not escape as existential witnesses.  The postcondition is stated over
 matrix entries, not a flattening.
 
-Caveat: we do NOT push fabs through to a real-arithmetic [rabs]
-because [Kuiper.Real] does not axiomatise a real abs.  Instead the
-inner sum is the sum of the *real images* of the elementwise absolute
-values (to_real (fabs x)), which is exactly the L1 norm for finite
-floats.  This is the standard pattern and needs only [to_real_ok]
-(no abs axiom).  Documented in the spec module's docstring.
+The pinned package does not relate primitive [fabs] to real absolute
+value.  The reduction instead uses [l1_abs x = fmax x (0 - x)].  The
+packaged subtraction and maximum approximation laws prove that this
+approximates [l1_abs_r x = rmax x (0 - x)], the real absolute value.
+No local absolute-value axiom is needed.
 
 (b) Is the proof genuine? YES.  No assume/admit/magic in
 Kuiper.Spec.L1Norm.{fst,fsti} or Kuiper.KB.L1Norm.{fst,fsti}.  The
 kernel is now a clean 3-launch composition (identical in structure to
 RMSNorm #36), with NO per-row host loop and NO scratch matrix:
-  1. HReduce.reduce_batched fabs       -> sum_abs[r] = row_reduce_partial fabs sx r d
+  1. HReduce.reduce_batched l1_abs     -> sum_abs[r] = row_reduce_partial l1_abs sx r d
   2. Map.map_gpu (l1_scale_fn dim_f)    -> sum_abs[r] = div dim_f sum_abs[r]
   3. RowScale.row_scale sum_abs x       -> macc x' r j = mul sum_abs[r] (macc x r j)
-The bridge lemma [row_reduce_partial_fabs_approx] (proved in
+The bridge lemma [row_reduce_partial_l1_abs_approx] (proved in
 Kuiper.Spec.L1Norm.fst) shows the device-side deterministic left-fold
 of absolutes %~ l1_sum_r, via row_reduce_partial_eq_fold (induction
-using the row_reduce_partial_succ SMTPat) + to_real_seq_is_approx +
-sum_is_approx.  This mirrors RMSNorm's row_reduce_partial_sq_approx
-but with fabs in place of sq_step and only to_real_ok pointwise (no
-a_mul, no abs axiom).
+using the row_reduce_partial_succ SMTPat), an indexwise application of
+[sub_approx] and [fmax_approx], and [sum_is_approx].
 
 (c) dim_f.  D / s now uses dim_f = l1_dim_f d = of_int (int64 d),
 computed INSIDE the verification boundary (extracts to
@@ -44,6 +42,6 @@ types.  An all-zero row yields IEEE infinity and NaNs,
 which have no finite-real interpretation; the direct contract therefore
 requires every real row L1 sum to be nonzero.
 
-(e) FAbs removed.  The trivial Kuiper.KB.FAbs wrapper (fabs_step =
-fabs, plus two unused fabs_fw kernels) is deleted: fabs is now passed
-directly as the reduce_batched pre-map.
+(e) No host-side absolute-value wrapper is involved.  [l1_abs] is an
+inline-for-extraction Kuiper expression passed directly as the
+[reduce_batched] pre-map.

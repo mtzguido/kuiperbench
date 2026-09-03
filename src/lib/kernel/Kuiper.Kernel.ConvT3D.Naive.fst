@@ -184,7 +184,7 @@ let kpost
                                    sd sh sw pd ph pw dd dh dw
                                    d_out h_out w_out sx sw_l sbias tid
 
-#push-options "--z3rlimit 80"
+#push-options "--z3rlimit 60"
 
 (* Inner-loop helper: read tap from x with strided + zero-padded
    ConvTranspose semantics.  Reads x[bi, ic, num_d/sd, num_h/sh, num_w/sw]
@@ -265,7 +265,7 @@ fn read_x_strided_pad_3d
 
 #pop-options
 
-#push-options "--z3rlimit 80"
+#push-options "--z3rlimit 60"
 
 (* Read a weight tap [(ic, oc, kd_i, kh_i, kw_i)] from the flat weight array.
    ConvT layout is (cin, cout, kd, kh, kw). *)
@@ -303,7 +303,7 @@ fn read_w_tap_t3
 
 #pop-options
 
-#push-options "--z3rlimit 400 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 (* Local helper: partial convT3d sum over the linearised
    (ic, kd, kh, kw) index up to [to], with all parameters explicit.
@@ -560,7 +560,7 @@ fn kf
 
 #pop-options
 
-#push-options "--z3rlimit 80"
+#push-options "--z3rlimit 60"
 
 (* Ghost setup: factor the launcher's full-permission frame into N per-thread
    slices.  Mirrors [Kuiper.Kernel.Conv1D.Naive.conv1d_naive_setup]. *)
@@ -737,7 +737,7 @@ fn convt3d_naive_teardown
 
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 
 inline_for_extraction noextract
 let kdesc

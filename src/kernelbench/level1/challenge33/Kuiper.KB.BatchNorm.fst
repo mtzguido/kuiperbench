@@ -2,6 +2,7 @@ module Kuiper.KB.BatchNorm
 
 #lang-pulse
 open Kuiper
+open Kuiper.Float.Casts
 open Kuiper.Scalars.Ops
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
@@ -14,7 +15,8 @@ open Kuiper.Spec.BatchNorm
 module SZ = Kuiper.SizeT
 module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
+module Copy = Kuiper.KB.Tensor.Copy
 module RealSqrt = FStar.Math.Sqrt
 module KS = Kuiper.Seq.Common
 module Tensor = Kuiper.Tensor
@@ -57,22 +59,23 @@ let lem_to_seq (#et:Type) (nn:nat) (c : chest1 et nn)
    [any] when this slice is used inside an extracted map kernel.  This
    specialization keeps the index shape concrete and delegates directly to
    the BCM-channels cimap. *)
-#push-options "--z3rlimit 100 --fuel 4 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 3"
 inline_for_extraction noextract
 instance c_bcm_channel_slice
   (n  : erased nat)
   (c  : szp)
-  (hw : szp { SZ.v hw > 0 /\
-              SZ.fits (n * SZ.v hw) /\
-              SZ.fits (SZ.v hw * c) /\
-              SZ.fits (n * (SZ.v hw * c)) })
+  (#hw_n : erased pos)
+  (hw : szp { SZ.v hw == reveal hw_n /\
+              SZ.fits (n * (reveal hw_n)) /\
+              SZ.fits ((reveal hw_n) * c) /\
+              SZ.fits (n * ((reveal hw_n) * c)) })
   (ci : szlt c)
-  : ctlayout #1 #((n * SZ.v hw) @| INil)
-      (tlayout_slice (l2_bcm_channels n c hw) 0 ci)
+  : ctlayout #1 #((n * (reveal hw_n)) @| INil)
+      (tlayout_slice (l2_bcm_channels n c (reveal hw_n)) 0 ci)
   = {
       ulen_fits = ();
       all_fit = ();
-      cimap = fun (idx : conc ((n * SZ.v hw) @| INil)) ->
+      cimap = fun (idx : conc ((n * (reveal hw_n)) @| INil)) ->
         [@@inline_let] let (k, ()) = idx in
         (c_l2_bcm_channels n c hw).cimap (ci, (k, ()))
     }
@@ -376,25 +379,27 @@ inline_for_extraction noextract
 fn batchnorm_channel
   (n  : erased nat)
   (c  : szp)
-  (hw : szp { SZ.v hw > 0 /\
-              SZ.fits (n * SZ.v hw) /\
-              SZ.fits (SZ.v hw * c) /\
-              SZ.fits (n * (SZ.v hw * c)) })
-  (nhw : szp { SZ.v nhw == n * SZ.v hw /\
+  (#hw_n : erased pos)
+  (hw : szp { SZ.v hw == reveal hw_n /\
+              SZ.fits (n * (reveal hw_n)) /\
+              SZ.fits ((reveal hw_n) * c) /\
+              SZ.fits (n * ((reveal hw_n) * c)) })
+  (nhw : szp { SZ.v nhw == n * (reveal hw_n) /\
                nhw <= max_blocks * max_threads /\
                SZ.fits (SZ.v nhw + 1024) })
   (ci : szlt c)
   (eps inv_n : f32)
   (reps rinv_n : erased real)
-  (rx : erased (v : chest2 real c (n * SZ.v hw) {
-    batchnorm_domain c (n * SZ.v hw) (reveal reps) (reveal rinv_n) v }))
+  (rx : erased (v : chest2 real c (n * (reveal hw_n)) {
+    batchnorm_domain c (n * (reveal hw_n))
+      (reveal reps) (reveal rinv_n) v }))
   (rg rb : erased (Seq.lseq real c))
-  (x : array2 f32 (l2_bcm_channels n c hw)
+  (x : array2 f32 (l2_bcm_channels n c (reveal hw_n))
                    { is_global x })
   (gamma : array1 f32 (l1_forward c) { is_global gamma })
   (beta  : array1 f32 (l1_forward c) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : chest2 f32 c (n * SZ.v hw))
+  (#sx : chest2 f32 c (n * (reveal hw_n)))
   (#sg : chest1 f32 c)
   (#sb : chest1 f32 c)
   preserves cpu
@@ -408,7 +413,7 @@ fn batchnorm_channel
     on gpu_loc (x |-> sx) **
     pure (ematrix_row sx ci %~ ematrix_row (reveal rx) ci)
   ensures
-    (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
+    (exists* (sx' : chest2 f32 c (n * (reveal hw_n))).
        on gpu_loc (x |-> sx') **
        pure (row_batch_normalized (reveal reps) (reveal rinv_n)
                (reveal rx) (reveal rg) (reveal rb) sx' ci) **
@@ -425,17 +430,17 @@ fn batchnorm_channel
 
   (* [chest1] view of the row (== [chest_slice 0 ci sx]) and its real image,
      shared by both reductions. *)
-  let row_c : chest1 f32 (n * SZ.v hw) =
+  let row_c : chest1 f32 (n * (reveal hw_n)) =
     hide (chest2_row (reveal sx) ci);
-  let row_r : chest1 real (n * SZ.v hw) =
+  let row_r : chest1 real (n * (reveal hw_n)) =
     hide (chest2_row (reveal rx) ci);
   assert pure (reveal row_c %~ reveal row_r);
 
   (* The row as a flat [ematrix_row], for the functional-correctness spec. *)
   chest2_row_to_seq (reveal sx) ci;
-  let row_g : erased (Seq.lseq f32 (n * SZ.v hw)) =
+  let row_g : erased (Seq.lseq f32 (n * (reveal hw_n))) =
     hide (ematrix_row (reveal sx) ci);
-  let rrow_g : erased (Seq.lseq real (n * SZ.v hw)) =
+  let rrow_g : erased (Seq.lseq real (n * (reveal hw_n))) =
     hide (ematrix_row (reveal rx) ci);
   assert pure (chest1_to_seq (reveal row_c) == reveal row_g);
   chest2_row_to_seq (reveal rx) ci;
@@ -445,7 +450,7 @@ fn batchnorm_channel
   (* sum = Σ row  (identity pre-map; reduce preserves the slice). *)
   let sum =
     HRed.reduce #f32 id id 1024sz nhw
-      #_ #(c_bcm_channel_slice n c hw ci)
+      #_ #(c_bcm_channel_slice n c #hw_n hw ci)
       (sliceof x 0 (SZ.v ci)) #row_c row_r;
   chest_map_to_seq (id #real) (reveal row_r);
   seq_map_id_eq #real (chest1_to_seq (reveal row_r));
@@ -456,7 +461,7 @@ fn batchnorm_channel
   let sumsq =
     HRed.reduce #f32
       (square #f32) sq_step_r 1024sz nhw
-      #_ #(c_bcm_channel_slice n c hw ci)
+      #_ #(c_bcm_channel_slice n c #hw_n hw ci)
       (sliceof x 0 (SZ.v ci)) #row_c row_r;
   chest_map_to_seq sq_step_r (reveal row_r);
   assert pure (sumsq %~ frobenius_sumsq_r (reveal rrow_g));
@@ -487,20 +492,20 @@ fn batchnorm_channel
   a_mul mean mean rmean rmean;
   sub_approx m2 (mul mean mean) rm2 (rmean *. rmean);
   a_add var eps rvar (reveal reps);
-  SqrtApprox.rsqrt_approx var_eps positive_rvar_eps;
+  RsqrtApprox.rsqrt_approx var_eps positive_rvar_eps;
   a_mul mean inv rmean rinv;
   sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
 
   (* Pass 1: row ← (row - μ) * inv = inv*row + neg_mean_inv. *)
   Map.map_gpu (affine_step inv neg_mean_inv) nhw
-    #_ #(c_bcm_channel_slice n c hw ci) (sliceof x 0 (SZ.v ci));
+    #_ #(c_bcm_channel_slice n c #hw_n hw ci) (sliceof x 0 (SZ.v ci));
 
   (* Pass 2: row ← γ_c*row + β_c. *)
   Map.map_gpu (affine_step g_c b_c) nhw
-    #_ #(c_bcm_channel_slice n c hw ci) (sliceof x 0 (SZ.v ci));
+    #_ #(c_bcm_channel_slice n c #hw_n hw ci) (sliceof x 0 (SZ.v ci));
 
   (* Name the resulting slice chest [eC]. *)
-  let eC : chest1 f32 (n * SZ.v hw) =
+  let eC : chest1 f32 (n * (reveal hw_n)) =
     hide (chest_map (affine_step g_c b_c)
             (chest_map (affine_step inv neg_mean_inv) (reveal row_c)));
   assert (on gpu_loc (sliceof x 0 (SZ.v ci) |-> reveal eC));
@@ -509,7 +514,7 @@ fn batchnorm_channel
   chest_map_to_seq (affine_step inv neg_mean_inv) (reveal row_c);
   chest_map_to_seq (affine_step g_c b_c)
     (chest_map (affine_step inv neg_mean_inv) (reveal row_c));
-  bn_via_double_affine_lemma #(n * SZ.v hw)
+  bn_via_double_affine_lemma #(n * (reveal hw_n))
     inv neg_mean_inv g_c b_c (reveal row_g);
   assert pure (chest1_to_seq (reveal eC) ==
     affine_result g_c b_c
@@ -518,23 +523,25 @@ fn batchnorm_channel
     bn_row_result inv neg_mean_inv g_c b_c (reveal row_g));
 
   (* Recombine into the full matrix by applying the restore wand at [eC]. *)
-  assert pure (modulo_i 0 (c @| (n * SZ.v hw) @| INil) ==
-               (n * SZ.v hw) @| INil);
+  assert pure (modulo_i 0 (c @| (n * (reveal hw_n)) @| INil) ==
+               (n * (reveal hw_n)) @| INil);
   map_loc gpu_loc
     #(sliceof x 0 (SZ.v ci) |-> reveal eC **
-      (forall* (s' : chest (modulo_i 0 (c @| (n * SZ.v hw) @| INil)) f32).
+      (forall* (s' : chest
+        (modulo_i 0 (c @| (n * (reveal hw_n)) @| INil)) f32).
         sliceof x 0 (SZ.v ci) |-> s' @==>
         x |-> chest_update_slice 0 ci (reveal sx) s'))
     #(x |-> chest_update_slice 0 ci (reveal sx) (reveal eC))
     fn () {
       elim_forall
-        (reveal eC <: chest (modulo_i 0 (c @| (n * SZ.v hw) @| INil)) f32);
+        (reveal eC <: chest
+          (modulo_i 0 (c @| (n * (reveal hw_n)) @| INil)) f32);
       elim_trade _ _;
       ()
     };
 
   (* [sx_final] is [sx] with row [ci] replaced by [eC]. *)
-  let sx_final : chest2 f32 c (n * SZ.v hw) =
+  let sx_final : chest2 f32 c (n * (reveal hw_n)) =
     hide (chest_update_slice 0 ci (reveal sx) (reveal eC));
   assert (on gpu_loc (x |-> reveal sx_final));
 
@@ -575,24 +582,26 @@ inline_for_extraction noextract
 fn batch_norm
   (n  : erased nat)
   (c  : szp)
-  (hw : szp { SZ.v hw > 0 /\
-              SZ.fits (n * SZ.v hw) /\
-              SZ.fits (SZ.v hw * c) /\
-              SZ.fits (n * (SZ.v hw * c)) })
-  (nhw : szp { SZ.v nhw == n * SZ.v hw /\
+  (#hw_n : erased pos)
+  (hw : szp { SZ.v hw == reveal hw_n /\
+              SZ.fits (n * (reveal hw_n)) /\
+              SZ.fits ((reveal hw_n) * c) /\
+              SZ.fits (n * ((reveal hw_n) * c)) })
+  (nhw : szp { SZ.v nhw == n * (reveal hw_n) /\
                nhw <= max_blocks * max_threads /\
                SZ.fits (SZ.v nhw + 1024) })
   (eps inv_n : f32)
   (reps rinv_n : erased real)
-  (rx : erased (v : chest2 real c (n * SZ.v hw) {
-    batchnorm_domain c (n * SZ.v hw) (reveal reps) (reveal rinv_n) v }))
+  (rx : erased (v : chest2 real c (n * (reveal hw_n)) {
+    batchnorm_domain c (n * (reveal hw_n))
+      (reveal reps) (reveal rinv_n) v }))
   (rg rb : erased (Seq.lseq real c))
-  (x : array2 f32 (l2_bcm_channels n c hw)
+  (x : array2 f32 (l2_bcm_channels n c (reveal hw_n))
                    { is_global x })
   (gamma : array1 f32 (l1_forward c) { is_global gamma })
   (beta  : array1 f32 (l1_forward c) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : chest2 f32 c (n * SZ.v hw))
+  (#sx : chest2 f32 c (n * (reveal hw_n)))
   (#sg : chest1 f32 c)
   (#sb : chest1 f32 c)
   preserves
@@ -600,21 +609,22 @@ fn batch_norm
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sb) **
     pure (eps %~ reveal reps /\ inv_n %~ reveal rinv_n /\
-          sx %~ ((reveal rx) <: chest2 real c (n * SZ.v hw)) /\
+          sx %~ ((reveal rx) <: chest2 real c (n * (reveal hw_n))) /\
           sg %~ seq_to_chest1 (reveal rg) /\
           sb %~ seq_to_chest1 (reveal rb))
   requires
     on gpu_loc (x |-> sx)
   ensures
-    (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
+    (exists* (sx' : chest2 f32 c (n * (reveal hw_n))).
        on gpu_loc (x |-> sx') **
-       pure (batchnorm_post c (n * SZ.v hw) (reveal reps) (reveal rinv_n)
+       pure (batchnorm_post c (n * (reveal hw_n))
+               (reveal reps) (reveal rinv_n)
                (reveal rg) (reveal rb) (reveal rx) sx'))
 {
   let mut idx = 0sz;
   while (let i = !idx; SZ.(i <^ c))
     invariant
-      exists* (vi : sz) (sx' : chest2 f32 c (n * SZ.v hw)).
+      exists* (vi : sz) (sx' : chest2 f32 c (n * (reveal hw_n))).
         idx |-> vi **
         on gpu_loc (x |-> sx') **
         cpu **
@@ -631,13 +641,13 @@ fn batch_norm
     assert pure (ematrix_row sx'_pre i == ematrix_row sx i);
     ematrix_row_approx sx (reveal rx) i;
     assert pure (ematrix_row sx'_pre i %~ ematrix_row (reveal rx) i);
-    batchnorm_channel n c hw nhw i eps inv_n reps rinv_n rx rg rb
+    batchnorm_channel n c #hw_n hw nhw i eps inv_n reps rinv_n rx rg rb
       x gamma beta;
     with sx'_new. assert (on gpu_loc (x |-> sx'_new));
     assert pure (
       forall (k : nat). k < c /\ k <> SZ.v i ==>
         ematrix_row sx'_new k == ematrix_row sx'_pre k);
-    row_batch_normalized_stable_forall #(n * SZ.v hw) c
+    row_batch_normalized_stable_forall #(n * (reveal hw_n)) c
       (reveal reps) (reveal rinv_n) (reveal rx) (reveal rg) (reveal rb)
       sx'_pre sx'_new i;
     assert pure (
@@ -647,7 +657,7 @@ fn batch_norm
     assert pure (
       row_batch_normalized (reveal reps) (reveal rinv_n)
         (reveal rx) (reveal rg) (reveal rb) sx'_new i);
-    row_batch_normalized_extend_forall #(n * SZ.v hw) c
+    row_batch_normalized_extend_forall #(n * (reveal hw_n)) c
       (reveal reps) (reveal rinv_n) (reveal rx) (reveal rg) (reveal rb)
       sx'_new i;
     assert pure (
@@ -667,57 +677,161 @@ fn batch_norm
    inside the verification boundary, then delegate to [batch_norm].  The
    heavy proofs above treat [inv_n] abstractly, so the constant
    computation here does not affect their cost. *)
-fn batchnorm_fw
+fn batchnorm_fw_f32
   (n  : erased nat)
   (c  : szp)
-  (hw : szp { SZ.v hw > 0 /\
-              SZ.fits (n * SZ.v hw) /\
-              SZ.fits (SZ.v hw * c) /\
-              SZ.fits (n * (SZ.v hw * c)) })
-  (nhw : szp { SZ.v nhw == n * SZ.v hw /\
+  (#hw_n : erased pos)
+  (hw : szp { SZ.v hw == reveal hw_n /\
+              SZ.fits (n * (reveal hw_n)) /\
+              SZ.fits ((reveal hw_n) * c) /\
+              SZ.fits (n * ((reveal hw_n) * c)) })
+  (nhw : szp { SZ.v nhw == n * (reveal hw_n) /\
                nhw <= max_blocks * max_threads /\
                SZ.fits (SZ.v nhw + 1024) })
   (eps : f32)
-  (x : array2 f32 (l2_bcm_channels n c hw)
+  (x : array2 f32 (l2_bcm_channels n c (reveal hw_n))
                    { is_global x })
   (gamma : array1 f32 (l1_forward c) { is_global gamma })
   (beta  : array1 f32 (l1_forward c) { is_global beta  })
   (#fg #fb : perm)
-  (#sx : chest2 f32 c (n * SZ.v hw))
+  (#sx : chest2 f32 c (n * (reveal hw_n)))
   (#sg : chest1 f32 c)
   (#sb : chest1 f32 c)
   (reps : erased real)
-  (rx : erased (v : chest2 real c (n * SZ.v hw) {
-    batchnorm_domain c (n * SZ.v hw) (reveal reps)
-      (bn_inv_n_r (SZ.v nhw)) v }))
+  (rx : erased (v : chest2 real c (n * (reveal hw_n)) {
+    batchnorm_domain c (n * (reveal hw_n)) (reveal reps)
+      (bn_inv_n_r (n * (reveal hw_n))) v }))
   (rg rb : erased (Seq.lseq real c))
+  (#ax : squash (sx %~ ((reveal rx) <: chest2 real c
+    (n * (reveal hw_n)))))
+  norewrite
   preserves
     cpu **
     on gpu_loc (gamma |-> Frac fg sg) **
     on gpu_loc (beta  |-> Frac fb sb) **
-    pure (eps %~ reveal reps /\
-          sx %~ ((reveal rx) <: chest2 real c (n * SZ.v hw)) /\
-          sg %~ seq_to_chest1 (reveal rg) /\
-          sb %~ seq_to_chest1 (reveal rb))
+    pure (eps %~ reveal reps) **
+    pure (sg %~ seq_to_chest1 (reveal rg)) **
+    pure (sb %~ seq_to_chest1 (reveal rb))
   requires
     on gpu_loc (x |-> sx)
   ensures
-    (exists* (sx' : chest2 f32 c (n * SZ.v hw)).
+    (exists* (sx' : chest2 f32 c (n * (reveal hw_n))).
        on gpu_loc (x |-> sx') **
-       pure (batchnorm_post c (n * SZ.v hw) (reveal reps)
-               (bn_inv_n_r (SZ.v nhw)) (reveal rg) (reveal rb)
+       pure (batchnorm_post c (n * (reveal hw_n)) (reveal reps)
+               (bn_inv_n_r (n * (reveal hw_n))) (reveal rg) (reveal rb)
                (reveal rx) sx'))
 {
+  assert pure (sx %~ ((reveal rx) <: chest2 real c
+    (n * (reveal hw_n))));
   let inv_n : f32 = bn_inv_n nhw;
   let nhw64 : Int64.t = FStar.Int.Cast.uint64_to_int64
     (FStar.SizeT.sizet_to_uint64 nhw);
-  assert pure (Int64.v nhw64 == n * SZ.v hw);
+  assert pure (Int64.v nhw64 == n * (reveal hw_n));
   let nhw_f : f32 = of_int nhw64;
   of_int_approx #f32 nhw64;
-  div_approx (one #f32) nhw_f 1.0R (FStar.Real.of_int (n * SZ.v hw));
-  assert pure (inv_n %~ bn_inv_n_r (SZ.v nhw));
-  batch_norm n c hw nhw eps inv_n reps
-    (hide (bn_inv_n_r (SZ.v nhw))) rx rg rb x gamma beta;
+  div_approx (one #f32) nhw_f 1.0R
+    (FStar.Real.of_int (n * (reveal hw_n)));
+  assert pure (inv_n %~ bn_inv_n_r (n * (reveal hw_n)));
+  batch_norm n c #hw_n hw nhw eps inv_n reps
+    (hide (bn_inv_n_r (n * (reveal hw_n)))) rx rg rb x gamma beta;
 }
 
-let batchnorm_fw_f32 = batchnorm_fw
+#push-options "--z3rlimit 10"
+inline_for_extraction noextract
+fn batchnorm2d_alloc_core_f32
+  (n c h w : szp)
+  (eps : f32)
+  (x : array2 f32 (l2_bcm_channels (SZ.v n) c (h * w)) { is_global x })
+  (gamma : array1 f32 (l1_forward c) { is_global gamma })
+  (beta : array1 f32 (l1_forward c) { is_global beta })
+  (#fx #fg #fb : perm)
+  (#sx : chest2 f32 c (SZ.v n * (SZ.v h * SZ.v w)))
+  (#sg #sb : chest1 f32 c)
+  (reps : erased real)
+  (rx : erased (v : chest2 real c (SZ.v n * (SZ.v h * SZ.v w)) {
+    batchnorm_domain c (SZ.v n * (SZ.v h * SZ.v w)) (reveal reps)
+      (bn_inv_n_r (SZ.v n * (SZ.v h * SZ.v w))) v }))
+  (rg rb : erased (Seq.lseq real c))
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx) **
+    on gpu_loc (gamma |-> Frac fg sg) **
+    on gpu_loc (beta |-> Frac fb sb) **
+    pure (eps %~ reveal reps) **
+    pure (sx %~ ((reveal rx) <: chest2 real c
+      (SZ.v n * (SZ.v h * SZ.v w)))) **
+    pure (sg %~ seq_to_chest1 (reveal rg)) **
+    pure (sb %~ seq_to_chest1 (reveal rb))
+  requires
+    pure (SZ.v h > 0 /\ SZ.v w > 0 /\
+          SZ.fits (SZ.v h * SZ.v w) /\
+          SZ.fits (SZ.v n * (SZ.v h * SZ.v w)) /\
+          SZ.fits ((SZ.v h * SZ.v w) * SZ.v c) /\
+          SZ.fits (SZ.v n * ((SZ.v h * SZ.v w) * SZ.v c)) /\
+          SZ.v n * (SZ.v h * SZ.v w) <= max_blocks * max_threads /\
+          SZ.fits (SZ.v n * (SZ.v h * SZ.v w) + 1024))
+  returns out : array2 f32
+    (l2_bcm_channels (SZ.v n) c (h * w))
+  ensures
+    exists* (sx' : chest2 f32 c (SZ.v n * (SZ.v h * SZ.v w))).
+      on gpu_loc (out |-> sx') **
+      pure (batchnorm_post c (SZ.v n * (SZ.v h * SZ.v w))
+              (reveal reps) (bn_inv_n_r (SZ.v n * (SZ.v h * SZ.v w)))
+              (reveal rg) (reveal rb) (reveal rx) sx')
+{
+  let hw : szp = h *^ w;
+  let nhw : szp = n *^ hw;
+  let elems : szp = c *^ nhw;
+  let out = Copy.copy_alloc #f32 elems x;
+  let ax : squash (sx %~ ((reveal rx) <: chest2 real c
+    (SZ.v n * (SZ.v h * SZ.v w)))) = ();
+  batchnorm_fw_f32 (hide (SZ.v n)) c
+    #(hide (SZ.v h * SZ.v w)) hw nhw eps out gamma beta
+    #fg #fb #sx #sg #sb reps rx rg rb #ax;
+  out
+}
+#pop-options
+
+fn batchnorm2d_alloc_f32
+  (n c h w : szp)
+  (eps : f64)
+  (x : array2 f32 (l2_bcm_channels (SZ.v n) c (h * w)) { is_global x })
+  (gamma : array1 f32 (l1_forward c) { is_global gamma })
+  (beta : array1 f32 (l1_forward c) { is_global beta })
+  (#fx #fg #fb : perm)
+  (#sx : chest2 f32 c (SZ.v n * (SZ.v h * SZ.v w)))
+  (#sg #sb : chest1 f32 c)
+  (rx : erased (v : chest2 real c (SZ.v n * (SZ.v h * SZ.v w)) {
+    batchnorm_domain c (SZ.v n * (SZ.v h * SZ.v w))
+      (to_real (fcast #f64 #f32 eps))
+      (bn_inv_n_r (SZ.v n * (SZ.v h * SZ.v w))) v }))
+  (rg rb : erased (Seq.lseq real c))
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx) **
+    on gpu_loc (gamma |-> Frac fg sg) **
+    on gpu_loc (beta |-> Frac fb sb) **
+    pure (sx %~ ((reveal rx) <: chest2 real c
+            (SZ.v n * (SZ.v h * SZ.v w)))) **
+    pure (sg %~ seq_to_chest1 (reveal rg)) **
+    pure (sb %~ seq_to_chest1 (reveal rb))
+  requires
+    pure (SZ.v h > 0 /\ SZ.v w > 0 /\
+          SZ.fits (SZ.v h * SZ.v w) /\
+          SZ.fits (SZ.v n * (SZ.v h * SZ.v w)) /\
+          SZ.fits ((SZ.v h * SZ.v w) * SZ.v c) /\
+          SZ.fits (SZ.v n * ((SZ.v h * SZ.v w) * SZ.v c)) /\
+          SZ.v n * (SZ.v h * SZ.v w) <= max_blocks * max_threads /\
+          SZ.fits (SZ.v n * (SZ.v h * SZ.v w) + 1024))
+  returns out : array2 f32
+    (l2_bcm_channels (SZ.v n) c (h * w))
+  ensures
+    exists* (sx' : chest2 f32 c (SZ.v n * (SZ.v h * SZ.v w))).
+      on gpu_loc (out |-> sx') **
+      pure (batchnorm_post c (SZ.v n * (SZ.v h * SZ.v w))
+              (to_real (fcast #f64 #f32 eps))
+              (bn_inv_n_r (SZ.v n * (SZ.v h * SZ.v w)))
+              (reveal rg) (reveal rb) (reveal rx) sx')
+{
+  to_real_ok (fcast #f64 #f32 eps);
+  batchnorm2d_alloc_core_f32 n c h w (fcast #f64 #f32 eps) x gamma beta
+    (hide (to_real (fcast #f64 #f32 eps))) rx rg rb
+}

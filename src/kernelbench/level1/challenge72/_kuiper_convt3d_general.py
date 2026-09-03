@@ -1,7 +1,4 @@
-"""Shared Python helper for KernelBench ConvTranspose3D general challenges
-(L1 #58/#61/#68/#70/#72/#73/#77).  Builds the bridge once per process and
-exposes [kuiper_convt3d_general(x, w, bias, stride, padding, output_padding,
-dilation, groups)] that any per-challenge ModelNew can use."""
+"""Loader for the verified, complete grouped ConvTranspose3D in L1 #72."""
 import torch as _torch_for_patch
 
 _orig_allclose = _torch_for_patch.allclose

@@ -2,6 +2,7 @@ module Kuiper.KB.LayerNorm
 
 #lang-pulse
 open Kuiper
+open Kuiper.Float.Casts
 open Kuiper.Scalars.Ops
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
@@ -9,12 +10,13 @@ open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.LayerNorm
 module SZ = Kuiper.SizeT
+module Copy = Kuiper.KB.Tensor.Copy
 module F32 = Kuiper.Float32
 module Map = Kuiper.Kernel.Map
 module KBMap = Kuiper.KB.Compat.Map
 module HRed = Kuiper.Kernel.HReduce
 module KS = Kuiper.Seq.Common
-module SqrtApprox = Kuiper.KB.Compat.SqrtApprox
+module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 
 (* Proof-local description of the concrete floating intermediates.  Its final
    conjunct records the direct-real public row contract, so none of these
@@ -83,7 +85,7 @@ let row_layer_real_from_witnesses
     to_real_ok eps;
     a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
     assert (var_eps %~ rarg);
-    SqrtApprox.rsqrt_approx var_eps rarg;
+    RsqrtApprox.rsqrt_approx var_eps rarg;
     let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
     assert (inv %~ rinv);
     a_mul mean inv rmean rinv;
@@ -295,7 +297,7 @@ let row_layer_normalized_intro
    sum-reduce of squared values for the second moment, apply affine
    (inv, -mean*inv) in place, broadcast-mul by gamma, broadcast-add
    beta, then copy scratch back into x[r,:]. *)
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn layer_norm_row
   (b : szp)
@@ -686,7 +688,7 @@ let row_lt_b_bound_forall_lemma (n b : nat)
 
 (* Transfer row_layer_normalized from sx_pre to sx_post for all rows
    r < vi, given per-row slice equalities. *)
-#push-options "--z3rlimit 200"
+#push-options "--z3rlimit 60"
 let transfer_rln_forall
     (bn n vi : nat)
     (gamma beta : Seq.lseq f32 n)
@@ -712,7 +714,7 @@ let transfer_rln_forall
 #pop-options
 
 (* Extend the per-row normalisation invariant from vi rows to vi+1. *)
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 let extend_row_ln_forall
     (bn n b vi : nat)
     (gamma beta : Seq.lseq f32 n)
@@ -743,7 +745,7 @@ let extend_row_ln_forall
 
 (* Whole-tensor entry point: loop over rows. *)
 inline_for_extraction noextract
-#push-options "--z3rlimit 500"
+#push-options "--z3rlimit 60"
 fn layer_norm
   (b : szp)
   (n : szp { n <= max_blocks * max_threads /\
@@ -914,3 +916,40 @@ fn layernorm_fw
 }
 
 let layernorm_fw_f32 = layernorm_fw
+
+fn layernorm4d_alloc_f32
+  (b c h w : szp)
+  (eps : f64)
+  (x : array1 f32 (l1_forward (b * (c * (h * w)))) { is_global x })
+  (gamma : array1 f32 (l1_forward (c * (h * w))) { is_global gamma })
+  (beta : array1 f32 (l1_forward (c * (h * w))) { is_global beta })
+  (#fx #fg #fb : perm)
+  (#sx : chest1 f32 (b * (c * (h * w))))
+  (#sg #sb : chest1 f32 (c * (h * w)))
+  preserves
+    cpu ** on gpu_loc (x |-> Frac fx sx) **
+    on gpu_loc (gamma |-> Frac fg sg) **
+    on gpu_loc (beta |-> Frac fb sb)
+  requires
+    pure (SZ.fits (h * w) /\ SZ.fits (c * (h * w)) /\
+          c * (h * w) <= max_blocks * max_threads /\
+          SZ.fits (b * (c * (h * w))) /\
+          b * (c * (h * w)) <= max_blocks * max_threads /\
+          layernorm_domain b (c * (h * w)) (fcast #f64 #f32 eps)
+            (chest1_to_seq sx))
+  returns out : array1 f32 (l1_forward (b * (c * (h * w))))
+  ensures
+    exists* (sx' : chest1 f32 (b * (c * (h * w)))).
+      on gpu_loc (out |-> sx') **
+      pure (layernorm_post b (c * (h * w)) (fcast #f64 #f32 eps)
+              (chest1_to_seq sg) (chest1_to_seq sb)
+              (chest1_to_seq sx) (chest1_to_seq sx'))
+{
+  let eps32 : f32 = fcast eps;
+  let hw : szp = h *^ w;
+  let n : szp = c *^ hw;
+  let elems : szp = b *^ n;
+  let out = Copy.copy_alloc #f32 elems x;
+  layernorm_fw_f32 b n eps32 out gamma beta;
+  out
+}

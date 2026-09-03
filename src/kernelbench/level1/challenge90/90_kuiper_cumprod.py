@@ -26,6 +26,6 @@ class ModelNew(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if self.dim == 1 and x.dim() == 2 and x.dtype == torch.float32 and x.is_cuda:
-            return kuiper_ext.kuiper_cumprod_dim1(x)
-        return torch.cumprod(x, dim=self.dim)
+        if self.dim != 1:
+            raise ValueError("Kuiper cumulative product supports dim=1")
+        return kuiper_ext.kuiper_cumprod_dim1(x)

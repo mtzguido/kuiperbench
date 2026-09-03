@@ -2,11 +2,11 @@
 //
 // PyTorch reference: torch.mean(torch.clamp(1 - predictions * targets, min=0))
 //
-// Verified pipeline (see Kuiper.Spec.HingeLoss.real_hinge):
-//   1. predictions[i] := max(0, 1 - predictions[i] * targets[i])
-//   2. tree_reduce_sum -> host scalar [s]
-//   3. on-device division [res := s / n]; returned as a scalar.
+// The single public Kuiper entry accepts predictions (B,N) and targets (N),
+// proves the broadcast target[j] across every row, preserves both inputs, and
+// returns a freshly allocated one-element GPU buffer.
 #include <torch/extension.h>
+#include <c10/cuda/CUDAGuard.h>
 #include "Kuiper_KB_HingeLoss.h"
 #include "Kuiper_KB_HingeLoss.cu"
 
@@ -18,24 +18,39 @@ torch::Tensor kuiper_hingeloss_cuda(torch::Tensor predictions,
     TORCH_CHECK(predictions.is_cuda() && targets.is_cuda()
                 && predictions.scalar_type() == torch::kFloat32
                 && targets.scalar_type() == torch::kFloat32
-                && predictions.dim() == 1 && targets.dim() == 1
-                && predictions.size(0) == targets.size(0),
-                "kuiper_hingeloss: expected two equal-length 1-D float32 CUDA tensors");
-    auto P = predictions.contiguous();
-    auto T = targets.contiguous();
-    int64_t N = P.size(0);
-    TORCH_CHECK(N > 0
-                && N <= KUIPER_MAX_BLOCKS * KUIPER_MAX_THREADS
-                && N <= (int64_t)UINT32_MAX,
+                && predictions.dim() == 2 && targets.dim() == 1,
+                "kuiper_hingeloss: expected predictions (B,N) and targets (N) "
+                "as float32 CUDA tensors");
+    TORCH_CHECK(targets.size(0) == predictions.size(1),
+                "kuiper_hingeloss: targets length must equal predictions.size(1)");
+    TORCH_CHECK(predictions.device() == targets.device(),
+                "kuiper_hingeloss: inputs must be on the same CUDA device");
+    TORCH_CHECK(predictions.is_contiguous() && targets.is_contiguous(),
+                "kuiper_hingeloss: inputs must be contiguous");
+
+    const int64_t B = predictions.size(0);
+    const int64_t N = predictions.size(1);
+    using wide = unsigned __int128;
+    const wide elems = (wide)B * (wide)N;
+    const wide launch_limit =
+        (wide)KUIPER_MAX_BLOCKS * (wide)KUIPER_MAX_THREADS;
+    TORCH_CHECK(B > 0 && N > 0
+                && (wide)B <= (wide)UINT32_MAX
+                && (wide)N <= (wide)UINT32_MAX
+                && elems <= launch_limit
+                && elems + (wide)KUIPER_MAX_THREADS <= (wide)UINT32_MAX,
                 "kuiper_hingeloss: shape out of range");
-    auto res = Kuiper_KB_HingeLoss_hinge_loss_fw_f32(
-        (uint32_t)N,
-        P.data_ptr<float>(), T.data_ptr<float>());
-    auto out = torch::tensor(res, torch::dtype(torch::kFloat32).device(torch::kCPU));
-    return out.to(predictions.device());
+
+    const c10::cuda::CUDAGuard device_guard(predictions.device());
+    float *out = Kuiper_KB_HingeLoss_hinge_loss_broadcast_f32(
+        (uint32_t)B, (uint32_t)N,
+        predictions.data_ptr<float>(), targets.data_ptr<float>());
+    return torch::from_blob(
+        out, c10::IntArrayRef{}, [](void *p) { cudaFree(p); },
+        predictions.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("kuiper_hingeloss", &kuiper_hingeloss_cuda,
-          "Kuiper verified Hinge Loss (mean of max(0, 1 - p*t))");
+          "Kuiper verified broadcast Hinge Loss");
 }

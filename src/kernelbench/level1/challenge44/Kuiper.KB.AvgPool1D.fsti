@@ -22,8 +22,10 @@ val pool_out_len_1d_sz
          SZ.v r == pool_out_len_1d l k s p d)
 
 (* Verified, extractable reciprocal 1/k as f32 (see .fst); the average-pool
-   divisor is computed inside the verification boundary. *)
-val avgpool_recip_f32 (k : szp) : f32
+   divisor is computed inside the verification boundary and related directly
+   to its real value. *)
+val avgpool_recip_f32 (k : szp)
+  : r:f32 { r %~ (1.0R /. FStar.Real.of_int (SZ.v k)) }
 
 (* Verification-facing wrapper type (layout-polymorphic, f32 carrier). *)
 inline_for_extraction noextract
@@ -120,3 +122,34 @@ ensures
                     k s p d (dfst r)) i j))) **
  pure (SZ.v (dfst r) ==
          pool_out_len_1d l k s p d)
+
+(* KernelBench-shaped entry: derives [bc = b*c] and supplies the operation's
+   implicit unit dilation inside Kuiper. *)
+fn avgpool1d_raw_alloc_f32
+  (k s p b : szp)
+  (c : szp { SZ.fits (SZ.v b * SZ.v c) /\
+             SZ.v b * SZ.v c <= max_blocks * max_threads })
+  (l : szp { SZ.fits (SZ.v (b *^ c) * SZ.v l) })
+  (input : array2 f32 (l2_row_major (b *^ c) l) { is_global input })
+  (#fIn : perm)
+  (#sx : chest2 f32 (b *^ c) l)
+  norewrite
+  preserves cpu ** on gpu_loc (input |-> Frac fIn sx)
+  requires
+    pure (SZ.fits (1 * (SZ.v k - 1) + 1)) **
+    pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
+    pure (1 * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
+    pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * 1)) **
+    pure (SZ.fits (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p))) **
+    pure (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p)
+            <= max_blocks * max_threads)
+  returns r :
+    (lo : sz { SZ.v lo == pool_out_len_1d l k s p 1 }
+     & array2 f32 (l2_row_major (b *^ c) lo))
+  ensures
+    on gpu_loc ((dsnd r) |->
+      mk2 (fun (i:natlt (b *^ c)) (j:natlt (dfst r)) ->
+        mul (avgpool_recip_f32 k)
+          (acc2 (windowreduce_result reducer_fadd_f32 sx
+            k s p 1 (dfst r)) i j))) **
+    pure (SZ.v (dfst r) == pool_out_len_1d l k s p 1)

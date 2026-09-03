@@ -151,3 +151,46 @@ float *Kuiper_KB_SeparableConv2D_separable_alloc_f32(
     MUST(cudaFree(gmid));
     return gy;
 }
+
+__global__
+/**
+  hoisted when extracting separable86_alloc_f32
+*/
+static void
+__hoisted_separable86_alloc_f32_0(float *bias_dw)
+{
+    if (1024U * blockIdx.x + threadIdx.x < 64U)
+        bias_dw[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+}
+
+__global__
+/**
+  hoisted when extracting separable86_alloc_f32
+*/
+static void
+__hoisted_separable86_alloc_f32_1(float *bias_pw)
+{
+    if (1024U * blockIdx.x + threadIdx.x < 128U)
+        bias_pw[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+}
+
+float *Kuiper_KB_SeparableConv2D_separable86_alloc_f32(float *gx, float *gw_dw,
+                                                       float *gw_pw)
+{
+    float *bias_dw = (float *) KPR_GPU_ALLOC(sizeof(float), 64U);
+    cudaStream_t s0 = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_separable86_alloc_f32_0, 1U, 1024U, 0U, s0, bias_dw);
+    MUST(cudaStreamSynchronize(s0));
+    MUST(cudaStreamDestroy(s0));
+    float *bias_pw = (float *) KPR_GPU_ALLOC(sizeof(float), 128U);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_separable86_alloc_f32_1, 1U, 1024U, 0U, s, bias_pw);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    float *gy = Kuiper_KB_SeparableConv2D_separable_alloc_f32(
+        16U, 64U, 512U, 512U, 3U, 3U, 1U, 1U, 128U, 512U, 512U, gx, gw_dw,
+        bias_dw, gw_pw, bias_pw);
+    MUST(cudaFree(bias_dw));
+    MUST(cudaFree(bias_pw));
+    return gy;
+}

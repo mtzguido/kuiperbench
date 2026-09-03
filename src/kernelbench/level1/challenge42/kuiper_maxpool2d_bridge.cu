@@ -6,10 +6,11 @@
 //
 // MaxPool is separable: max{x[h+dh, w+dw]} = max_dh max_dw x[h+dh, w+dw].
 // The ENTIRE 2-D pool is now a SINGLE verified F*/Pulse call
-// [Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32]: it takes ONLY raw
-// (B*C, H, W, kh,kw,sh,sw,ph,pw,dh,dw) and the input buffer, and *inside the
+// [Kuiper_KB_MaxPool2D_maxpool2d_raw_alloc_f32]: it takes ONLY the canonical
+// (K,S,P,D,B,C,H,W) arguments and the input buffer, and *inside the
 // verification boundary*:
 //
+//   setup: derive B*C and broadcast K/S/P/D across both axes
 //   pass 1: view input as (B*C*H, W); reduce over W ⇒ row-major (B*C, H, W_out)
 //   pass 2: reinterpret the SAME bytes as the flat batched-column-major
 //           (l2_bcm_pages) view (B*C*W_out, H) and reduce the now-strided H
@@ -23,32 +24,8 @@
 // (B, C, H_out, W_out) result.  This bridge does NO arithmetic that feeds the
 // kernel and NO output allocation; it only checks dimension contracts.
 #include <torch/extension.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <cuda_runtime.h>
-
-// Karamel emits the verified entry's return value as nested Prims dtuple2
-// structs, but the build drops the Prims namespace (-drop Prims), so their
-// definitions are not present in the generated header.  Declare the ABI types
-// here (matching Karamel's layout) before including the extracted code.  Pure
-// ABI declarations -- no kernel logic.
-typedef struct Prims_dtuple2__uint32_t__float__s {
-    uint32_t fst;
-    float *snd;
-} Prims_dtuple2__uint32_t__float_;
-
-typedef struct Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float__s {
-    uint32_t fst;
-    Prims_dtuple2__uint32_t__float_ snd;
-} Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_;
-
-// Karamel's compound-literal compatibility macro (emitted by the gpu-branch
-// krml but absent from this karamel runtime header).
-#ifndef KRML_CLITERAL
-#  if defined(__cplusplus)
-#    define KRML_CLITERAL(x) x
-#  else
-#    define KRML_CLITERAL(x) (x)
-#  endif
-#endif
 
 // The extracted entry projects the inner pass-1 dtuple with FStar.Pervasives's
 // generic dfst/dsnd, whose monomorphic definitions live in the dropped Prims/
@@ -70,14 +47,15 @@ static constexpr int64_t KUIPER_MAX_NTHR = (int64_t)2097152 * 1024;
 // Raw-dimension contract checks discharging the verified preconditions of
 // [maxpool2d_full_alloc_f32].  No W_out/H_out is computed here: the kernel
 // computes, allocates, fills, frees, and returns them.
-static void check_full_raw(int64_t bc, int64_t H, int64_t W,
+static void check_full_raw(int64_t B, int64_t C, int64_t H, int64_t W,
                            int64_t k, int64_t s, int64_t p, int64_t d) {
-    int64_t kspanW = d * (k - 1) + 1;
-    int64_t kspanH = d * (k - 1) + 1;
-    int64_t pw = W + 2 * p;
-    int64_t ph = H + 2 * p;
-    int64_t U = (int64_t)UINT32_MAX;
-    TORCH_CHECK(bc > 0
+    const __int128 bc = (__int128) B * C;
+    const __int128 kspanW = (__int128) d * (k - 1) + 1;
+    const __int128 kspanH = kspanW;
+    const __int128 pw = (__int128) W + 2 * p;
+    const __int128 ph = (__int128) H + 2 * p;
+    const __int128 U = (__int128)UINT32_MAX;
+    TORCH_CHECK(bc > 0 && bc <= U
                 && H <= U && W <= U
                 && kspanW <= U && kspanH <= U
                 && pw <= U && ph <= U
@@ -98,32 +76,29 @@ torch::Tensor kuiper_maxpool2d_cuda(torch::Tensor X,
     TORCH_CHECK(X.is_cuda(), "kuiper_maxpool2d: X must be CUDA");
     TORCH_CHECK(X.scalar_type() == torch::kFloat32,
                 "kuiper_maxpool2d: X must be float32");
-    TORCH_CHECK(X.dim() == 4, "kuiper_maxpool2d: X must be (B, C, H, W)");
+    TORCH_CHECK(X.dim() == 4 && X.is_contiguous(),
+                "kuiper_maxpool2d: X must be contiguous (B, C, H, W)");
     TORCH_CHECK(kernel_size >= 1 && stride >= 1 && padding >= 1
                 && dilation >= 1,
                 "kuiper_maxpool2d: k/s/p/d must be >= 1 (verified szp range)");
 
-    auto Xc = X.contiguous();
-    int64_t B = Xc.size(0);
-    int64_t C = Xc.size(1);
-    int64_t H = Xc.size(2);
-    int64_t W = Xc.size(3);
-    int64_t bc = B * C;
-
+    int64_t B = X.size(0);
+    int64_t C = X.size(1);
+    int64_t H = X.size(2);
+    int64_t W = X.size(3);
     TORCH_CHECK(B > 0 && C > 0 && H > 0 && W > 0,
                 "kuiper_maxpool2d: input dimensions must be positive");
-    check_full_raw(bc, H, W, kernel_size, stride, padding, dilation);
+    check_full_raw(B, C, H, W, kernel_size, stride, padding, dilation);
 
     // ── Single verified, transpose-free 2-D max pool. ────────────────
     // The same scalar (k,s,p,d) is used for both axes: kh=kw, sh=sw, etc.
+    const c10::cuda::CUDAGuard device_guard(X.device());
     Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r =
-        Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32(
-            (uint32_t)kernel_size, (uint32_t)kernel_size,   // kh, kw
-            (uint32_t)stride,      (uint32_t)stride,        // sh, sw
-            (uint32_t)padding,     (uint32_t)padding,       // ph, pw
-            (uint32_t)dilation,    (uint32_t)dilation,      // dh, dw
-            (uint32_t)bc, (uint32_t)H, (uint32_t)W,
-            Xc.data_ptr<float>());
+        Kuiper_KB_MaxPool2D_maxpool2d_raw_alloc_f32(
+            (uint32_t)kernel_size, (uint32_t)stride,
+            (uint32_t)padding, (uint32_t)dilation,
+            (uint32_t)B, (uint32_t)C, (uint32_t)H, (uint32_t)W,
+            X.data_ptr<float>());
 
     int64_t W_out = (int64_t)r.fst;
     int64_t H_out = (int64_t)r.snd.fst;
@@ -133,7 +108,7 @@ torch::Tensor kuiper_maxpool2d_cuda(torch::Tensor X,
     // permute needed.  Wrap it in a tensor owning the cudaMalloc'd buffer.
     return torch::from_blob(
         out_ptr, {B, C, H_out, W_out},
-        [](void *q) { cudaFree(q); }, Xc.options());
+        [](void *q) { cudaFree(q); }, X.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

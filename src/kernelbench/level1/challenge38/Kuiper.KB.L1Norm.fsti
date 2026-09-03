@@ -48,15 +48,36 @@ fn l1norm_fw_f32
   (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
   (x : array2 f32 (l2_row_major b d) { is_global x })
   (#sx : chest2 f32 b d)
+  (rx : erased (chest2 real b d))
   preserves cpu
   requires
     on gpu_loc (x |-> sx) **
     pure (
       SZ.v b > 0 /\
       SZ.v b * SZ.v d <= max_blocks * max_threads /\
-      l1norm_domain sx
+      sx %~ reveal rx /\
+      l1norm_domain (reveal rx)
     )
   ensures
     (exists* (sx' : chest2 f32 b d).
        on gpu_loc (x |-> sx') **
-       pure (l1norm_post b d sx sx'))
+       pure (l1norm_post b d (reveal rx) sx'))
+
+fn l1norm_alloc_f32
+  (b : szp)
+  (d : szp { 0 < SZ.v d /\ SZ.fits (SZ.v b * SZ.v d) })
+  (x : array2 f32 (l2_row_major b d) { is_global x })
+  (#f : perm)
+  (#sx : chest2 f32 b d)
+  (rx : erased (chest2 real b d))
+  preserves cpu ** on gpu_loc (x |-> Frac f sx)
+  requires
+    pure (SZ.v b > 0 /\
+          SZ.v b * SZ.v d <= max_blocks * max_threads /\
+          sx %~ reveal rx /\
+          l1norm_domain (reveal rx))
+  returns out : array2 f32 (l2_row_major b d)
+  ensures
+    exists* (sx' : chest2 f32 b d).
+      on gpu_loc (out |-> sx') **
+      pure (l1norm_post b d (reveal rx) sx')

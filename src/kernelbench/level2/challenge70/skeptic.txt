@@ -48,8 +48,8 @@ ASSUMED / EMPIRICAL (NOT covered by the proof — be honest):
 grep over .fst/.fsti: the ONLY match for "assume/magic/admit" is the prose
 comment in the .fsti ("No assume / magic / admit"). No `assume pure`, no
 `magic()`, no `admit()`, no `sorry` in code. Clean. Z3 nonlinear arithmetic is
-handled by the gssr_row_aux lemma + rlimit bumps (z3rlimit 50/100), not papered
-over.
+handled by the gssr_row_aux lemma with every local z3rlimit at or below 60,
+not papered over.
 
 (c) BRIDGE CORRECTNESS (kuiper_gssr_bridge.cu)
 ----------------------------------------------

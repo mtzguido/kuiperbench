@@ -77,12 +77,9 @@ class ModelNew(nn.Module):
         self._dilation = dilation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        w = self.conv2d.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if self.conv2d.bias is not None:
-            b = self.conv2d.bias.contiguous().to(x.device).to(torch.float32)
         sh, sw = _to_pair(self._stride)
         ph, pw = _to_pair(self._padding)
         dh, dw = _to_pair(self._dilation)
         return _module.kuiper_conv2d_dilated_asym(
-            x, w, b, sh, sw, ph, pw, dh, dw, 1)
+            x, self.conv2d.weight, self.conv2d.bias,
+            sh, sw, ph, pw, dh, dw, 1)

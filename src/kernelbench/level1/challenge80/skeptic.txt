@@ -1,3 +1,12 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The fixed public entry `conv2d_dilated_asym80_alloc_f32` now constructs its
+zero bias, allocates the canonical output, and runs the fully proved dilated
+kernel.  The bridge validates the fixed #80 configuration, calls that entry
+once, and wraps the result.  It performs no output-extent computation, bias
+copy/memset, or output allocation.  Older claims below about `assume pure`,
+`magic`, admitted views, or bridge-side geometry/bias are superseded.
+
 Skeptic review — KernelBench L1 #80 (Conv2D, asym kernel + dilation + asym pad)
 ================================================================================
 

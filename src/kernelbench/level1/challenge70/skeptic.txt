@@ -1,3 +1,10 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+This challenge is groups=1.  The shared raw allocating entry owns output
+geometry, optional zero bias, allocation, and launch behind one functional
+postcondition.  There is no host group dispatch, slicing/stitching, or separate
+extent-helper call.  Any contrary caveat below is historical and superseded.
+
 skeptic.txt — KernelBench L1 #70
 ================================
 

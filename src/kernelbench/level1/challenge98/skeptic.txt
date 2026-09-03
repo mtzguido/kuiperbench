@@ -1,6 +1,15 @@
 KernelBench L1 #98: KLDivLoss (reduction='batchmean')
 ======================================================
 
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The bridge checks the logarithm-domain and ABI preconditions, then makes
+exactly one call to `kl_div_fw_f32`.  The verified entry preserves both
+inputs, owns its scratch and result, performs the map and reduction, and
+computes division by `batch_size` internally.  Invalid inputs are rejected;
+there is no PyTorch fallback.  The contrary edge-case sentence below is
+superseded.
+
 Spec: src/lib/spec/Kuiper.Spec.KLDivLoss.fsti
 
   res %~ real_kl N batch_size rp rt

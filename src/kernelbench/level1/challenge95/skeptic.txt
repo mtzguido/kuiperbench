@@ -1,5 +1,13 @@
 # Skeptic review — KernelBench L1 #95 (CrossEntropyLoss)
 
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The bridge's target-range validation is a tensor-wide predicate, not a C++
+loop.  It then calls `ce_loss_fw_f32` exactly once.  Cross-entropy arithmetic,
+int64 target consumption, reduction, reciprocal computation, and result
+allocation all remain inside the verified surface; there is no fallback.
+Older references below to a remaining host bounds-check loop are superseded.
+
 Reviewer: agent-self-review
 Verification: GREEN (./fstar.sh succeeds on the spec .fsti and on the
               kernel .fsti and .fst; no assume / admit / magic /
@@ -43,9 +51,8 @@ negation/`%~`-fold off the large loop context.  z3rlimit 40.
 Previously this kernel verified only a PER-ROW primitive and the bridge
 summed the B per-row scalars in an UNVERIFIED host `double` loop, then
 divided by B.  That host reduction is GONE: the bridge now makes a single
-verified call.  The only remaining host loop is a pure bounds-check that
-establishes the kernel precondition (every target index in [0, C)); it
-performs no loss arithmetic.
+verified call.  A tensor-wide predicate establishes that every target index
+is in [0, C) before that call; it performs no loss arithmetic.
 
 The old `Kuiper.Spec.CrossEntropyLoss` stub was dead (imported by
 nothing) and mathematically wrong (`logsumexp_real` was defined as the

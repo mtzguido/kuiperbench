@@ -7,7 +7,7 @@ open Kuiper.Tensor.Layout
 open Kuiper.Tensor.Layout.Alg
 module SZ = Kuiper.SizeT
 
-#push-options "--z3rlimit 400 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 let l2_bcm_channels (n : nat) (c : nat) (hw : nat{hw > 0})
   : full_tlayout (c @| (n * hw) @| INil)
   = let f : abs (c @| (n * hw) @| INil) -> GTot (natlt (sizeof (c @| (n * hw) @| INil))) =
@@ -59,13 +59,13 @@ let l2_bcm_channels (n : nat) (c : nat) (hw : nat{hw > 0})
     pack (mk_injection f is_inj)
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 let l2_bcm_channels_ulen (n : nat) (c : nat) (hw : nat{hw > 0})
   : Lemma ((l2_bcm_channels n c hw).ulen = n * c * hw)
   = ()
 #pop-options
 
-#push-options "--z3rlimit 100 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 let l2_bcm_channels_imap_f (n : nat) (c : nat) (hw : nat{hw > 0})
   (idx : abs (c @| (n * hw) @| INil))
   : Lemma (
@@ -75,7 +75,7 @@ let l2_bcm_channels_imap_f (n : nat) (c : nat) (hw : nat{hw > 0})
     FStar.Math.Lemmas.euclidean_div_axiom k hw
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 2"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 2"
 let cimap_fits (n : nat) (c hw : pos) (ci k : nat)
   : Lemma (requires ci < c /\ k < n * hw /\
                     SZ.fits (n * hw) /\ SZ.fits (hw * c) /\ SZ.fits (n * (hw * c)))

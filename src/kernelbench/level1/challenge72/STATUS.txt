@@ -2,42 +2,26 @@ STATUS — KernelBench L1 #72
 ===========================
 
 ConvTranspose3D — asymmetric, strided/padded/grouped
-PASS — Kuiper-verified primitive end-to-end against PyTorch reference
-       (torch.allclose at atol=rtol=1e-2).
+PASS — one complete Kuiper-verified grouped operation with a full-output
+functional postcondition.
 
-What's landed
--------------
-  - Kuiper.Kernel.ConvT3D.Naive (verified)
-  - Kuiper.KB.ConvT3DGeneral host wrapper (verifies clean) — single
-    primitive entry point shared by all 7 ConvT3D challenges (#58, #61,
-    #68, #70, #72, #73, #77).  #75 reuses the existing ConvT2DGeneral
-    wrapper from challenge57.
-  - kuiper_convt3d_general_bridge.cu + kuiper_convt3d_general_common.h (host-side groups loop)
-  - 72_kuiper_convt*.py — ModelNew that exactly mirrors the upstream
-    Model.__init__ defaults (notably bias=False), avoiding the
-    nn.ConvTranspose default-bias pitfall.
-  - run.sh — drives src/kernelbench/run_test.py for this challenge.
+Verified surface
+----------------
+  - Kuiper.Spec.ConvTranspose3D defines the grouped operation over the
+    original NCDHW input and PyTorch ConvTranspose weight layout.
+  - Kuiper.Kernel.ConvT3D.GroupedNaive computes the complete groups=4 output
+    directly.  The group, local output channel, and matching input-channel
+    range are derived inside the verified kernel; there are no host slices.
+  - Kuiper.KB.ConvT3DGrouped72 allocates and initializes the implicit zero
+    bias, allocates the complete output, launches the grouped kernel, frees
+    the temporary bias, and returns the output behind one public entry point.
+  - The C++ bridge only checks the fixed #72 configuration, calls that entry
+    once, and wraps the returned device pointer as a tensor.
 
-Groups support
---------------
-Grouped ConvTranspose is dispatched at the host level: the bridge slices
-X along Cin and W along Cin into per-group contiguous slabs, calls the
-verified primitive once per group, and writes results back into the
-unified Y output.  groups=1 falls through transparently (one
-self-allocating verified call + from_blob, no copy).  No proof changes
-are required at the kernel level for the grouped variants.  Output
-spatial dims now come from the VERIFIED extracted helper [convt_out_dim]
-and each per-group output buffer is allocated INSIDE the verified
-self-allocating entry [convt*_general_alloc_f32] (no C++ output-size
-formula, no torch::empty for the verified slab).
+The checked configuration is B=8, Cin=Cout=32, groups=4, input
+12x24x48, kernel 3x5x7, stride 2x2x2, padding 1x2x3,
+output_padding 1x1x1, dilation 1x1x1, and bias=False.  Its output is
+8x32x24x48x96.
 
-Inherited verification debt
----------------------------
-Same as the rest of the ConvTranspose / Conv tree:
-  - setup, teardown, kpre_sendable, kpost_sendable are discharged with
-    [solve] (no [magic ()], no admit) in plain [kernel_desc]-style kernels.
-  - Per-thread [kf] body's spec connection is now fully PROVED (the
-    former [assume pure (result == convT*_out_at ...)] was discharged
-    2026-06-04 via the convT3d_partial_at loop invariant + step lemma
-    and tid-decode match; Conv3D.Naive precedent).  No assume pure remains.
-No new admit categories were introduced.
+No new admits, assumptions, magic, or unverified layout/composition code were
+introduced.

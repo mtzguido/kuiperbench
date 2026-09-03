@@ -28,6 +28,7 @@ open Kuiper.Tensor.Layout.Alg
 open Kuiper.Shape
 module EMatrix = Kuiper.EMatrix
 module MS = Kuiper.Spec.GEMM
+module SZ = Kuiper.SizeT
 
 (* Local row-major 4-D layout: the direct analogue of [l3_batched_row_major].
    Defined locally (rather than in the core library) since [matmul4d] only
@@ -83,3 +84,23 @@ fn matmul4d_f32
     (exists* (eC' : chest4 f32 b i j k).
       on gpu_loc (gC |-> eC') **
       pure (eC' %~ ematmul4 rA rB))
+
+fn matmul4d_alloc_f32
+  (b i j l k : szp)
+  (gA : array4 f32 (l4_row_major b i j l) { is_global gA })
+  (gB : array2 f32 (l2_row_major l k) { is_global gB })
+  (rA : chest4 real b i j l)
+  (rB : chest2 real l k)
+  (#eA : chest4 f32 b i j l)
+  (#eB : chest2 f32 l k)
+  (#fA #fB : perm)
+  norewrite
+  preserves
+    cpu ** on gpu_loc (gA |-> Frac fA eA ** gB |-> Frac fB eB)
+  requires
+    pure (SZ.fits (SZ.v b * SZ.v i * SZ.v j * SZ.v k)) **
+    pure (eA %~ rA) ** pure (eB %~ rB)
+  returns gC : array4 f32 (l4_row_major b i j k)
+  ensures
+    exists* (eC : chest4 f32 b i j k).
+      on gpu_loc (gC |-> eC) ** pure (eC %~ ematmul4 rA rB)

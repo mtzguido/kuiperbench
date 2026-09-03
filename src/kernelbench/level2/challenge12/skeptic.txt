@@ -12,7 +12,8 @@ code. The postcondition gemm_mul_lrelu_post is discharged constructively:
   - bias_add via BA.bias_add_gpu with per-tid fact bias_add_at.
   - fused map via Map.map_gpu (mul_lrelu mult slope).
   - per-(i,j) glue lemma gmlr_row_aux + Classical.forall_intro_2.
-Nothing is papered over. z3rlimit bumps (50/100) are legitimate, not holes.
+Nothing is papered over. Explicit row lemmas keep every local z3rlimit at or
+below the repository-wide bound of 60.
 
 (a) Float branch vs torch LeakyReLU boundary — MATCHES (no observable diff)
 --------------------------------------------------------------------------

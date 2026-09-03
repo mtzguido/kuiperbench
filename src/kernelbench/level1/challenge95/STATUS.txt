@@ -1,6 +1,14 @@
 STATUS — KernelBench L1 #95 Cross-Entropy Loss
 ==============================================
 
+CURRENT STATUS (2026-09-03)
+---------------------------
+The bridge validates target bounds with a tensor-wide predicate and then
+makes exactly one call to `ce_loss_fw_f32`; there is no C++ bounds-check loop,
+host reduction, output allocation, or fallback.  Targets remain int64 at the
+ABI and their use/conversion is covered by the verified Kuiper entry.  Any
+older wording below about a remaining host loop is superseded.
+
 Status:    GREEN end-to-end:
              - .fst/.fsti verify clean (./fstar.sh), no admit/assume/magic
              - src/lib/spec/Kuiper.Spec.CrossEntropyLoss.{fst,fsti} verify
@@ -45,9 +53,8 @@ What landed (single verified entry — whole reduction is verified)
 
 - src/kernelbench/level1/challenge95/kuiper_crossentropyloss_bridge.cu
     Single verified call: ce_loss_fw_f32(B, C, predictions, targets).  NO host
-    reduction loop.  The only host loop is
-    a pure bounds-check that establishes the kernel precondition (every
-    target in [0, C)); it computes no loss arithmetic.
+    reduction or bounds-check loop.  A tensor-wide predicate establishes that
+    every target is in [0, C) before the call; it computes no loss arithmetic.
 
 CLOSED GAP
 ----------

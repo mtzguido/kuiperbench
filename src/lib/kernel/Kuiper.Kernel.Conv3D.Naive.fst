@@ -52,6 +52,17 @@ let named_mul_value
       (ensures SZ.v xy == SZ.v x * SZ.v y)
   = ()
 
+(* Keep the SizeT remainder's value equation out of the large loop context.
+   At the repository-wide rlimit cap, asking SMT to rediscover this equation
+   after all five-dimensional bounds have entered scope is needlessly
+   expensive. *)
+let named_rem_value
+  (x : sz) (y : szp) (r : sz)
+  : Lemma
+      (requires r == SZ.rem x y)
+      (ensures SZ.v r == SZ.v x % SZ.v y)
+  = ()
+
 let flatten_taps
   (cin kd kh kw kh_kw kd_kh_kw n_taps : nat)
   : Lemma
@@ -345,7 +356,7 @@ let conv3d_partial_at_step
 
 #pop-options
 
-#push-options "--z3rlimit 400 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 (* Per-thread conv body: decode tid, run the inner accumulator loop,
    add bias, write to output cell.  The body proves
@@ -465,7 +476,7 @@ fn kf
     assert pure (SZ.v kd_i == SZ.v r / SZ.v kh_kw);
     assert pure (SZ.v r2 == SZ.v r % SZ.v kh_kw);
     assert pure (SZ.v kh_i == SZ.v r2 / kw);
-    assert pure (SZ.v kw_i == SZ.v r2 % kw);
+    named_rem_value r2 kw kw_i;
     unrank3_from_steps cin kd kh kw kk kh_kw
       kd_kh_kw n_taps ic r kd_i
       r2 kh_i kw_i;

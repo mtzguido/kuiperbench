@@ -52,16 +52,12 @@ let cumsum_exclusive_post
 fn cumsum_exclusive_fw_f32
   (b : szp { b <= max_blocks })
   (d : szp { SZ.fits (SZ.v b * SZ.v d) })
-  (input  : array2 f32 (l2_row_major b d)
-            { is_global input  })
-  (output : array2 f32 (l2_row_major b d)
-            { is_global output })
-  (#sx #sy0 : chest2 f32 b d)
+  (input : array2 f32 (l2_row_major b d) { is_global input })
+  (#sx : chest2 f32 b d)
   preserves
     cpu **
-    on gpu_loc (input  |-> sx)
-  requires
-    on gpu_loc (output |-> sy0)
+    on gpu_loc (input |-> sx)
+  returns output : array2 f32 (l2_row_major b d)
   ensures
     (exists* (sy : chest2 f32 b d).
        on gpu_loc (output |-> sy) **

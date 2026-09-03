@@ -136,7 +136,7 @@ let kpost_batched_argmin
 
 (* ── Per-thread kernel ─────────────────────────────────────────────── *)
 
-#push-options "--fuel 2 --ifuel 2 --z3rlimit 400"
+#push-options "--fuel 2 --ifuel 2 --z3rlimit 60"
 inline_for_extraction noextract
 fn kf_batched_argmin
   (rows : szp)

@@ -50,7 +50,7 @@ let gmlr_row_aux
     acc1_chest_map (mul_lrelu mult slope) sy_b (i * out + j)
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn gemm_mul_leaky_relu_f32_impl
   (batch : szp)

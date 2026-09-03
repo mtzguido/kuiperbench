@@ -24,12 +24,8 @@ class ModelNew(nn.Module):
 
     def forward(self, x):
         ct = self.conv1d_transpose
-        w = ct.weight.contiguous().to(x.device).to(torch.float32)
-        b = None
-        if ct.bias is not None:
-            b = ct.bias.contiguous().to(x.device).to(torch.float32)
         return kuiper_convt1d_general(
-            x, w, b,
+            x, ct.weight, ct.bias,
             stride=ct.stride[0], padding=ct.padding[0],
             output_padding=ct.output_padding[0],
             dilation=ct.dilation[0], groups=ct.groups)

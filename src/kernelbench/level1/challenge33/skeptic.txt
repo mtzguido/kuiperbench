@@ -34,7 +34,7 @@ Inherited debt
 Same map_gpu2 / kernel_desc legacy [magic ()] in
 Kuiper.Kernel.{Map,HReduce,Affine,...} sendability fields as every
 other in-tree plain-[kernel_desc] kernel.  The real proof also relies on the
-temporary [Kuiper.KB.Compat.SqrtApprox.rsqrt_approx] assumption proposed for
+temporary [Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] assumption proposed for
 upstream Kuiper.  BatchNorm.fst itself adds no [magic ()], [admit ()], or
 [assume pure].
 

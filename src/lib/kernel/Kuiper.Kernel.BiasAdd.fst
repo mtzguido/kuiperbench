@@ -89,7 +89,7 @@ let kpost
     (gbias |-> Frac (fb /. (m * n)) sbias) **
     (Cell gy (idx1 tid) |-> bias_add_at m n eC sbias tid)
 
-#push-options "--z3rlimit 200 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 (* Per-thread body: decode [tid], read [C[i,j]] and [bias[j]], write the sum. *)
 inline_for_extraction noextract
@@ -251,7 +251,7 @@ fn bias_add_teardown
 
 #pop-options
 
-#push-options "--z3rlimit 100 --fuel 2 --ifuel 1"
+#push-options "--z3rlimit 60 --fuel 2 --ifuel 1"
 
 inline_for_extraction noextract
 let kdesc

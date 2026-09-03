@@ -204,6 +204,54 @@ let convT2d
       convT2d_single kh kw sh sw ph pw dh dw
                      x weight bias b oc oh ow)
 
+(* Grouped ConvTranspose2D.  PyTorch stores the weight as
+   [(groups*cin_pg), cout_pg, kh, kw].  Output channel [oc] selects group
+   [oc / cout_pg], and only the corresponding [cin_pg] input channels and
+   weight rows participate. *)
+let convT2d_group_input
+  (#et:Type)
+  (#b_n #groups #cin_pg #h_in #w_in : nat)
+  (x : etensor4 et b_n (groups * cin_pg) h_in w_in)
+  (g : natlt groups)
+  : etensor4 et b_n cin_pg h_in w_in
+  = mkT4 (fun b ic ih iw -> tacc x b (g * cin_pg + ic) ih iw)
+
+let convT2d_group_weight
+  (#et:Type)
+  (#groups #cin_pg #cout_pg #kh #kw : nat)
+  (weight : etensor4 et (groups * cin_pg) cout_pg kh kw)
+  (g : natlt groups)
+  : etensor4 et cin_pg cout_pg kh kw
+  = mkT4 (fun ic oc khi kwi ->
+      tacc weight (g * cin_pg + ic) oc khi kwi)
+
+let convT2d_group_bias
+  (#et:Type)
+  (#groups #cout_pg : nat)
+  (bias : Seq.lseq et (groups * cout_pg))
+  (g : natlt groups)
+  : GTot (Seq.lseq et cout_pg)
+  = Seq.init_ghost cout_pg (fun oc -> Seq.index bias (g * cout_pg + oc))
+
+let convT2d_grouped_single
+  (#et:Type) {| scalar et |}
+  (#b_n : nat) (groups cin_pg : pos) (#h_in #w_in : nat)
+  (cout_pg kh kw sh sw : pos) (ph pw : nat) (dh dw : pos)
+  (#h_out #w_out : nat)
+  (x : etensor4 et b_n (groups * cin_pg) h_in w_in)
+  (weight : etensor4 et (groups * cin_pg) cout_pg kh kw)
+  (bias : Seq.lseq et (groups * cout_pg))
+  (b : natlt b_n) (oc : natlt (groups * cout_pg))
+  (oh : natlt h_out) (ow : natlt w_out)
+  : GTot et
+  = let g : natlt groups = oc / cout_pg in
+    let oc_pg : natlt cout_pg = oc % cout_pg in
+    convT2d_single kh kw sh sw ph pw dh dw
+      (convT2d_group_input x g)
+      (convT2d_group_weight weight g)
+      (convT2d_group_bias bias g)
+      b oc_pg oh ow
+
 val lemma_convT2d_index
   (#et:Type) {| scalar et |}
   (#b_n #cin #h_in #w_in : nat)

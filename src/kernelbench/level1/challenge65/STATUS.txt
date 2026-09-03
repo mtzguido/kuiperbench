@@ -1,3 +1,11 @@
+CURRENT STATUS (2026-09-03)
+---------------------------
+#57/#65/#69/#71/#78/#81 use the shared `ConvT2DGeneral` raw allocating
+surface.  A single verified call derives both output extents, handles optional
+zero bias, allocates, and launches.  The bridge performs checks and wraps the
+returned dimensions/pointer; separate-helper and deferred-phase descriptions
+below are historical and superseded.
+
 UPDATED 2026-06-03: This challenge now PASSES the live KernelBench correctness
 test (src/kernelbench/run_test.py 1 65 -> PASS, bit-correct vs the PyTorch
 reference within atol=rtol=1e-4 on an RTX A6000). The end-to-end Kuiper

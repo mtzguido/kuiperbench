@@ -37,3 +37,14 @@ void Kuiper_KB_BatchedGEMM_batched_gemm_f32(uint32_t batch, uint32_t rows,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_BatchedGEMM_batched_gemm_alloc_f32(uint32_t batch,
+                                                    uint32_t rows,
+                                                    uint32_t shared,
+                                                    uint32_t cols, float *a,
+                                                    float *b)
+{
+    float *c = (float *) KPR_GPU_ALLOC(sizeof(float), batch * rows * cols);
+    Kuiper_KB_BatchedGEMM_batched_gemm_f32(batch, rows, shared, cols, a, b, c);
+    return c;
+}

@@ -1,3 +1,11 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+#87 now uses `conv2d_raw_alloc_zero_f32` through the shared checked boundary.
+Output geometry, zero bias, allocation, and kernel execution form one verified
+operation.  The loader performs no tensor/parameter staging and the bridge has
+no helper call or per-batch loop.  Old `assume`/`magic` debt and planned GEMM
+orchestration descriptions below are historical and superseded.
+
 UPDATE 2026-06-14 (corrections — read first)
 ============================================
 The "Inherited admits" section below is STALE.  #87 reuses challenge62's

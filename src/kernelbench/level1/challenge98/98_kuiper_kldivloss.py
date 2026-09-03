@@ -27,13 +27,5 @@ class ModelNew(nn.Module):
     def forward(self, predictions: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         # PyTorch's kl_div with reduction='batchmean' divides by batch_size,
         # not by the total number of elements.
-        if (predictions.is_cuda and targets.is_cuda
-                and predictions.dtype == torch.float32
-                and targets.dtype == torch.float32
-                and predictions.shape == targets.shape
-                and predictions.dim() >= 1):
-            batch_size = predictions.shape[0]
-            p_flat = predictions.contiguous().view(-1)
-            t_flat = targets.contiguous().view(-1)
-            return kuiper_kldivloss.kuiper_kldivloss(p_flat, t_flat, batch_size)
-        return torch.nn.functional.kl_div(torch.log(predictions), targets, reduction='batchmean')
+        return kuiper_kldivloss.kuiper_kldivloss(
+            predictions, targets, predictions.shape[0])

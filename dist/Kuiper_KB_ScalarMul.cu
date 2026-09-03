@@ -176,3 +176,16 @@ void Kuiper_KB_ScalarMul_smul_out_u64(uint64_t cst, uint32_t lena, uint64_t *c,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_ScalarMul_smul_alloc_f32(float cst, uint32_t lena, float *a)
+{
+    float *c = (float *) KPR_GPU_ALLOC(sizeof(float), lena);
+    Kuiper_KB_ScalarMul_smul_out_f32(cst, lena, c, a);
+    return c;
+}
+
+float *Kuiper_KB_ScalarMul_smul_alloc_f64_f32(double cst, uint32_t lena,
+                                              float *a)
+{
+    return Kuiper_KB_ScalarMul_smul_alloc_f32((float) cst, lena, a);
+}

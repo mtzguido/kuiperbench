@@ -1,3 +1,12 @@
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The current #67/#76 bridge calls one of
+`conv1d_raw_alloc_{bias,zero}_f32`.  Kuiper derives the output length,
+constructs zero bias when needed, allocates the result, and runs the kernel.
+There is no separate output helper, `torch::empty`, cudaMemset bias scratch, or
+fallback path in the current boundary.  Contrary historical text below is
+superseded.
+
 Skeptic review — KernelBench L1 #67 (Kuiper.KB.Conv1DGeneral)
 =============================================================
 

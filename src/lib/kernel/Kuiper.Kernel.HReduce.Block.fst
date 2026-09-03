@@ -124,7 +124,7 @@ fn forevery_drop_pure
 (* Per-thread input-side reduction: like [sum_stride_map] but reads from a
    single row of a 2-D tensor. Handles empty strided buckets (starts at [zero]),
    so no [off < cols] requirement is needed (unlike the MAX analogue). *)
-#push-options "--fuel 4 --ifuel 8 --z3rlimit 200"
+#push-options "--fuel 4 --ifuel 8 --z3rlimit 60"
 inline_for_extraction noextract
 fn sum_stride_map_2d
   (#et:Type0) {| scalar et, real_like et |}
@@ -576,7 +576,7 @@ fn setup_block_outer
   ()
 }
 
-#push-options "--z3rlimit 100 --fuel 4 --ifuel 4"
+#push-options "--z3rlimit 60 --fuel 4 --ifuel 4"
 ghost
 fn teardown_block_outer
   (#et:Type0) {| scalar et, real_like et |}

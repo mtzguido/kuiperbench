@@ -1,6 +1,16 @@
 STATUS — KernelBench L1 #99 TripletMarginLoss
 =============================================
 
+CURRENT STATUS (2026-09-03)
+---------------------------
+The bridge performs validation and one call to `triplet_fw_f32`; that entry
+narrows the Python `f64` margin and supplies the fixed `1e-6f` epsilon. All per-row
+orchestration, copies, reductions, square roots, reciprocal
+computation, result allocation, and final mean are inside Kuiper.  There is no
+host algorithmic loop and no fallback.  The launch-heavy per-row composition
+is a verified implementation/performance qualification, not host-side glue.
+The older phrase "per-row host orchestration" below is superseded.
+
 Updated: 2026-08-31
 Status: verified and extracted; CUDA runtime test requires an available GPU.
 
@@ -46,9 +56,8 @@ Files
 Known qualifications
 --------------------
 
-- `Kuiper.KB.Compat.SqrtApprox` temporarily assumes the missing law that the
-  floating `sqrt` approximates `FStar.Math.Sqrt.sqrt`. The proposed upstream
-  Kuiper patch is in `patches/kuiper-sqrt-approx.patch`.
+- The selected Kuiper package supplies the `sqrt` approximation law used to
+  connect floating square root to `FStar.Math.Sqrt.sqrt`.
 - The shared compatibility D2D-copy proof contains an `admit()`.
 - The shared HReduce implementation uses `magic()` for sendability proofs.
-- The per-row host orchestration is correctness-first and launch-heavy.
+- The verified per-row orchestration is correctness-first and launch-heavy.

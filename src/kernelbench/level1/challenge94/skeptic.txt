@@ -1,6 +1,18 @@
 KernelBench L1 #94: Mean Squared Error
 =========================================
 
+CURRENT AUDIT NOTE (2026-09-03)
+--------------------------------
+The public contract now directly states that the returned scalar approximates
+`real_mse n rp rt`; it exposes neither an intermediate sum nor a
+caller-chosen reciprocal.  `mse_loss_fw_f32` preserves both original inputs,
+allocates its scratch and result, performs the map, reduction, and division by
+`n` inside Kuiper, and returns the owned GPU scalar.  The C++ bridge validates
+the ABI and makes exactly this one call.  Unsupported inputs are rejected;
+there is no PyTorch fallback.  The older `s`/`inv_n`, host-reciprocal,
+fallback, and extraction-workaround discussion below describes a superseded
+implementation.
+
 Spec: src/lib/spec/Kuiper.Spec.MSELoss.fsti  (mse_post)
 
   exists s. s %~ rsum (to_real_seq (lseq_map2 mse_step sp st))

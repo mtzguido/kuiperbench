@@ -33,6 +33,16 @@ make -j$(nproc) dist
 Set `KUIPER_HOME=/path/to/package` to use an existing package. `ADMIT=1` is
 development-only; final validation must not use it.
 
+Local verification guidance:
+
+- keep every `--z3rlimit` in a local `.fst` or `.fsti` file at or below 60;
+- keep verification of one module within 600 seconds (10 minutes).
+
+These are review guidelines, not mechanically enforced limits. When either is
+exceeded, split the proof or add explicit intermediate lemmas instead of
+raising the budget. They apply only to this repository's sources. Do not edit
+the selected package under `.kuiper/` to satisfy them.
+
 GPU correctness tests require CUDA and the KernelBench submodule:
 
 ```bash

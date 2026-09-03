@@ -1,3 +1,12 @@
+CURRENT STATUS (2026-09-03)
+---------------------------
+#87 is the 1x1 specialization of the shared Conv2D raw allocating surface.
+The loader passes the original input/weight/parameters directly; Kuiper derives
+the output extents, constructs zero bias, allocates, and runs the fully proved
+kernel.  There is no host reshape, parameter staging, per-batch GEMM loop,
+separate extent helper, or fallback.  Contrary phase-plan text below is
+historical and superseded.
+
 UPDATED 2026-06-14: #87 reuses challenge62's verified general-conv bridge,
 which computes output size via the VERIFIED helper conv2d_out_dim and
 self-allocates the output (no unverified C++ division, no torch::empty).

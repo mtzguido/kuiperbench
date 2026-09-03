@@ -52,10 +52,9 @@ What's potentially weak / worth flagging
   no claim that it equals PyTorch's reduction for NaN-containing inputs.
   KernelBench's reference inputs are torch.rand and contain no NaNs.
 
-* The Python wrapper still includes the Kuiper_Math_Fmin_pos_inf
-  regex-strip from the #49 template; it is now a no-op (since
-  [pos_inf] is inlined as a literal), kept only for symmetry with
-  #49's wrapper.  Removing it is a future cleanup.
+* [pos_inf] is selected inside the verified reduction and extracted through
+  Kuiper's concrete f32 [infinity] primitive.  The loader consumes generated
+  CUDA unchanged; there is no declaration rewrite or bridge-defined symbol.
 
 * run.sh exercises KernelBench's own eval_kernel_against_ref via
   src/kernelbench/run_test.py — no hand-rolled tolerance.  Test

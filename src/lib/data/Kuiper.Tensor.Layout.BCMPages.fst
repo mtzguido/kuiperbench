@@ -6,7 +6,7 @@ open Kuiper.Shape
 open Kuiper.Tensor.Layout
 open Kuiper.Tensor.Layout.Alg
 
-#push-options "--z3rlimit 400 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 let l2_bcm_pages (b : nat) (hw : nat{hw > 0}) (c : nat)
   : full_tlayout ((b * hw) @| c @| INil)
   = let f : abs ((b * hw) @| c @| INil) -> GTot (natlt (sizeof ((b * hw) @| c @| INil))) =
@@ -56,13 +56,13 @@ let l2_bcm_pages (b : nat) (hw : nat{hw > 0}) (c : nat)
     pack (mk_injection f is_inj)
 #pop-options
 
-#push-options "--z3rlimit 200 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 let l2_bcm_pages_ulen (b : nat) (hw : nat{hw > 0}) (c : nat)
   : Lemma ((l2_bcm_pages b hw c).ulen = (b * hw) * c)
   = ()
 #pop-options
 
-#push-options "--z3rlimit 100 --fuel 3 --ifuel 3"
+#push-options "--z3rlimit 60 --fuel 3 --ifuel 3"
 let l2_bcm_pages_imap_f (b : nat) (hw : nat{hw > 0}) (c : nat)
   (idx : abs ((b * hw) @| c @| INil))
   : Lemma (

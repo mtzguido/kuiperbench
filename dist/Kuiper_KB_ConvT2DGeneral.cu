@@ -90,3 +90,202 @@ float *Kuiper_KB_ConvT2DGeneral_convt2d_general_alloc_f32(
         gx, gw, gbias, gy);
     return gy;
 }
+
+Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_bias_f32(
+    uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
+    uint32_t kh, uint32_t kw, uint32_t sh, uint32_t sw, uint32_t ph,
+    uint32_t pw, uint32_t oph, uint32_t opw, uint32_t dh, uint32_t dw,
+    float *gx, float *gw, float *gbias)
+{
+    KPR_GUARD(oph < sh || oph < dh);
+    KPR_GUARD(opw < sw || opw < dw);
+    uint32_t hm1 = h_in - 1U;
+    uint32_t khm1 = kh - 1U;
+    KPR_GUARD(hm1 <= 4294967295U / sh);
+    uint32_t hs = sh * hm1;
+    KPR_GUARD(khm1 <= 4294967295U / dh);
+    uint32_t hdk = dh * khm1;
+    KPR_GUARD(hs <= 4294967295U - hdk);
+    uint32_t hsum0 = hs + hdk;
+    KPR_GUARD(hsum0 <= 4294967295U - oph);
+    uint32_t hsum1 = hsum0 + oph;
+    KPR_GUARD(hsum1 <= 4294967295U - 1U);
+    uint32_t hpos = hsum1 + 1U;
+    KPR_GUARD(ph <= 2147483647U);
+    KPR_GUARD(2U * ph < hpos);
+    uint32_t wm1 = w_in - 1U;
+    uint32_t kwm1 = kw - 1U;
+    KPR_GUARD(wm1 <= 4294967295U / sw);
+    uint32_t ws = sw * wm1;
+    KPR_GUARD(kwm1 <= 4294967295U / dw);
+    uint32_t wdk = dw * kwm1;
+    KPR_GUARD(ws <= 4294967295U - wdk);
+    uint32_t wsum0 = ws + wdk;
+    KPR_GUARD(wsum0 <= 4294967295U - opw);
+    uint32_t wsum1 = wsum0 + opw;
+    KPR_GUARD(wsum1 <= 4294967295U - 1U);
+    uint32_t wpos = wsum1 + 1U;
+    KPR_GUARD(pw <= 2147483647U);
+    KPR_GUARD(2U * pw < wpos);
+    uint32_t h_out =
+        Kuiper_KB_ConvT2DGeneral_convt_out_dim(h_in, sh, dh, kh, ph, oph);
+    uint32_t w_out0 =
+        Kuiper_KB_ConvT2DGeneral_convt_out_dim(w_in, sw, dw, kw, pw, opw);
+    KPR_GUARD(cin <= 4294967295U / b);
+    uint32_t xy0 = b * cin;
+    KPR_GUARD(h_in <= 4294967295U / xy0);
+    uint32_t wxy = xy0 * h_in;
+    KPR_GUARD(w_in <= 4294967295U / wxy);
+    KRML_HOST_IGNORE(wxy * w_in);
+    KPR_GUARD(cout <= 4294967295U / cin);
+    uint32_t xy1 = cin * cout;
+    KPR_GUARD(kh <= 4294967295U / xy1);
+    uint32_t wxy0 = xy1 * kh;
+    KPR_GUARD(kw <= 4294967295U / wxy0);
+    KRML_HOST_IGNORE(wxy0 * kw);
+    KPR_GUARD(cout <= 4294967295U / b);
+    uint32_t xy2 = b * cout;
+    KPR_GUARD(h_out <= 4294967295U / xy2);
+    uint32_t wxy1 = xy2 * h_out;
+    KPR_GUARD(w_out0 <= 4294967295U / wxy1);
+    uint32_t ylen = wxy1 * w_out0;
+    KPR_GUARD(kh <= 4294967295U / cin);
+    uint32_t xy = cin * kh;
+    KPR_GUARD(kw <= 4294967295U / xy);
+    KRML_HOST_IGNORE(xy * kw);
+    KPR_GUARD(kw <= 4294967295U / kh);
+    KRML_HOST_IGNORE(kh * kw);
+    KPR_GUARD(w_out0 <= 4294967295U / h_out);
+    KRML_HOST_IGNORE(h_out * w_out0);
+    KPR_GUARD(h_out <= 4294967295U / cout);
+    uint32_t xy3 = cout * h_out;
+    KPR_GUARD(w_out0 <= 4294967295U / xy3);
+    KRML_HOST_IGNORE(xy3 * w_out0);
+    KPR_GUARD(h_out <= 4294967295U - ph);
+    KRML_HOST_IGNORE(h_out + ph);
+    KPR_GUARD(w_out0 <= 4294967295U - pw);
+    KRML_HOST_IGNORE(w_out0 + pw);
+    KPR_GUARD(dh <= 4294967295U / kh);
+    KRML_HOST_IGNORE(kh * dh);
+    KPR_GUARD(dw <= 4294967295U / kw);
+    KRML_HOST_IGNORE(kw * dw);
+    KPR_GUARD(ylen <= 2147483648U);
+    uint32_t h_out0 =
+        Kuiper_KB_ConvT2DGeneral_convt_out_dim(h_in, sh, dh, kh, ph, oph);
+    uint32_t w_out =
+        Kuiper_KB_ConvT2DGeneral_convt_out_dim(w_in, sw, dw, kw, pw, opw);
+    return (
+        KRML_CLITERAL(Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_){
+            .fst = h_out0,
+            .snd = {.fst = w_out,
+                    .snd = Kuiper_KB_ConvT2DGeneral_convt2d_general_alloc_f32(
+                        b, cin, h_in, w_in, cout, kh, kw, sh, sw, ph, pw, dh,
+                        dw, h_out0, w_out, gx, gw, gbias)}});
+}
+
+__global__
+/**
+  hoisted when extracting convt2d_raw_alloc_zero_f32
+*/
+static void
+__hoisted_convt2d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
+{
+    if (1024U * blockIdx.x + threadIdx.x < cout)
+        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+}
+
+Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_zero_f32(
+    uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
+    uint32_t kh, uint32_t kw, uint32_t sh, uint32_t sw, uint32_t ph,
+    uint32_t pw, uint32_t oph, uint32_t opw, uint32_t dh, uint32_t dw,
+    float *gx, float *gw)
+{
+    KPR_GUARD(oph < sh || oph < dh);
+    KPR_GUARD(opw < sw || opw < dw);
+    uint32_t hm1 = h_in - 1U;
+    uint32_t khm1 = kh - 1U;
+    KPR_GUARD(hm1 <= 4294967295U / sh);
+    uint32_t hs = sh * hm1;
+    KPR_GUARD(khm1 <= 4294967295U / dh);
+    uint32_t hdk = dh * khm1;
+    KPR_GUARD(hs <= 4294967295U - hdk);
+    uint32_t hsum0 = hs + hdk;
+    KPR_GUARD(hsum0 <= 4294967295U - oph);
+    uint32_t hsum1 = hsum0 + oph;
+    KPR_GUARD(hsum1 <= 4294967295U - 1U);
+    uint32_t hpos = hsum1 + 1U;
+    KPR_GUARD(ph <= 2147483647U);
+    KPR_GUARD(2U * ph < hpos);
+    uint32_t wm1 = w_in - 1U;
+    uint32_t kwm1 = kw - 1U;
+    KPR_GUARD(wm1 <= 4294967295U / sw);
+    uint32_t ws = sw * wm1;
+    KPR_GUARD(kwm1 <= 4294967295U / dw);
+    uint32_t wdk = dw * kwm1;
+    KPR_GUARD(ws <= 4294967295U - wdk);
+    uint32_t wsum0 = ws + wdk;
+    KPR_GUARD(wsum0 <= 4294967295U - opw);
+    uint32_t wsum1 = wsum0 + opw;
+    KPR_GUARD(wsum1 <= 4294967295U - 1U);
+    uint32_t wpos = wsum1 + 1U;
+    KPR_GUARD(pw <= 2147483647U);
+    KPR_GUARD(2U * pw < wpos);
+    uint32_t h_out =
+        Kuiper_KB_ConvT2DGeneral_convt_out_dim(h_in, sh, dh, kh, ph, oph);
+    uint32_t w_out =
+        Kuiper_KB_ConvT2DGeneral_convt_out_dim(w_in, sw, dw, kw, pw, opw);
+    KPR_GUARD(cin <= 4294967295U / b);
+    uint32_t xy0 = b * cin;
+    KPR_GUARD(h_in <= 4294967295U / xy0);
+    uint32_t wxy = xy0 * h_in;
+    KPR_GUARD(w_in <= 4294967295U / wxy);
+    KRML_HOST_IGNORE(wxy * w_in);
+    KPR_GUARD(cout <= 4294967295U / cin);
+    uint32_t xy1 = cin * cout;
+    KPR_GUARD(kh <= 4294967295U / xy1);
+    uint32_t wxy0 = xy1 * kh;
+    KPR_GUARD(kw <= 4294967295U / wxy0);
+    KRML_HOST_IGNORE(wxy0 * kw);
+    KPR_GUARD(cout <= 4294967295U / b);
+    uint32_t xy2 = b * cout;
+    KPR_GUARD(h_out <= 4294967295U / xy2);
+    uint32_t wxy1 = xy2 * h_out;
+    KPR_GUARD(w_out <= 4294967295U / wxy1);
+    uint32_t ylen = wxy1 * w_out;
+    KPR_GUARD(kh <= 4294967295U / cin);
+    uint32_t xy = cin * kh;
+    KPR_GUARD(kw <= 4294967295U / xy);
+    KRML_HOST_IGNORE(xy * kw);
+    KPR_GUARD(kw <= 4294967295U / kh);
+    KRML_HOST_IGNORE(kh * kw);
+    KPR_GUARD(w_out <= 4294967295U / h_out);
+    KRML_HOST_IGNORE(h_out * w_out);
+    KPR_GUARD(h_out <= 4294967295U / cout);
+    uint32_t xy3 = cout * h_out;
+    KPR_GUARD(w_out <= 4294967295U / xy3);
+    KRML_HOST_IGNORE(xy3 * w_out);
+    KPR_GUARD(h_out <= 4294967295U - ph);
+    KRML_HOST_IGNORE(h_out + ph);
+    KPR_GUARD(w_out <= 4294967295U - pw);
+    KRML_HOST_IGNORE(w_out + pw);
+    KPR_GUARD(dh <= 4294967295U / kh);
+    KRML_HOST_IGNORE(kh * dh);
+    KPR_GUARD(dw <= 4294967295U / kw);
+    KRML_HOST_IGNORE(kw * dw);
+    KPR_GUARD(ylen <= 2147483648U);
+    float *gbias = (float *) KPR_GPU_ALLOC(sizeof(float), cout);
+    cudaStream_t s = KPR_FRESH_STREAM();
+    KPR_KCALL(__hoisted_convt2d_raw_alloc_zero_f32_0,
+              cout / 1024U + (uint32_t) (cout % 1024U != 0U), 1024U, 0U, s,
+              cout, gbias);
+    MUST(cudaStreamSynchronize(s));
+    MUST(cudaStreamDestroy(s));
+    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r =
+        Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_bias_f32(
+            b, cin, h_in, w_in, cout, kh, kw, sh, sw, ph, pw, oph, opw, dh, dw,
+            gx, gw, gbias);
+    MUST(cudaFree(gbias));
+    return r;
+}

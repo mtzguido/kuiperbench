@@ -48,3 +48,12 @@ void Kuiper_KB_Matmul4D_matmul4d_f32(uint32_t b, uint32_t i, uint32_t j,
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
 }
+
+float *Kuiper_KB_Matmul4D_matmul4d_alloc_f32(uint32_t b, uint32_t i, uint32_t j,
+                                             uint32_t l, uint32_t k, float *gA,
+                                             float *gB)
+{
+    float *gC = (float *) KPR_GPU_ALLOC(sizeof(float), b * i * j * k);
+    Kuiper_KB_Matmul4D_matmul4d_f32(b, i, j, l, k, gA, gB, gC);
+    return gC;
+}

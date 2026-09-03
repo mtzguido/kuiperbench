@@ -96,3 +96,12 @@ Kuiper_KB_AvgPool1D_avgpool1d_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
     return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
                                                            .snd = output});
 }
+
+Prims_dtuple2__uint32_t__float_
+Kuiper_KB_AvgPool1D_avgpool1d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
+                                            uint32_t b, uint32_t c, uint32_t l,
+                                            float *input)
+{
+    return Kuiper_KB_AvgPool1D_avgpool1d_alloc_f32(k, s, p, 1U, b * c, l,
+                                                   input);
+}

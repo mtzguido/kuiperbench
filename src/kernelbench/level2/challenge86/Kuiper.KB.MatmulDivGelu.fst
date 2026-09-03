@@ -37,7 +37,7 @@ let mdg_row_aux
             == div_gelu divisor (acc1 sy_b tid))
 #pop-options
 
-#push-options "--z3rlimit 100"
+#push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn matmul_div_gelu_f32_impl
   (batch : szp)

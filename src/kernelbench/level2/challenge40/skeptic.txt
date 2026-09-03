@@ -30,7 +30,7 @@ descriptive comment "No assume / magic / admit." in the fsti. Proof is real:
 - msr_row_aux discharges per-(i,j) via BA.bias_add_at_ij + KS.lseq_map index
   lemma, then Classical.forall_intro_2 closes the postcondition.
 - GEMM result pinned to MS.matmul via mmcomb_gpu_exact (comb2 ignores old gC).
-- z3rlimit 50/100 — ordinary, not a red flag.
+- Explicit row lemmas keep every local z3rlimit at or below 60.
 
 (c) BRIDGE CORRECTNESS  [CONFIRMED]
 ----------------------------------------------------------------
