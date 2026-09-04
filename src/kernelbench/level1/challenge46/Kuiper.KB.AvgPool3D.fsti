@@ -32,6 +32,11 @@ open Kuiper.Tensor.Layout.BCMPages { l2_bcm_pages }
 module SZ = Kuiper.SizeT
 module EM = Kuiper.EMatrix
 
+noeq type avgpool3d_axis_alloc_result (k s : szp) (p : sz) (d bc l : szp) = {
+  l_out : lo:sz { SZ.v lo == pool_out_len_1d l k s p d };
+  output : array2 f32 (l2_row_major bc l_out);
+}
+
 (* Verified, extractable 1-D pool output-length formula (see .fst), provably
    equal to the pure spec [pool_out_len_1d].  [p] is [sz] (>= 0). *)
 val pool_out_len_1d_sz
@@ -109,8 +114,8 @@ ensures
    [(bc, l_out)] GPU output buffer, fills it with the per-window SUM
    (reducer_fadd_f32, rid = 0, padding -> 0), divides every element by [K] in
    place via the verified [Kuiper.KB.ScalarMul] kernel (scaling by
-   [inv_k = avgpool_recip_f32 k = 1/K]), and returns the pair
-   [(l_out, output_buffer)] — ownership passes to the caller.  The post is
+   [inv_k = avgpool_recip_f32 k = 1/K]), and returns both values in a named
+   result record — ownership passes to the caller.  The post is
    exactly "windowed sum, then /K": every output accumulator equals [inv_k]
    times the corresponding [windowreduce_result] (sum) accumulator.  Applying
    this per-pass /K across the three (3-D) separable axis passes yields the
@@ -141,15 +146,14 @@ requires
  pure (SZ.v bc *
          pool_out_len_1d l k s p d
        <= max_blocks * max_threads)
-returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-            & array2 f32 (l2_row_major bc lo))
+returns r : avgpool3d_axis_alloc_result k s p d bc l
 ensures
- on gpu_loc ((dsnd r) |->
-   mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
+ on gpu_loc (r.output |->
+   mk2 (fun (i:natlt bc) (j:natlt r.l_out) ->
      mul (avgpool_recip_f32 k)
          (acc2 (windowreduce_result reducer_fadd_f32 sx
-                    k s p d (dfst r)) i j))) **
- pure (SZ.v (dfst r) ==
+                    k s p d r.l_out) i j))) **
+ pure (SZ.v r.l_out ==
          pool_out_len_1d l k s p d)
 
 unfold
@@ -248,28 +252,27 @@ let avgpool3d_full_pre
     pool_out_len_1d w kw sw pw dw) * pool_out_len_1d depth kd sd pd dd <=
     max_blocks * max_threads
 
-unfold
-let avgpool3d_full_result
-  (kd kh kw sd sh sw : pos) (pd ph pw : nat) (dd dh dw : pos)
-  (bc depth h w : nat) : Type0 =
-  (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw /\ SZ.v wo > 0 }
-   & (ho : sz { SZ.v ho == pool_out_len_1d h kh sh ph dh /\ SZ.v ho > 0 }
-      & (do_ : sz { SZ.v do_ == pool_out_len_1d depth kd sd pd dd /\
-                    SZ.v do_ > 0 }
-         & array2 f32 (l2_bcm_pages bc (ho * wo) do_))))
+noeq type avgpool3d_full_result
+  (kd kh kw sd sh sw : szp) (pd ph pw : sz) (dd dh dw : szp)
+  (bc depth h w : szp) = {
+  w_out : wo:szp { SZ.v wo == pool_out_len_1d w kw sw pw dw };
+  h_out : ho:szp { SZ.v ho == pool_out_len_1d h kh sh ph dh };
+  d_out : do_:szp { SZ.v do_ == pool_out_len_1d depth kd sd pd dd };
+  full_output : array2 f32 (l2_bcm_pages bc (h_out * w_out) d_out);
+}
 
 unfold
 let avgpool3d_full_post
-  (kd kh kw : szp) (sd sh sw : pos) (pd ph pw : nat) (dd dh dw : pos)
-  (bc depth h w : nat)
+  (kd kh kw sd sh sw : szp) (pd ph pw : sz) (dd dh dw : szp)
+  (bc depth h w : szp)
   (sx : chest2 f32 (bc * depth * h) w)
   (r : avgpool3d_full_result kd kh kw sd sh sw pd ph pw dd dh dw
     bc depth h w) : slprop =
-  on gpu_loc ((dsnd (dsnd (dsnd r))) |->
+  on gpu_loc (r.full_output |->
     avgpool3d_axis_layout_result
-      (l2_bcm_pages bc (dfst (dsnd r) * dfst r) (dfst (dsnd (dsnd r)))) kd
+      (l2_bcm_pages bc (r.h_out * r.w_out) r.d_out) kd
       (avgpool3d_mid_h_view bc depth h w kh kw sh sw ph pw dh dw
-        (dfst r) (dfst (dsnd r)) sx)
+        r.w_out r.h_out sx)
       sd pd dd)
 
 (* Complete count-include-pad AvgPool3D pipeline.  Each axis performs the
@@ -309,7 +312,7 @@ fn avgpool3d_raw_alloc_f32
   requires
     pure (avgpool3d_full_pre k k k s s s p p p 1 1 1
       (SZ.v (b *^ c)) depth h w)
-  returns r : avgpool3d_full_result k k k s s s p p p 1 1 1
-    (SZ.v (b *^ c)) depth h w
-  ensures avgpool3d_full_post k k k s s s p p p 1 1 1
-    (SZ.v (b *^ c)) depth h w sx r
+  returns r : avgpool3d_full_result k k k s s s p p p 1sz 1sz 1sz
+    (b *^ c) depth h w
+  ensures avgpool3d_full_post k k k s s s p p p 1sz 1sz 1sz
+    (b *^ c) depth h w sx r

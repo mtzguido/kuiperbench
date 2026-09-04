@@ -59,19 +59,6 @@ void Kuiper_KB_MaxPool2D_maxpool2d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-Prims_dtuple2__uint32_t__float_
-Kuiper_KB_MaxPool2D_maxpool2d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
-                                             uint32_t d, uint32_t bc,
-                                             uint32_t l, float *input)
-{
-    uint32_t l_out = Kuiper_KB_MaxPool2D_pool_out_len_1d_sz(l, k, s, p, d);
-    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), bc * l_out);
-    Kuiper_KB_MaxPool2D_maxpool2d_axis_fw_rm_f32(k, s, p, d, bc, l, l_out,
-                                                 input, output);
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
-                                                           .snd = output});
-}
-
 __global__
 /**
   hoisted when extracting maxpool2d_full_alloc_f32
@@ -102,7 +89,7 @@ __hoisted_maxpool2d_full_alloc_f32_0(uint32_t kh, uint32_t sh, uint32_t ph,
     }
 }
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_MaxPool2D_maxpool2d_full_result
 Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32(uint32_t kh, uint32_t kw,
                                              uint32_t sh, uint32_t sw,
                                              uint32_t ph, uint32_t pw,
@@ -110,14 +97,13 @@ Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32(uint32_t kh, uint32_t kw,
                                              uint32_t bc, uint32_t h,
                                              uint32_t w, float *input)
 {
-    uint32_t l_out = Kuiper_KB_MaxPool2D_pool_out_len_1d_sz(w, kw, sw, pw, dw);
-    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), bc * h * l_out);
-    Kuiper_KB_MaxPool2D_maxpool2d_axis_fw_rm_f32(kw, sw, pw, dw, bc * h, w,
-                                                 l_out, input, output);
-    Prims_dtuple2__uint32_t__float_ r1 = {.fst = l_out, .snd = output};
-    uint32_t wo = FStar_Pervasives_dfst(r1);
+    uint32_t wo = Kuiper_KB_MaxPool2D_pool_out_len_1d_sz(w, kw, sw, pw, dw);
+    float *output = (float *) KPR_GPU_ALLOC(sizeof(float), bc * h * wo);
+    Kuiper_KB_MaxPool2D_maxpool2d_axis_fw_rm_f32(kw, sw, pw, dw, bc * h, w, wo,
+                                                 input, output);
+    float *mid = output;
     uint32_t ho = Kuiper_KB_MaxPool2D_pool_out_len_1d_sz(h, kh, sh, ph, dh);
-    float *mid2 = FStar_Pervasives_dsnd(r1);
+    float *mid2 = mid;
     float *out = (float *) KPR_GPU_ALLOC(sizeof(float), bc * wo * ho);
     if (ho != 0U) {
         cudaStream_t s = KPR_FRESH_STREAM();
@@ -129,12 +115,11 @@ Kuiper_KB_MaxPool2D_maxpool2d_full_alloc_f32(uint32_t kh, uint32_t kw,
         MUST(cudaStreamDestroy(s));
     }
     MUST(cudaFree(mid2));
-    return (
-        KRML_CLITERAL(Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_){
-            .fst = wo, .snd = {.fst = ho, .snd = out}});
+    return (KRML_CLITERAL(Kuiper_KB_MaxPool2D_maxpool2d_full_result){
+        .w_out = wo, .h_out = ho, .output = out});
 }
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_MaxPool2D_maxpool2d_full_result
 Kuiper_KB_MaxPool2D_maxpool2d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                             uint32_t d, uint32_t b, uint32_t c,
                                             uint32_t h, uint32_t w,

@@ -5,6 +5,12 @@
 #include <kuiper.h>
 #include <kbench.h>
 
+typedef struct Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_result_s {
+    uint32_t h_out;
+    uint32_t w_out;
+    float *output;
+} Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_result;
+
 uint32_t Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim(uint32_t n, uint32_t k,
                                                     uint32_t stride,
                                                     uint32_t pad);
@@ -19,13 +25,13 @@ float *Kuiper_KB_DepthwiseConv2D_dwconv2d_alloc_f32(
     uint32_t kw, uint32_t stride, uint32_t pad, uint32_t h_out, uint32_t w_out,
     float *gx, float *gw, float *gbias);
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_result
 Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_alloc_bias_f32(
     uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in, uint32_t kh,
     uint32_t kw, uint32_t stride, uint32_t pad, float *gx, float *gw,
     float *gbias);
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_result
 Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_alloc_zero_f32(
     uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in, uint32_t kh,
     uint32_t kw, uint32_t stride, uint32_t pad, float *gx, float *gw);

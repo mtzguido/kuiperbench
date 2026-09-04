@@ -24,6 +24,13 @@ let conv2d_out_len (n : nat) (k stride : pos) (pad : nat) : nat
   = let padded = n + 2 * pad in
     if k > padded then 0 else (padded - k) / stride + 1
 
+noeq type conv2d_raw_result
+  (b cin h_in w_in cout kh kw stride : szp) (pad : sz) = {
+  h_out : ho:szp { SZ.v ho == conv2d_out_len h_in kh stride pad };
+  w_out : wo:szp { SZ.v wo == conv2d_out_len w_in kw stride pad };
+  output : array1 f32 (l1_forward (b * cout * h_out * w_out));
+}
+
 inline_for_extraction noextract
 unfold
 let conv2d_raw_size_req
@@ -101,18 +108,15 @@ fn conv2d_raw_alloc_bias_f32
     cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw) **
     on gpu_loc (gbias |-> Frac fb sbias)
-  returns r :
-    (ho : szp { SZ.v ho == conv2d_out_len h_in kh stride pad } &
-     (wo : szp { SZ.v wo == conv2d_out_len w_in kw stride pad } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : conv2d_raw_result b cin h_in w_in cout kh kw stride pad
   ensures
     exists* (sy : chest1 f32
-      (b * cout * (dfst r) * (dfst (dsnd r)))).
-      on gpu_loc ((dsnd (dsnd r)) |-> sy) **
+      (b * cout * r.h_out * r.w_out)).
+      on gpu_loc (r.output |-> sy) **
       pure (forall (tid : nat{
-        tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+        tid < b * cout * r.h_out * r.w_out}).
         acc1 sy tid == conv2d_out_at b cin h_in w_in cout kh kw stride pad
-          (dfst r) (dfst (dsnd r)) sx sw sbias tid)
+          r.h_out r.w_out sx sw sbias tid)
 
 fn conv2d_raw_alloc_zero_f32
   (b cin h_in w_in cout kh kw stride : szp) (pad : sz)
@@ -125,16 +129,13 @@ fn conv2d_raw_alloc_zero_f32
   preserves
     cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw)
-  returns r :
-    (ho : szp { SZ.v ho == conv2d_out_len h_in kh stride pad } &
-     (wo : szp { SZ.v wo == conv2d_out_len w_in kw stride pad } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : conv2d_raw_result b cin h_in w_in cout kh kw stride pad
   ensures
     exists* (sy : chest1 f32
-      (b * cout * (dfst r) * (dfst (dsnd r)))).
-      on gpu_loc ((dsnd (dsnd r)) |-> sy) **
+      (b * cout * r.h_out * r.w_out)).
+      on gpu_loc (r.output |-> sy) **
       pure (forall (tid : nat{
-        tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+        tid < b * cout * r.h_out * r.w_out}).
         acc1 sy tid == conv2d_out_at b cin h_in w_in cout kh kw stride pad
-          (dfst r) (dfst (dsnd r)) sx sw
+          r.h_out r.w_out sx sw
           (mk1 (fun _ -> (zero #f32))) tid)

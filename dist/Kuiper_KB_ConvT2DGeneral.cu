@@ -91,7 +91,7 @@ float *Kuiper_KB_ConvT2DGeneral_convt2d_general_alloc_f32(
     return gy;
 }
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_ConvT2DGeneral_convt2d_raw_result
 Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_bias_f32(
     uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
     uint32_t kh, uint32_t kw, uint32_t sh, uint32_t sw, uint32_t ph,
@@ -175,13 +175,12 @@ Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_bias_f32(
         Kuiper_KB_ConvT2DGeneral_convt_out_dim(h_in, sh, dh, kh, ph, oph);
     uint32_t w_out =
         Kuiper_KB_ConvT2DGeneral_convt_out_dim(w_in, sw, dw, kw, pw, opw);
-    return (
-        KRML_CLITERAL(Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_){
-            .fst = h_out0,
-            .snd = {.fst = w_out,
-                    .snd = Kuiper_KB_ConvT2DGeneral_convt2d_general_alloc_f32(
-                        b, cin, h_in, w_in, cout, kh, kw, sh, sw, ph, pw, dh,
-                        dw, h_out0, w_out, gx, gw, gbias)}});
+    return (KRML_CLITERAL(Kuiper_KB_ConvT2DGeneral_convt2d_raw_result){
+        .h_out = h_out0,
+        .w_out = w_out,
+        .output = Kuiper_KB_ConvT2DGeneral_convt2d_general_alloc_f32(
+            b, cin, h_in, w_in, cout, kh, kw, sh, sw, ph, pw, dh, dw, h_out0,
+            w_out, gx, gw, gbias)});
 }
 
 __global__
@@ -195,7 +194,7 @@ __hoisted_convt2d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
         gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
 }
 
-Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_
+Kuiper_KB_ConvT2DGeneral_convt2d_raw_result
 Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_zero_f32(
     uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
     uint32_t kh, uint32_t kw, uint32_t sh, uint32_t sw, uint32_t ph,
@@ -282,7 +281,7 @@ Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_zero_f32(
               cout, gbias);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
-    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ r =
+    Kuiper_KB_ConvT2DGeneral_convt2d_raw_result r =
         Kuiper_KB_ConvT2DGeneral_convt2d_raw_alloc_bias_f32(
             b, cin, h_in, w_in, cout, kh, kw, sh, sw, ph, pw, oph, opw, dh, dw,
             gx, gw, gbias);

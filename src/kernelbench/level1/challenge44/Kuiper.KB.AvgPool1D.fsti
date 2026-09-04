@@ -11,6 +11,11 @@ open Kuiper.Spec.Pool1D { pool_out_len_1d }
 module SZ = Kuiper.SizeT
 module EM = Kuiper.EMatrix
 
+noeq type avgpool1d_alloc_result (k s p d bc l : szp) = {
+  l_out : lo:sz { SZ.v lo == pool_out_len_1d l k s p d };
+  output : array2 f32 (l2_row_major bc l_out);
+}
+
 (* Verified, extractable 1-D pool output-length formula (see .fst), provably
    equal to the pure spec [pool_out_len_1d]. *)
 val pool_out_len_1d_sz
@@ -83,14 +88,12 @@ ensures
    tensor; computes [l_out], allocates the GPU output buffer, fills it with the
    per-window SUM, divides every element by [K] in place with the verified
    [Kuiper.KB.ScalarMul] kernel (scaling by [inv_k = avgpool_recip_f32 k = 1/K]),
-   and returns the pair [(l_out, output_buffer)] — the buffer's ownership passes
+   and returns both in a named result record — the buffer's ownership passes
    to the caller.  All preconditions are stated on the raw dimensions
    ([l + 2p] etc.), so the unverified bridge only performs dimension-contract
    checks: it computes nothing that feeds the kernel and allocates nothing.  The
    post is exactly "windowed sum, then /K": every output accumulator equals
    [inv_k] times the corresponding [windowreduce_result] (sum) accumulator.
-   Extracts to a C function returning a [{ uint32_t fst; float *snd; }] struct.
-
    NOTE: proving the stronger [%~ avgpool1d_post] form from [Spec.Pool1D]
    (relating this to the real-valued average over the count-include-pad window)
    is a SEPARATE deferred functional bridge; this map-of-[windowreduce_result]
@@ -112,15 +115,14 @@ requires
  pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
  pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
  pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-            & array2 f32 (l2_row_major bc lo))
+returns r : avgpool1d_alloc_result k s p d bc l
 ensures
- on gpu_loc ((dsnd r) |->
-   mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
+ on gpu_loc (r.output |->
+   mk2 (fun (i:natlt bc) (j:natlt r.l_out) ->
      mul (avgpool_recip_f32 k)
          (acc2 (windowreduce_result reducer_fadd_f32 sx
-                    k s p d (dfst r)) i j))) **
- pure (SZ.v (dfst r) ==
+                    k s p d r.l_out) i j))) **
+ pure (SZ.v r.l_out ==
          pool_out_len_1d l k s p d)
 
 (* KernelBench-shaped entry: derives [bc = b*c] and supplies the operation's
@@ -143,13 +145,11 @@ fn avgpool1d_raw_alloc_f32
     pure (SZ.fits (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v (b *^ c) * (SZ.v l + 2 * SZ.v p)
             <= max_blocks * max_threads)
-  returns r :
-    (lo : sz { SZ.v lo == pool_out_len_1d l k s p 1 }
-     & array2 f32 (l2_row_major (b *^ c) lo))
+  returns r : avgpool1d_alloc_result k s p 1sz (b *^ c) l
   ensures
-    on gpu_loc ((dsnd r) |->
-      mk2 (fun (i:natlt (b *^ c)) (j:natlt (dfst r)) ->
+    on gpu_loc (r.output |->
+      mk2 (fun (i:natlt (b *^ c)) (j:natlt r.l_out) ->
         mul (avgpool_recip_f32 k)
           (acc2 (windowreduce_result reducer_fadd_f32 sx
-            k s p 1 (dfst r)) i j))) **
-    pure (SZ.v (dfst r) == pool_out_len_1d l k s p 1)
+            k s p 1 r.l_out) i j))) **
+    pure (SZ.v r.l_out == pool_out_len_1d l k s p 1)

@@ -78,9 +78,9 @@ kuiper_convt3d_general_cuda(torch::Tensor X, torch::Tensor W,
     }
 
     return torch::from_blob(
-        r.snd.snd.snd,
-        {B, Cout, (int64_t) r.fst, (int64_t) r.snd.fst,
-         (int64_t) r.snd.snd.fst},
+        r.output,
+        {B, Cout, (int64_t) r.d_out, (int64_t) r.h_out,
+         (int64_t) r.w_out},
         [](void *p) { cudaFree(p); }, X.options());
 }
 

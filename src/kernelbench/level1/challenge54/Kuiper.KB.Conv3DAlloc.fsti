@@ -41,13 +41,13 @@ let conv3d_raw_size_req
    boundary named is important for verification performance: expanding the
    five-dimensional postcondition at every internal call creates thousands of
    duplicate refinement goals. *)
-unfold
-let conv3d_raw_result
-  (b cin d_in h_in w_in cout kd kh kw stride : szp) (pad : sz) : Type0 =
-  (do_ : szp { SZ.v do_ == conv3d_out_len d_in kd stride pad } &
-   (ho : szp { SZ.v ho == conv3d_out_len h_in kh stride pad } &
-    (wo : szp { SZ.v wo == conv3d_out_len w_in kw stride pad } &
-     array1 f32 (l1_forward (b * cout * do_ * ho * wo)))))
+noeq type conv3d_raw_result
+  (b cin d_in h_in w_in cout kd kh kw stride : szp) (pad : sz) = {
+  d_out : do_:szp { SZ.v do_ == conv3d_out_len d_in kd stride pad };
+  h_out : ho:szp { SZ.v ho == conv3d_out_len h_in kh stride pad };
+  w_out : wo:szp { SZ.v wo == conv3d_out_len w_in kw stride pad };
+  output : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out));
+}
 
 unfold
 let conv3d_raw_post
@@ -57,13 +57,11 @@ let conv3d_raw_post
   (sbias : chest1 f32 cout)
   (r : conv3d_raw_result b cin d_in h_in w_in cout kd kh kw stride pad)
   : slprop =
-  exists* (sy : chest1 f32 (b * cout * (dfst r) *
-    (dfst (dsnd r)) * (dfst (dsnd (dsnd r))))).
-    on gpu_loc ((dsnd (dsnd (dsnd r))) |-> sy) **
-    pure (forall (tid : nat{tid < b * cout * (dfst r) *
-      (dfst (dsnd r)) * (dfst (dsnd (dsnd r)))}).
+  exists* (sy : chest1 f32 (b * cout * r.d_out * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * r.d_out * r.h_out * r.w_out}).
       acc1 sy tid == conv3d_out_at b cin d_in h_in w_in cout kd kh kw
-        stride pad (dfst r) (dfst (dsnd r)) (dfst (dsnd (dsnd r)))
+        stride pad r.d_out r.h_out r.w_out
         sx sw sbias tid)
 (* (a) Verified, extractable conv3d output-size formula used by the raw entry
    (see .fst).  Conv3d

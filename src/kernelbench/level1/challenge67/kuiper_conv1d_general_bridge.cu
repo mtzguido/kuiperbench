@@ -43,7 +43,7 @@ static torch::Tensor kuiper_conv1d_general_cuda(
     }
 
     const c10::cuda::CUDAGuard device_guard(X.device());
-    Prims_dtuple2__uint32_t__float_ r;
+    Kuiper_KB_Conv1DAlloc_conv1d_raw_result r;
     if (has_bias) {
         r = Kuiper_KB_Conv1DAlloc_conv1d_raw_alloc_bias_f32(
             (uint32_t) B, (uint32_t) Cin, (uint32_t) Lin, (uint32_t) Cout,
@@ -58,7 +58,7 @@ static torch::Tensor kuiper_conv1d_general_cuda(
     }
 
     return torch::from_blob(
-        r.snd, {B, Cout, (int64_t) r.fst}, [](void *p) { cudaFree(p); },
+        r.output, {B, Cout, (int64_t) r.l_out}, [](void *p) { cudaFree(p); },
         X.options());
 }
 

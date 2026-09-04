@@ -16,7 +16,7 @@
 //     monoid (rid = 0, rop = +) writing the per-window SUM,
 //   * divides every output element by K in place via the verified
 //     Kuiper.KB.ScalarMul kernel (scaling by inv_k = 1/K), and
-//   * returns the pair (L_out, output_device_ptr).
+//   * returns a named {L_out, output_device_ptr} result.
 // Ownership of the returned buffer passes to this bridge, which wraps it in a
 // torch::Tensor with a cudaFree deleter.  This driver therefore performs NO
 // arithmetic, NO allocation, and NO second kernel launch; it only checks
@@ -67,14 +67,14 @@ torch::Tensor kuiper_avgpool1d_cuda(torch::Tensor X,
                 "kuiper_avgpool1d: shape out of verified u32 / launch range");
 
     const c10::cuda::CUDAGuard device_guard(X.device());
-    Prims_dtuple2__uint32_t__float_ r =
+    Kuiper_KB_AvgPool1D_avgpool1d_alloc_result r =
         Kuiper_KB_AvgPool1D_avgpool1d_raw_alloc_f32(
             (uint32_t)kernel_size, (uint32_t)stride, (uint32_t)padding,
             (uint32_t)B, (uint32_t)C, (uint32_t)L,
             X.data_ptr<float>());
 
-    int64_t L_out = (int64_t)r.fst;
-    float *out_ptr = r.snd;
+    int64_t L_out = (int64_t)r.l_out;
+    float *out_ptr = r.output;
 
     // Wrap the Kuiper-allocated (cudaMalloc'd) device buffer in a tensor that
     // owns it: the deleter cudaFree's it when the tensor is destroyed.

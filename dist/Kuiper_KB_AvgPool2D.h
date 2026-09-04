@@ -17,11 +17,6 @@ void Kuiper_KB_AvgPool2D_avgpool2d_axis_fw_rm_f32(uint32_t k, uint32_t s,
                                                   uint32_t l_out, float *input,
                                                   float *output);
 
-Prims_dtuple2__uint32_t__float_
-Kuiper_KB_AvgPool2D_avgpool2d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
-                                             uint32_t d, uint32_t bc,
-                                             uint32_t l, float *input);
-
 float *Kuiper_KB_AvgPool2D_avgpool2d_half_alloc(uint32_t bc, uint32_t h,
                                                 uint32_t w, float *input);
 

@@ -102,56 +102,6 @@ ensures
      k s p d l_out)
 
 
-(* Internal self-allocating per-axis building block.  Takes the raw per-axis
-   dims [(k, s, p, d)], the leading product [bc] (the non-reduced dims folded
-   into rows for this pass), the reduced axis length [l], and the input tensor.
-   It computes [l_out] via the verified [pool_out_len_1d_sz], allocates the
-   [(bc, l_out)] GPU output buffer, fills it with the per-window SUM
-   (reducer_fadd_f32, rid = 0, padding -> 0), divides every element by [K] in
-   place via the verified [Kuiper.KB.ScalarMul] kernel (scaling by
-   [inv_k = avgpool_recip_f32 k = 1/K]), and returns the pair
-   [(l_out, output_buffer)] — ownership passes to the caller.  The post is
-   exactly "windowed sum, then /K": every output accumulator equals [inv_k]
-   times the corresponding [windowreduce_result] (sum) accumulator.  Applying
-   this per-pass /K across the two (2-D) separable axis passes yields the
-   PyTorch divisor K*K (count_include_pad = True).
-
-   It is composed internally by the complete public entry; the bridge does not
-   invoke individual axis passes. *)
-fn avgpool2d_axis_alloc_f32
-  (k s : szp)
-(p : sz)
-(d : szp)
-(bc : szp { SZ.v bc <= max_blocks * max_threads })
-(l : szp { SZ.fits (SZ.v bc * SZ.v l) })
-(input : array2 f32 (l2_row_major bc l) { is_global input })
-(#fIn : perm)
-(#sx  : chest2 f32 bc l)
-preserves
- cpu **
- on gpu_loc (input |-> Frac fIn sx)
-requires
- pure (SZ.fits (SZ.v d * (SZ.v k - 1) + 1)) **
- pure (SZ.fits (SZ.v l + 2 * SZ.v p)) **
- pure (SZ.v d * (SZ.v k - 1) + 1 <= SZ.v l + 2 * SZ.v p) **
- pure (SZ.fits (pool_out_len_1d l k s p d
-                  * SZ.v s + SZ.v k * SZ.v d)) **
- pure (SZ.fits (SZ.v bc *
-         pool_out_len_1d l k s p d)) **
- pure (SZ.v bc *
-         pool_out_len_1d l k s p d
-       <= max_blocks * max_threads)
-returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-            & array2 f32 (l2_row_major bc lo))
-ensures
- on gpu_loc ((dsnd r) |->
-   mk2 (fun (i:natlt bc) (j:natlt (dfst r)) ->
-     mul (avgpool_recip_f32 k)
-         (acc2 (windowreduce_result reducer_fadd_f32 sx
-                    k s p d (dfst r)) i j))) **
- pure (SZ.v (dfst r) ==
-         pool_out_len_1d l k s p d)
-
 (* Exact result of scaling every physical slot of a full layout. *)
 unfold
 let avgpool2d_scale_layout_result

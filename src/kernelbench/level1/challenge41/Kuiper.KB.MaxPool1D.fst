@@ -96,7 +96,8 @@ let pool_out_len_1d_ub (l k s p d : nat)
    PyTorch dims and the input tensor, this computes [l_out] via the verified
    [pool_out_len_1d_sz], allocates the [(B*C, l_out)] output buffer on the GPU
    (extracts to [cudaMalloc]), fills it with the windowed max-reduction, and
-   returns BOTH the output length and the freshly allocated device buffer to
+   returns the output length and freshly allocated device buffer in a named
+   result record to
    the caller.  Ownership of the returned buffer transfers to the caller (the
    bridge wraps it in a torch tensor with a [cudaFree] deleter).  The bridge
    thus performs no arithmetic and no allocation whatsoever — it only checks
@@ -121,13 +122,12 @@ fn maxpool1d_alloc
     pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
     pure (SZ.fits (SZ.v b * SZ.v c * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v b * SZ.v c * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-               & array2 f32 (l2_row_major (b * c) lo))
+  returns r : maxpool1d_alloc_result b c l k s p d
   ensures
-    on gpu_loc ((dsnd r) |->
+    on gpu_loc (r.output |->
       windowreduce_result reducer_fmax_f32 sx
-        k s p d (dfst r)) **
-    pure (SZ.v (dfst r) ==
+        k s p d r.l_out) **
+    pure (SZ.v r.l_out ==
             pool_out_len_1d l k s p d)
 {
   let l_out = pool_out_len_1d_sz l k s p d;
@@ -136,7 +136,7 @@ fn maxpool1d_alloc
   ML.lemma_mult_le_right s l_out (SZ.v l + 2 * SZ.v p);
   let output = alloc0 #f32 ((b *^ c) *^ l_out) (l2_row_major (b *^ c) l_out);
   maxpool1d_fw_rm_f32 k s p d (b *^ c) l l_out input output;
-  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
+  { l_out = l_out; output = output }
 }
 
 let maxpool1d_alloc_f32 =

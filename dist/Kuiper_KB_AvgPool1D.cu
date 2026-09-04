@@ -83,7 +83,7 @@ void Kuiper_KB_AvgPool1D_avgpool1d_fw_rm_f32(uint32_t k, uint32_t s, uint32_t p,
     }
 }
 
-Prims_dtuple2__uint32_t__float_
+Kuiper_KB_AvgPool1D_avgpool1d_alloc_result
 Kuiper_KB_AvgPool1D_avgpool1d_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                         uint32_t d, uint32_t bc, uint32_t l,
                                         float *input)
@@ -93,11 +93,11 @@ Kuiper_KB_AvgPool1D_avgpool1d_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
     Kuiper_KB_AvgPool1D_avgpool1d_fw_rm_f32(k, s, p, d, bc, l, l_out, input,
                                             output);
     smul_fw_f32(Kuiper_KB_AvgPool1D_avgpool_recip_f32(k), bc * l_out, output);
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
-                                                           .snd = output});
+    return (KRML_CLITERAL(Kuiper_KB_AvgPool1D_avgpool1d_alloc_result){
+        .l_out = l_out, .output = output});
 }
 
-Prims_dtuple2__uint32_t__float_
+Kuiper_KB_AvgPool1D_avgpool1d_alloc_result
 Kuiper_KB_AvgPool1D_avgpool1d_raw_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                             uint32_t b, uint32_t c, uint32_t l,
                                             float *input)

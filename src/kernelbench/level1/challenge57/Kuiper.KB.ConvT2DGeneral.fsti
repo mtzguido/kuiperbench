@@ -22,6 +22,14 @@ let convt2d_out_len
   (n : nat) (s d k : pos) (p opad : nat) : nat
   = convT_out_len_1d n s p d k opad
 
+noeq type convt2d_raw_result
+  (b cin h_in w_in cout kh kw sh sw : szp)
+  (ph pw oph opw : sz) (dh dw : szp) = {
+  h_out : ho:szp { SZ.v ho == convt2d_out_len h_in sh dh kh ph oph };
+  w_out : wo:szp { SZ.v wo == convt2d_out_len w_in sw dw kw pw opw };
+  output : array1 f32 (l1_forward (b * cout * h_out * w_out));
+}
+
 inline_for_extraction noextract
 unfold
 let convt2d_raw_size_req
@@ -158,16 +166,14 @@ fn convt2d_raw_alloc_bias_f32
   norewrite
   preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) ** on gpu_loc (gbias |-> Frac fb sbias)
-  returns r :
-    (ho : szp { SZ.v ho == convt2d_out_len h_in sh dh kh ph oph } &
-     (wo : szp { SZ.v wo == convt2d_out_len w_in sw dw kw pw opw } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : convt2d_raw_result b cin h_in w_in cout kh kw sh sw
+    ph pw oph opw dh dw
   ensures exists* (sy : chest1 f32
-    (b * cout * (dfst r) * (dfst (dsnd r)))).
-    on gpu_loc ((dsnd (dsnd r)) |-> sy) **
-    pure (forall (tid : nat{tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+    (b * cout * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * r.h_out * r.w_out}).
       acc1 sy tid == convT2d_out_at b cin h_in w_in cout kh kw sh sw ph pw
-        dh dw (dfst r) (dfst (dsnd r)) sx sw_l sbias tid)
+        dh dw r.h_out r.w_out sx sw_l sbias tid)
 
 fn convt2d_raw_alloc_zero_f32
   (b cin h_in w_in cout kh kw sh sw : szp)
@@ -180,16 +186,14 @@ fn convt2d_raw_alloc_zero_f32
   norewrite
   preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l)
-  returns r :
-    (ho : szp { SZ.v ho == convt2d_out_len h_in sh dh kh ph oph } &
-     (wo : szp { SZ.v wo == convt2d_out_len w_in sw dw kw pw opw } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : convt2d_raw_result b cin h_in w_in cout kh kw sh sw
+    ph pw oph opw dh dw
   ensures exists* (sy : chest1 f32
-    (b * cout * (dfst r) * (dfst (dsnd r)))).
-    on gpu_loc ((dsnd (dsnd r)) |-> sy) **
-    pure (forall (tid : nat{tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+    (b * cout * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * r.h_out * r.w_out}).
       acc1 sy tid == convT2d_out_at b cin h_in w_in cout kh kw sh sw ph pw
-        dh dw (dfst r) (dfst (dsnd r)) sx sw_l
+        dh dw r.h_out r.w_out sx sw_l
         (mk1 (fun _ -> (zero #f32))) tid)
 
 

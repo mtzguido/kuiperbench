@@ -45,7 +45,7 @@ static torch::Tensor kuiper_convt1d_general_cuda(
         W.data_ptr<float>());
 
     return torch::from_blob(
-        r.snd, {B, Cout, (int64_t) r.fst}, [](void *p) { cudaFree(p); },
+        r.output, {B, Cout, (int64_t) r.l_out}, [](void *p) { cudaFree(p); },
         X.options());
 }
 

@@ -50,14 +50,14 @@ let convt3d_raw_size_req
 (* Preserve the three-axis dependent result as a named verification
    boundary.  Expanding this postcondition in every application causes Pulse
    to generate thousands of duplicate five-dimensional refinement goals. *)
-unfold
-let convt3d_raw_result
+noeq type convt3d_raw_result
   (b cin d_in h_in w_in cout kd kh kw sd sh sw : szp)
-  (pd ph pw opd oph opw : sz) (dd dh dw : szp) : Type0 =
-  (do_ : szp { SZ.v do_ == convt3d_out_len d_in sd dd kd pd opd } &
-   (ho : szp { SZ.v ho == convt3d_out_len h_in sh dh kh ph oph } &
-    (wo : szp { SZ.v wo == convt3d_out_len w_in sw dw kw pw opw } &
-     array1 f32 (l1_forward (b * cout * do_ * ho * wo)))))
+  (pd ph pw opd oph opw : sz) (dd dh dw : szp) = {
+  d_out : do_:szp { SZ.v do_ == convt3d_out_len d_in sd dd kd pd opd };
+  h_out : ho:szp { SZ.v ho == convt3d_out_len h_in sh dh kh ph oph };
+  w_out : wo:szp { SZ.v wo == convt3d_out_len w_in sw dw kw pw opw };
+  output : array1 f32 (l1_forward (b * cout * d_out * h_out * w_out));
+}
 
 unfold
 let convt3d_raw_post
@@ -68,14 +68,12 @@ let convt3d_raw_post
   (sbias : chest1 f32 cout)
   (r : convt3d_raw_result b cin d_in h_in w_in cout kd kh kw sd sh sw
     pd ph pw opd oph opw dd dh dw) : slprop =
-  exists* (sy : chest1 f32 (b * cout * (dfst r) *
-    (dfst (dsnd r)) * (dfst (dsnd (dsnd r))))).
-    on gpu_loc ((dsnd (dsnd (dsnd r))) |-> sy) **
-    pure (forall (tid : nat{tid < b * cout * (dfst r) *
-      (dfst (dsnd r)) * (dfst (dsnd (dsnd r)))}).
+  exists* (sy : chest1 f32 (b * cout * r.d_out * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * r.d_out * r.h_out * r.w_out}).
       acc1 sy tid == convT3d_out_at b cin d_in h_in w_in cout kd kh kw
-        sd sh sw pd ph pw dd dh dw (dfst r) (dfst (dsnd r))
-        (dfst (dsnd (dsnd r))) sx sw_l sbias tid)
+        sd sh sw pd ph pw dd dh dw r.d_out r.h_out r.w_out
+        sx sw_l sbias tid)
 
 (* (a) Verified, extractable ConvTranspose output-size formula used by the
    raw entries (see .fst):

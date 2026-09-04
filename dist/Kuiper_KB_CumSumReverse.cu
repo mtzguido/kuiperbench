@@ -1,11 +1,6 @@
 
 #include "Kuiper_KB_CumSumReverse.h"
 
-typedef struct __uint32_t__uint32_t_______s {
-    uint32_t fst;
-    uint32_t snd;
-} __uint32_t__uint32_t______;
-
 __global__
 /**
   hoisted when extracting cumsum_reverse_fw_f32
@@ -17,12 +12,8 @@ __hoisted_cumsum_reverse_fw_f32_0(uint32_t d, float *input_r, float *output_r)
     uint32_t di_ref = 0U;
     for (; di_ref < d; di_ref++) {
         uint32_t di_old_sz = di_ref;
-        __uint32_t__uint32_t______ scrut = {.fst = blockIdx.x,
-                                            .snd = d - 1U - di_old_sz};
-        acc += input_r[scrut.fst * d + scrut.snd];
-        __uint32_t__uint32_t______ scrut0 = {.fst = blockIdx.x,
-                                             .snd = d - 1U - di_old_sz};
-        output_r[scrut0.fst * d + scrut0.snd] = acc;
+        acc += input_r[blockIdx.x * d + (d - 1U - di_old_sz)];
+        output_r[blockIdx.x * d + (d - 1U - di_old_sz)] = acc;
     }
 }
 

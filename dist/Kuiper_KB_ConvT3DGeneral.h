@@ -6,8 +6,10 @@
 #include <kbench.h>
 
 typedef struct Kuiper_KB_ConvT3DGeneral_convt3d_raw_result_s {
-    uint32_t fst;
-    Prims_dtuple2__uint32_t_Prims_dtuple2__uint32_t__float_ snd;
+    uint32_t d_out;
+    uint32_t h_out;
+    uint32_t w_out;
+    float *output;
 } Kuiper_KB_ConvT3DGeneral_convt3d_raw_result;
 
 uint32_t Kuiper_KB_ConvT3DGeneral_convt_out_dim(uint32_t n, uint32_t s,

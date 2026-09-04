@@ -68,15 +68,13 @@ fn convt1d_general_alloc_f32
     cpu **
     on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw)
-  returns r :
-    (lo : szp { SZ.v lo == convt1d_out_len l_in s d k p opad }
-     & array1 f32 (l1_forward (b * cout * lo)))
+  returns r : convt1d_alloc_result b cin l_in cout k s p opad d
   ensures
-    exists* (sy : chest1 f32 (b * cout * (dfst r))).
-      on gpu_loc ((dsnd r) |-> sy) **
-      pure (forall (tid : nat{tid < b * cout * (dfst r)}).
+    exists* (sy : chest1 f32 (b * cout * 1 * r.l_out)).
+      on gpu_loc (r.output |-> sy) **
+      pure (forall (tid : nat{tid < b * cout * 1 * r.l_out}).
         acc1 sy tid ==
-          convt1d_via2d_out_at b cin l_in cout k s p d (dfst r)
+          convt1d_via2d_out_at b cin l_in cout k s p d r.l_out
             sx sw tid)
 {
   guard_convt1d_raw_size b cin l_in cout k s p opad d;
@@ -97,7 +95,7 @@ fn convt1d_general_alloc_f32
     gx gw gbias;
   with sy. assert (on gpu_loc (gy |-> sy));
   free gbias;
-  (| l_out, gy |)
+  { l_out = l_out; output = gy }
 }
 
 inline_for_extraction let () = ()

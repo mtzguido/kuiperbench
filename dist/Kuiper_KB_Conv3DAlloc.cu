@@ -191,8 +191,7 @@ Kuiper_KB_Conv3DAlloc_conv3d_raw_alloc_bias_f32(
     conv3d_general_f32(b, cin, d_in, h_in, w_in, cout, kd, kh, kw, stride, pad,
                        d_out0, h_out, w_out, gx, gw, gbias, gy);
     return (KRML_CLITERAL(Kuiper_KB_Conv3DAlloc_conv3d_raw_result){
-        .fst = d_out0,
-        .snd = {.fst = h_out, .snd = {.fst = w_out, .snd = gy}}});
+        .d_out = d_out0, .h_out = h_out, .w_out = w_out, .output = gy});
 }
 
 __global__
@@ -310,6 +309,5 @@ Kuiper_KB_Conv3DAlloc_conv3d_raw_alloc_zero_f32(
     float *gy0 = gy;
     MUST(cudaFree(gbias));
     return (KRML_CLITERAL(Kuiper_KB_Conv3DAlloc_conv3d_raw_result){
-        .fst = d_out0,
-        .snd = {.fst = h_out, .snd = {.fst = w_out, .snd = gy0}}});
+        .d_out = d_out0, .h_out = h_out, .w_out = w_out, .output = gy0});
 }

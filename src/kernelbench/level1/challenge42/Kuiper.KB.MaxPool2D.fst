@@ -141,20 +141,15 @@ let l2_row_major_full (m n : nat)
           [SMTPat (is_full (l2_row_major m n))]
   = ()
 
-(* Self-allocating per-axis pass.  Given the flattened row count [bc], the inner
-   axis length [l], and the pool params, this computes [l_out] via the verified
-   [pool_out_len_1d_sz], allocates the [(bc, l_out)] GPU output buffer (extracts
-   to cudaMalloc), runs the fmax windowreduce, and returns BOTH [l_out] and the
-   freshly allocated buffer.  Ownership of the buffer transfers to the caller
-   (the bridge wraps it in a torch tensor with a cudaFree deleter, permutes, and
-   feeds it to the next axis pass).  The bridge thus computes no output length
-   and allocates no pool buffer; it only supplies the flattened row count and
-   inner length and checks raw-dimension contracts. *)
+(* Private self-allocating per-axis pass.  The verified caller computes and
+   supplies [l_out], so this helper can return the allocated buffer directly
+   instead of materializing a dependent pair in extracted code. *)
 inline_for_extraction noextract
 fn maxpool2d_axis_alloc
   (k s p d : szp)
   (bc : szp { SZ.v bc <= max_blocks * max_threads })
   (l : szp { SZ.fits (SZ.v bc * SZ.v l) })
+  (l_out : sz { SZ.v l_out == pool_out_len_1d l k s p d })
   (input : array2 f32 (l2_row_major bc l) { is_global input })
   (#fIn : perm)
   (#sx  : chest2 f32 bc l)
@@ -168,29 +163,21 @@ fn maxpool2d_axis_alloc
     pure (SZ.fits ((SZ.v l + 2 * SZ.v p) * SZ.v s + SZ.v k * SZ.v d)) **
     pure (SZ.fits (SZ.v bc * (SZ.v l + 2 * SZ.v p))) **
     pure (SZ.v bc * (SZ.v l + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r : (lo:sz { SZ.v lo == pool_out_len_1d l k s p d }
-               & array2 f32 (l2_row_major bc lo))
+  returns output : array2 f32 (l2_row_major bc l_out)
   ensures
-    on gpu_loc ((dsnd r) |->
+    on gpu_loc (output |->
       windowreduce_result reducer_fmax_f32 sx
-        k s p d (dfst r)) **
-    pure (SZ.v (dfst r) ==
-            pool_out_len_1d l k s p d) **
-    pure (is_global (dsnd r)) **
-    pure (is_full_array (core (dsnd r)))
+        k s p d l_out) **
+    pure (is_global output) **
+    pure (is_full_array (core output))
 {
-  let l_out = pool_out_len_1d_sz l k s p d;
   pool_out_len_1d_ub l k s p d;
   ML.lemma_mult_le_left bc l_out (SZ.v l + 2 * SZ.v p);
   ML.lemma_mult_le_right s l_out (SZ.v l + 2 * SZ.v p);
   let output = alloc0 #f32 (bc *^ l_out) (l2_row_major bc l_out);
   maxpool2d_axis_fw_rm_f32 k s p d bc l l_out input output;
-  (| (l_out <: (lo:sz { SZ.v lo == pool_out_len_1d l k s p d })), output |)
+  output
 }
-
-let maxpool2d_axis_alloc_f32 =
-  fun k s p d bc l input #fIn #sx ->
-    maxpool2d_axis_alloc k s p d bc l input #fIn #sx
 
 (* ── Single verified, transpose-free 2-D max-pool entry ──────────────
 
@@ -242,17 +229,12 @@ fn maxpool2d_full_alloc
     pure (SZ.fits (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw))) **
     pure (SZ.v bc * (SZ.v h + 2 * SZ.v ph) * (SZ.v w + 2 * SZ.v pw)
             <= max_blocks * max_threads)
-  returns r :
-    (wo : sz { SZ.v wo == pool_out_len_1d w kw sw pw dw
-               /\ SZ.v wo > 0 }
-     & (ho : sz { SZ.v ho == pool_out_len_1d h kh sh ph dh
-                  /\ SZ.v ho > 0 }
-        & array2 f32 (l2_bcm_pages bc wo ho)))
+  returns r : maxpool2d_full_result kh kw sh sw ph pw dh dw bc h w
   ensures
-    on gpu_loc ((dsnd (dsnd r)) |->
+    on gpu_loc (r.output |->
       windowreduce_result reducer_fmax_f32
-        (maxpool2d_mid_view bc h w kw sw pw dw (dfst r) sx)
-        kh sh ph dh (dfst (dsnd r)))
+        (maxpool2d_mid_view bc h w kw sw pw dw r.w_out sx)
+        kh sh ph dh r.h_out)
 {
   (* All [bcv]/[ph2]/[pw2]/[wov]/[hov]-style values below are written
      inline as [SZ.v _] expressions: they appear ONLY as ghost lemma
@@ -267,16 +249,14 @@ fn maxpool2d_full_alloc
   prod3_le bc h w (SZ.v h + 2 * SZ.v ph) (SZ.v w + 2 * SZ.v pw);
   prod3_le bc h (SZ.v w + 2 * SZ.v pw) (SZ.v h + 2 * SZ.v ph) (SZ.v w + 2 * SZ.v pw);
 
-  let r1 = maxpool2d_axis_alloc kw sw pw dw (bc *^ h) w input;
+  let wo = pool_out_len_1d_sz w kw sw pw dw;
   pool_out_len_1d_pos w kw sw pw dw;  (* wo > 0 *)
   pool_out_len_1d_ub  w kw sw pw dw;  (* wo <= pw2 *)
-  let wo : (x:sz { SZ.v x == pool_out_len_1d w kw sw pw dw
-                   /\ SZ.v x > 0 }) = dfst r1;
+  let mid = maxpool2d_axis_alloc kw sw pw dw (bc *^ h) w wo input;
 
   pool_out_len_1d_pos h kh sh ph dh;  (* ho > 0 *)
   pool_out_len_1d_ub  h kh sh ph dh;  (* ho <= ph2 *)
-  let ho : (x:sz { SZ.v x == pool_out_len_1d h kh sh ph dh
-                   /\ SZ.v x > 0 }) = pool_out_len_1d_sz h kh sh ph dh;
+  let ho = pool_out_len_1d_sz h kh sh ph dh;
 
   (* ── Pass-2 bounds ── *)
   prod3_le bc wo ho (SZ.v w + 2 * SZ.v pw) (SZ.v h + 2 * SZ.v ph);
@@ -291,7 +271,7 @@ fn maxpool2d_full_alloc
 
   (* ── Recast pass-1 output to the BCM-pages H view (l2_bcm_pages is a
         full_tlayout, so [is_full] holds by its refinement). ── *)
-  let mid2 = recast_gpu (l2_bcm_pages (SZ.v bc) (SZ.v wo) (SZ.v h)) (dsnd r1);
+  let mid2 = recast_gpu (l2_bcm_pages (SZ.v bc) (SZ.v wo) (SZ.v h)) mid;
 
   (* ── Allocate the final (BCM-pages) output and run pass 2 over H ── *)
   let out = alloc0 #f32 ((bc *^ wo) *^ ho) (l2_bcm_pages (SZ.v bc) (SZ.v wo) (SZ.v ho));
@@ -304,7 +284,7 @@ fn maxpool2d_full_alloc
 
   (* ── Free the (shared) intermediate and return ── *)
   free mid2;
-  (| wo, (| ho, out |) |)
+  { w_out = wo; h_out = ho; output = out }
 }
 #pop-options
 
@@ -335,15 +315,12 @@ fn maxpool2d_raw_alloc_f32
                     * (SZ.v w + 2 * SZ.v p))) **
     pure (SZ.v (b *^ c) * (SZ.v h + 2 * SZ.v p)
             * (SZ.v w + 2 * SZ.v p) <= max_blocks * max_threads)
-  returns r :
-    (wo : sz { SZ.v wo == pool_out_len_1d w k s p d /\ SZ.v wo > 0 }
-     & (ho : sz { SZ.v ho == pool_out_len_1d h k s p d /\ SZ.v ho > 0 }
-        & array2 f32 (l2_bcm_pages (b *^ c) wo ho)))
+  returns r : maxpool2d_full_result k k s s p p d d (b *^ c) h w
   ensures
-    on gpu_loc ((dsnd (dsnd r)) |->
+    on gpu_loc (r.output |->
       windowreduce_result reducer_fmax_f32
-        (maxpool2d_mid_view (b *^ c) h w k s p d (dfst r) sx)
-        k s p d (dfst (dsnd r)))
+        (maxpool2d_mid_view (b *^ c) h w k s p d r.w_out sx)
+        k s p d r.h_out)
 {
   maxpool2d_full_alloc_f32 k k s s p p d d (b *^ c) h w input
 }

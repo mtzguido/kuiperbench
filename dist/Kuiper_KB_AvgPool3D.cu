@@ -85,7 +85,7 @@ void Kuiper_KB_AvgPool3D_avgpool3d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-Prims_dtuple2__uint32_t__float_
+Kuiper_KB_AvgPool3D_avgpool3d_axis_alloc_result
 Kuiper_KB_AvgPool3D_avgpool3d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
                                              uint32_t d, uint32_t bc,
                                              uint32_t l, float *input)
@@ -95,8 +95,8 @@ Kuiper_KB_AvgPool3D_avgpool3d_axis_alloc_f32(uint32_t k, uint32_t s, uint32_t p,
     Kuiper_KB_AvgPool3D_avgpool3d_axis_fw_rm_f32(k, s, p, d, bc, l, l_out,
                                                  input, output);
     smul_fw_f32(Kuiper_KB_AvgPool3D_avgpool_recip_f32(k), bc * l_out, output);
-    return (KRML_CLITERAL(Prims_dtuple2__uint32_t__float_){.fst = l_out,
-                                                           .snd = output});
+    return (KRML_CLITERAL(Kuiper_KB_AvgPool3D_avgpool3d_axis_alloc_result){
+        .l_out = l_out, .output = output});
 }
 
 __global__
@@ -211,7 +211,7 @@ Kuiper_KB_AvgPool3D_avgpool3d_full_alloc_f32(
     uint32_t n = rows_d * do_;
     smul_fw_f32(Kuiper_KB_AvgPool3D_avgpool_recip_f32(kd), n, out);
     return (KRML_CLITERAL(Kuiper_KB_AvgPool3D_avgpool3d_full_result){
-        .fst = wo, .snd = {.fst = ho, .snd = {.fst = do_, .snd = out}}});
+        .w_out = wo, .h_out = ho, .d_out = do_, .full_output = out});
 }
 
 Kuiper_KB_AvgPool3D_avgpool3d_full_result

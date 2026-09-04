@@ -127,6 +127,75 @@ let unfolded_mask_map
     Kuiper.Chest.lemma_equal_intro lhs rhs;
     Kuiper.Chest.ext lhs rhs
 
+ghost
+fn reshape2to1
+  (#et:Type) (#m #cn:nat)
+  (p:nat) (#_ : squash (p == m * cn))
+  (a2 : array2 et (l2_row_major m cn))
+  (#s2 : chest2 et m cn)
+  (#f : perm)
+  requires a2 |-> Frac f s2
+  ensures
+    from_array (l1_forward p) (core a2)
+      |-> Frac f (from_seq (l1_forward p)
+                     (to_seq (l2_row_major m cn) s2))
+{
+  tensor_concr a2;
+  tensor_abs' (l1_forward p) (core a2)
+}
+
+ghost
+fn reshape1to2
+  (#et:Type) (#m #cn:nat)
+  (p:nat) (#_ : squash (p == m * cn))
+  (a2 : array2 et (l2_row_major m cn))
+  (#s2 : chest2 et m cn)
+  (#f : perm)
+  requires
+    from_array (l1_forward p) (core a2)
+      |-> Frac f (from_seq (l1_forward p)
+                     (to_seq (l2_row_major m cn) s2))
+  ensures a2 |-> Frac f s2
+{
+  tensor_concr (from_array (l1_forward p) (core a2));
+  rewrite
+    (core (from_array (l1_forward p) (core a2))
+      |-> Frac f (to_seq (l1_forward p)
+                    (from_seq (l1_forward p)
+                       (to_seq (l2_row_major m cn) s2))))
+  as (core a2 |-> Frac f (to_seq (l2_row_major m cn) s2));
+  tensor_abs (l2_row_major m cn) (core a2) #f #s2;
+  rewrite (from_array (l2_row_major m cn) (core a2) |-> Frac f s2)
+       as (a2 |-> Frac f s2)
+}
+
+let flat_mask_map
+  (#b #d #n : nat)
+  (_ : squash (n == b * d))
+  (sx : chest2 f32 b d)
+  (sm : chest2 u8 b d)
+  : Lemma
+      (mk1 (fun i ->
+         mask_step_f32
+           (acc1 (from_seq (l1_forward n)
+                    (to_seq (l2_row_major b d) sx)) i)
+           (acc1 (from_seq (l1_forward n)
+                    (to_seq (l2_row_major b d) sm)) i))
+       == from_seq (l1_forward n)
+            (to_seq (l2_row_major b d) (masked_chest sx sm)))
+  = let lhs = mk1 (fun i ->
+      mask_step_f32
+        (acc1 (from_seq (l1_forward n)
+                 (to_seq (l2_row_major b d) sx)) i)
+        (acc1 (from_seq (l1_forward n)
+                 (to_seq (l2_row_major b d) sm)) i)) in
+    let rhs = from_seq (l1_forward n)
+      (to_seq (l2_row_major b d) (masked_chest sx sm)) in
+    let aux (i : natlt n) : Lemma (acc1 lhs i == acc1 rhs i) = () in
+    Classical.forall_intro aux;
+    Kuiper.Chest.lemma_equal_intro lhs rhs;
+    Kuiper.Chest.ext lhs rhs
+
 #push-options "--z3rlimit 60"
 inline_for_extraction noextract
 fn masked_cumsum_fw_f32_impl
@@ -154,36 +223,23 @@ fn masked_cumsum_fw_f32_impl
   let n : szp = b *^ d;
   let scratch = alloc0 #f32 n (l2_row_major b d);
 
-  let input_f = tensor_fold_ro_located input;
-  let mask_f = tensor_fold_ro_located mask;
-  let scratch_f = tensor_fold_st_located scratch;
-
+  map_loc gpu_loc (fun () -> reshape2to1 (SZ.v n) input);
+  map_loc gpu_loc (fun () -> reshape2to1 (SZ.v n) mask);
+  map_loc gpu_loc (fun () -> reshape2to1 (SZ.v n) scratch);
   Map.map_gpu2_to #f32 #u8 #f32 mask_step_f32 n
-    #(tlayout_fold_outer (l2_row_major b d))
-    #(ctlayout_fold_outer (l2_row_major b d))
-    #(tlayout_fold_outer (l2_row_major b d))
-    #(ctlayout_fold_outer (l2_row_major b d))
-    #(tlayout_fold_outer (l2_row_major b d))
-    #(ctlayout_fold_outer (l2_row_major b d))
-    input_f mask_f scratch_f;
+    #(l1_forward (SZ.v n)) #(c_l1_forward (FStar.Ghost.hide (SZ.v n)))
+    #(l1_forward (SZ.v n)) #(c_l1_forward (FStar.Ghost.hide (SZ.v n)))
+    #(l1_forward (SZ.v n)) #(c_l1_forward (FStar.Ghost.hide (SZ.v n)))
+    (from_array (l1_forward (SZ.v n)) (core input))
+    (from_array (l1_forward (SZ.v n)) (core mask))
+    (from_array (l1_forward (SZ.v n)) (core scratch));
 
-  with mapped_f. assert on gpu_loc (scratch_f |-> mapped_f);
-  Pulse.Lib.Forall.elim_forall
-    (mapped_f <: chest (fold_outer (b @| d @| INil)) f32);
-  Pulse.Lib.Trade.elim_trade
-    (on gpu_loc
-      (scratch_f |->
-        (mapped_f <: chest (fold_outer (b @| d @| INil)) f32))) _;
-  Pulse.Lib.Trade.elim_trade
-    (on gpu_loc (mask_f |-> fold_chest (reveal sm))) _;
-  Pulse.Lib.Trade.elim_trade
-    (on gpu_loc (input_f |-> fold_chest (reveal sx))) _;
-
-  unfolded_mask_map (reveal sx) (reveal sm);
-  rewrite each
-    (unfold_chest #f32 #2 #(b @| d @| INil)
-      (mapped_f <: chest (fold_outer (b @| d @| INil)) f32))
-    as masked_chest (reveal sx) (reveal sm);
+  flat_mask_map #(SZ.v b) #(SZ.v d) #(SZ.v n) ()
+    (reveal sx) (reveal sm);
+  map_loc gpu_loc (fun () -> reshape1to2 (SZ.v n) input);
+  map_loc gpu_loc (fun () -> reshape1to2 (SZ.v n) mask);
+  map_loc gpu_loc (fun () -> reshape1to2 (SZ.v n) scratch
+    #(masked_chest (reveal sx) (reveal sm)) #_);
 
   scan1d_inclusive_rowblock #f32 reducer_fadd_f32 b d
     #(l2_row_major b d) #_

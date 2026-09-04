@@ -223,16 +223,14 @@ fn convt2d_raw_alloc_bias_f32
   norewrite
   preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l) ** on gpu_loc (gbias |-> Frac fb sbias)
-  returns r :
-    (ho : szp { SZ.v ho == convt2d_out_len h_in sh dh kh ph oph } &
-     (wo : szp { SZ.v wo == convt2d_out_len w_in sw dw kw pw opw } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : convt2d_raw_result b cin h_in w_in cout kh kw sh sw
+    ph pw oph opw dh dw
   ensures exists* (sy : chest1 f32
-    (b * cout * (dfst r) * (dfst (dsnd r)))).
-    on gpu_loc ((dsnd (dsnd r)) |-> sy) **
-    pure (forall (tid : nat{tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+    (b * cout * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * r.h_out * r.w_out}).
       acc1 sy tid == convT2d_out_at b cin h_in w_in cout kh kw sh sw ph pw
-        dh dw (dfst r) (dfst (dsnd r)) sx sw_l sbias tid)
+        dh dw r.h_out r.w_out sx sw_l sbias tid)
 {
   guard_convt2d_raw_size b cin h_in w_in cout kh kw sh sw
     ph pw oph opw dh dw;
@@ -244,7 +242,7 @@ fn convt2d_raw_alloc_bias_f32
   let w_out : szp = w0;
   let gy = convt2d_general_alloc_f32 b cin h_in w_in cout kh kw sh sw ph pw
     dh dw h_out w_out gx gw gbias;
-  (| h_out, (| w_out, gy |) |)
+  { h_out = h_out; w_out = w_out; output = gy }
 }
 
 fn convt2d_raw_alloc_zero_f32
@@ -258,16 +256,14 @@ fn convt2d_raw_alloc_zero_f32
   norewrite
   preserves cpu ** on gpu_loc (gx |-> Frac fx sx) **
     on gpu_loc (gw |-> Frac fw sw_l)
-  returns r :
-    (ho : szp { SZ.v ho == convt2d_out_len h_in sh dh kh ph oph } &
-     (wo : szp { SZ.v wo == convt2d_out_len w_in sw dw kw pw opw } &
-      array1 f32 (l1_forward (b * cout * ho * wo))))
+  returns r : convt2d_raw_result b cin h_in w_in cout kh kw sh sw
+    ph pw oph opw dh dw
   ensures exists* (sy : chest1 f32
-    (b * cout * (dfst r) * (dfst (dsnd r)))).
-    on gpu_loc ((dsnd (dsnd r)) |-> sy) **
-    pure (forall (tid : nat{tid < b * cout * (dfst r) * (dfst (dsnd r))}).
+    (b * cout * r.h_out * r.w_out)).
+    on gpu_loc (r.output |-> sy) **
+    pure (forall (tid : nat{tid < b * cout * r.h_out * r.w_out}).
       acc1 sy tid == convT2d_out_at b cin h_in w_in cout kh kw sh sw ph pw
-        dh dw (dfst r) (dfst (dsnd r)) sx sw_l
+        dh dw r.h_out r.w_out sx sw_l
         (mk1 (fun _ -> (zero #f32))) tid)
 {
   guard_convt2d_raw_size b cin h_in w_in cout kh kw sh sw
