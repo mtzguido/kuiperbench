@@ -420,6 +420,51 @@ let to_real_chest_to_seq (#et : Type0) {| scalar et, real_like et |} (#n : nat)
   : Lemma (chest1_to_seq (to_real_chest c) == to_real_seq (chest1_to_seq c))
   = assert (Seq.equal (chest1_to_seq (to_real_chest c)) (to_real_seq (chest1_to_seq c)))
 
+(* Package the concrete reduction witnesses into the row postcondition in a
+   small pure context.  Keeping the existential construction out of the Pulse
+   body avoids asking SMT to rediscover the row alias amid its heap facts. *)
+#push-options "--z3rlimit 30 --z3refresh"
+let l2norm_row_post_witnesses
+  (#bd #d : nat)
+  (sx sx' : Seq.lseq f32 bd)
+  (off : nat{off + d <= bd})
+  (row : Seq.lseq f32 d)
+  (inv sumsq : f32)
+  : Lemma
+    (requires
+      row == Seq.slice sx off (off + d) /\
+      sumsq %~ frobenius_sumsq_r (to_real_seq row) /\
+      inv == rsqrt sumsq /\
+      sx' == KS.seq_blit sx off
+        (frobenius_result #f32 inv #d row) 0 d)
+    (ensures
+      exists (inv' : f32) (sumsq' : f32).
+        (let target_row : Seq.lseq f32 d =
+           Seq.slice sx off (off + d) in
+         sumsq' %~ frobenius_sumsq_r (to_real_seq target_row) /\
+         inv' == rsqrt sumsq' /\
+         sx' == KS.seq_blit sx off
+           (frobenius_result #f32 inv' #d target_row) 0 d))
+  = FStar.Classical.exists_intro
+      (fun (sumsq' : f32) ->
+        sumsq' %~ frobenius_sumsq_r
+          (to_real_seq (Seq.slice sx off (off + d))) /\
+        inv == rsqrt sumsq' /\
+        sx' == KS.seq_blit sx off
+          (frobenius_result #f32 inv #d
+            (Seq.slice sx off (off + d))) 0 d)
+      sumsq;
+    FStar.Classical.exists_intro
+      (fun (inv' : f32) -> exists (sumsq' : f32).
+        sumsq' %~ frobenius_sumsq_r
+          (to_real_seq (Seq.slice sx off (off + d))) /\
+        inv' == rsqrt sumsq' /\
+        sx' == KS.seq_blit sx off
+          (frobenius_result #f32 inv' #d
+            (Seq.slice sx off (off + d))) 0 d)
+      inv
+#pop-options
+
 (* Device-to-device offset blit at the chest level.  Bridges the raw
    [Kuiper.KB.Compat.Array.gpu_memcpy_device_to_device'] primitive (which works on the backing
    [core] larrays) through [tensor_concr]/[tensor_abs]/[tensor_abs'] and
@@ -500,12 +545,11 @@ fn l2norm_row
   with ss1. assert (on gpu_loc (scratch |-> reveal ss1));
   (* [seq_blit ss 0 sx rv_off d] fully overwrites the length-d scratch,
      so it equals [slice sx rv_off (rv_off+d)] -- the row. *)
-  let row_g : erased (lseq f32 d) =
-    hide (Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d));
   Seq.lemma_eq_intro
     (KS.seq_blit (chest1_to_seq ss) 0 (chest1_to_seq sx) rv_off d)
-    (reveal row_g);
-  assert pure (chest1_to_seq (reveal ss1) == reveal row_g);
+    (Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d));
+  assert pure (chest1_to_seq (reveal ss1) ==
+    Seq.slice (chest1_to_seq sx) rv_off (SZ.v rv_off + SZ.v d));
 
   (* Sum of squares over the row (device tree-reduce with a square pre-map). *)
   sq_step_approx_forall #f32 ();
@@ -528,32 +572,24 @@ fn l2norm_row
   chest_map_to_seq (smul_step inv) (reveal ss1);
   chest_map_to_seq sq_step_r vr;
   to_real_chest_to_seq (reveal ss1);
-  assert pure (chest1_to_seq vr == to_real_seq (reveal row_g));
-  assert pure (sumsq %~ frobenius_sumsq_r (to_real_seq (reveal row_g)));
+  assert pure (chest1_to_seq vr == to_real_seq (chest1_to_seq (reveal ss1)));
+  assert pure (sumsq %~ frobenius_sumsq_r
+    (to_real_seq (chest1_to_seq (reveal ss1))));
   assert pure (
     chest1_to_seq (chest_map (smul_step inv) (reveal ss1)) ==
-    frobenius_result #f32 inv #d (reveal row_g));
-  FStar.Classical.exists_intro
-    (fun (sumsq' : f32) ->
-      sumsq' %~ frobenius_sumsq_r (to_real_seq (reveal row_g)) /\
-      inv == rsqrt sumsq' /\
-      chest1_to_seq (reveal sx') ==
-        KS.seq_blit (chest1_to_seq sx) rv_off
-          (frobenius_result #f32 inv #d (reveal row_g)) 0 d)
-    sumsq;
-  FStar.Classical.exists_intro
-    (fun (inv' : f32) -> exists (sumsq' : f32).
-      sumsq' %~ frobenius_sumsq_r (to_real_seq (reveal row_g)) /\
-      inv' == rsqrt sumsq' /\
-      chest1_to_seq (reveal sx') ==
-        KS.seq_blit (chest1_to_seq sx) rv_off
-          (frobenius_result #f32 inv' #d (reveal row_g)) 0 d)
-    inv;
+    frobenius_result #f32 inv #d (chest1_to_seq (reveal ss1)));
   FStar.Seq.lemma_len_slice (chest1_to_seq sx)
     rv_off (SZ.v rv_off + SZ.v d);
   assert pure (SZ.v rv_off + SZ.v d - SZ.v rv_off == SZ.v d);
   assert pure (Seq.length (Seq.slice (chest1_to_seq sx)
     rv_off (SZ.v rv_off + SZ.v d)) == SZ.v d);
+  assert pure (inv == rsqrt sumsq);
+  assert pure (chest1_to_seq (reveal sx') ==
+    KS.seq_blit (chest1_to_seq sx) rv_off
+      (frobenius_result #f32 inv #d (chest1_to_seq (reveal ss1))) 0 d);
+  l2norm_row_post_witnesses
+    (chest1_to_seq sx) (chest1_to_seq (reveal sx'))
+    rv_off (chest1_to_seq (reveal ss1)) inv sumsq;
   ()
 }
 
