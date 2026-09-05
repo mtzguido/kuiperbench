@@ -34,17 +34,19 @@ let l2_bcm_pages (b : nat) (hw : nat{hw > 0}) (c : nat)
         (* Step 1: deduce rem1 = rem2 via mod hw *)
         FStar.Math.Lemmas.lemma_mod_plus rem1 (q1 * c + ci1) hw;
         FStar.Math.Lemmas.lemma_mod_plus rem2 (q2 * c + ci2) hw;
-        FStar.Math.Lemmas.distributivity_add_left (q1 * c) ci1 hw;
-        FStar.Math.Lemmas.distributivity_add_left (q2 * c) ci2 hw;
         FStar.Math.Lemmas.small_mod rem1 hw;
         FStar.Math.Lemmas.small_mod rem2 hw;
+        assert (rem1 + (q1 * c + ci1) * hw == q1 * c * hw + ci1 * hw + rem1);
+        assert (rem2 + (q2 * c + ci2) * hw == q2 * c * hw + ci2 * hw + rem2);
         assert (rem1 = rem2);
         (* Step 2: cancel rem, divide by hw: q1*c + ci1 = q2*c + ci2 *)
         assert ((q1*c + ci1) * hw = (q2*c + ci2) * hw);
         assert (q1*c + ci1 = q2*c + ci2);
         (* Step 3: deduce ci1 = ci2 via mod c *)
-        FStar.Math.Lemmas.lemma_mod_plus (q1*c + ci1) 1 c;
-        FStar.Math.Lemmas.lemma_mod_plus (q2*c + ci2) 1 c;
+        FStar.Math.Lemmas.lemma_mod_plus ci1 q1 c;
+        FStar.Math.Lemmas.lemma_mod_plus ci2 q2 c;
+        FStar.Math.Lemmas.small_mod ci1 c;
+        FStar.Math.Lemmas.small_mod ci2 c;
         assert (ci1 = ci2);
         (* Step 4: q1 = q2 *)
         assert (q1*c = q2*c);

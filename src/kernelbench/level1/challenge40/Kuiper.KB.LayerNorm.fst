@@ -715,6 +715,10 @@ let transfer_rln_forall
 
 (* Extend the per-row normalisation invariant from vi rows to vi+1. *)
 #push-options "--z3rlimit 60"
+let layer_nat_squeeze (r vi : nat)
+  : Lemma (requires ~(r < vi) /\ r < vi + 1) (ensures r == vi)
+  = ()
+
 let extend_row_ln_forall
     (bn n b vi : nat)
     (gamma beta : Seq.lseq f32 n)
@@ -738,7 +742,7 @@ let extend_row_ln_forall
         (ensures r * n + n <= bn /\
                  row_layer_normalized sx sx' gamma beta (r * n) eps inv_n) =
       if r < vi then ()
-      else ()  (* r = vi *)
+      else layer_nat_squeeze r vi
     in
     Classical.forall_intro aux
 #pop-options
