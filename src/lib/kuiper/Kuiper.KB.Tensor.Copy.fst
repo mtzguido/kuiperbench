@@ -31,7 +31,7 @@ fn copy_alloc
   map_loc gpu_loc #(dst |-> sd) #(core dst |-> to_seq l sd)
     fn _ { tensor_concr dst; };
 
-  Kuiper.Array.Core.gpu_memcpy_device_to_device
+  Kuiper.Array.Core.memcpy_device_to_device
     (core dst) (core src) n;
 
   (* [Tensor.Layout] exposes the two sequence conversions through the

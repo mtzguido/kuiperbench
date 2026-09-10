@@ -198,7 +198,7 @@ fn copy1_f32
     #(src |-> Frac f ss)
     #(core src |-> Frac f (to_seq (l1_forward n) ss))
     fn _ { tensor_concr src; };
-  gpu_memcpy_device_to_device (core dst) (core src) n;
+  memcpy_device_to_device (core dst) (core src) n;
   map_loc gpu_loc
     #(core src |-> Frac f (to_seq (l1_forward n) ss))
     #(src |-> Frac f ss)

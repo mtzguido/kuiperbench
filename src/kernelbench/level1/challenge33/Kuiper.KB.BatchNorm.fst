@@ -150,7 +150,7 @@ let ematrix_row_upd_slice_other (#et:Type) (#r #cc:nat)
 (* From the CPU, read one element of a flat rank-1 [array1] under [gpu_loc].
    Direct replacement for the deleted [Kuiper.Array1.arr_read_1]: copies the
    single device element into a length-1 host [vec] via the sanctioned
-   [gpu_memcpy_device_to_host'] primitive, reads it, and restores the tensor
+   [memcpy_device_to_host'] primitive, reads it, and restores the tensor
    view.  Specialised to [f32] to keep instance resolution simple. *)
 inline_for_extraction noextract
 fn t_read_1
@@ -169,7 +169,7 @@ fn t_read_1
     #(a |-> Frac f va)
     #(core a |-> Frac f (to_seq (l1_forward len) va))
     fn _ { tensor_concr a; };
-  gpu_memcpy_device_to_host' #_ #_ #(hide 1) ca 0sz (core a) i 1sz;
+  memcpy_device_to_host' #_ #_ #(hide 1) ca 0sz (core a) i 1sz;
   let x = Pulse.Lib.Vec.(ca.(0sz));
   Pulse.Lib.Vec.free ca;
   map_loc gpu_loc
