@@ -18,8 +18,8 @@ module Kuiper.KB.LayerNorm
    Per-row uses the device-to-device offset memcpy primitive to copy a
    row in/out of a fixed-size scratch buffer.  γ and β are held with
    fractional permission throughout (read-only across the row loop).
-   The direct real proof uses the temporary [rsqrt_approx] compatibility
-   assumption documented in the repository patch.  The existing
+   The direct real proof uses the packaged
+   [Kuiper.Approximates.rsqrt_approx] law.  The existing
    [map_gpu2] sendability debt is documented in the module's skeptic. *)
 
 #lang-pulse

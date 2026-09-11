@@ -13,7 +13,6 @@ module Copy = Kuiper.KB.Tensor.Copy
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 
 (* Pointwise multiplication transports approximation through the final
    row-scaling pass. *)
@@ -233,7 +232,7 @@ let l2_loop_step_lemma
             Seq.slice sx_post (r * d) (r * d + d) ==
             Seq.slice sx_pre  (r * d) (r * d + d)))
       = l2_blit_step_lemma b d sx sx_pre sx_post vi inv sumsq;
-        RsqrtApprox.rsqrt_approx sumsq rss;
+        rsqrt_approx sumsq rss;
         to_real_seq_is_approx row;
         frobenius_result_approx inv (FStar.Math.Sqrt.rsqrt rss) row rrow
     in

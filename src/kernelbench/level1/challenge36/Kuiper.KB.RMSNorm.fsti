@@ -18,8 +18,8 @@ module Kuiper.KB.RMSNorm
      2. map_gpu (s ↦ rsqrt(s/C+ε)) -- inv_rms per row
      3. row_scale                   -- in-place scale each row
 
-   The reciprocal-square-root approximation law is supplied by the temporary
-   local [Kuiper.KB.Compat.RsqrtApprox] compatibility assumption. *)
+   The reciprocal-square-root approximation law is supplied by the packaged
+   [Kuiper.Approximates.rsqrt_approx]. *)
 
 #lang-pulse
 open Kuiper

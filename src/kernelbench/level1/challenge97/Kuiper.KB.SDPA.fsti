@@ -32,8 +32,8 @@ module Kuiper.KB.SDPA
    counterparts by the corresponding [%~] laws.  No floating intermediate
    appears in the public functional claim.
 
-   The direct real scale proof uses the temporary
-   [Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] compatibility assumption. *)
+   The direct real scale proof uses the packaged
+   [Kuiper.Approximates.rsqrt_approx] law. *)
 
 #lang-pulse
 open Kuiper

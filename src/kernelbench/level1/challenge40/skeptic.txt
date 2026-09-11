@@ -16,11 +16,9 @@ The entry point computes 1/n internally and proves its real approximation;
 the bridge does not supply it.
 
 The public [layernorm_domain] precondition requires every real
-[var + eps] to be positive.  On that domain, the temporary
-[Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] assumption connects the float
-[rsqrt] operation to [FStar.Math.Sqrt.rsqrt].  This compatibility law is
-proposed for upstream Kuiper and is the numerical proof's explicit local
-trust debt.
+[var + eps] to be positive.  On that domain, the packaged
+[Kuiper.Approximates.rsqrt_approx] law connects the float
+[rsqrt] operation to [FStar.Math.Sqrt.rsqrt].
 
 Proof shape
 -----------
@@ -33,8 +31,8 @@ Inherited debt
 --------------
 [Kuiper.Kernel.Map.map_gpu2] uses [magic ()] for its kernel descriptor's
 sendability fields, following the existing plain-kernel pattern.  The
-LayerNorm-specific numerical proof adds no further magic or admit, but it
-does depend on the local rsqrt compatibility assumption described above.
+LayerNorm-specific numerical proof adds no further magic or admit and uses
+the packaged rsqrt approximation law described above.
 
 Edge cases
 ----------
