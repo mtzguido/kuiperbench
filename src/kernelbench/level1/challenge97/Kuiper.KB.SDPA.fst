@@ -25,8 +25,8 @@ module Kuiper.KB.SDPA
    the analogues of the Array3<->Array2 reshapes in Kuiper.KB.MatmulND, plus a
    new Array3<->Array1 reshape for the scalar-multiply.
 
-   The direct real scale proof uses the temporary
-   [Kuiper.KB.Compat.RsqrtApprox.rsqrt_approx] compatibility assumption. *)
+   The direct real scale proof uses the packaged
+   [Kuiper.Approximates.rsqrt_approx] law. *)
 
 #lang-pulse
 open Kuiper
@@ -41,7 +41,6 @@ module SMul = Kuiper.KB.ScalarMul
 module MS = Kuiper.Spec.GEMM
 module MU = Kuiper.Kernel.GEMM.Util
 module BG = Kuiper.Kernel.GEMM.Naive2
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 module RealSqrt = FStar.Math.Sqrt
 open Kuiper.KB.BatchedGEMM { batched_matmul, batched_gemm_f32 }
 open Kuiper.Injection
@@ -889,7 +888,7 @@ let sdpa_scale_approx (d : szp)
     let df : f32 = of_int d64 in
     of_int_approx #f32 d64;
     assert (df %~ FStar.Real.of_int d);
-    RsqrtApprox.rsqrt_approx df (FStar.Real.of_int d)
+    rsqrt_approx df (FStar.Real.of_int d)
 
 let batched_matmul_approx
   (#batch #rows #shared #cols:nat)

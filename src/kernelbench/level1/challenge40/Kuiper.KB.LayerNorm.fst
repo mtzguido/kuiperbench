@@ -16,7 +16,6 @@ module Map = Kuiper.Kernel.Map
 module KBMap = Kuiper.KB.Compat.Map
 module HRed = Kuiper.Kernel.HReduce
 module KS = Kuiper.Seq.Common
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 
 (* Proof-local description of the concrete floating intermediates.  Its final
    conjunct records the direct-real public row contract, so none of these
@@ -85,7 +84,7 @@ let row_layer_real_from_witnesses
     to_real_ok eps;
     a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
     assert (var_eps %~ rarg);
-    RsqrtApprox.rsqrt_approx var_eps rarg;
+    rsqrt_approx var_eps rarg;
     let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
     assert (inv %~ rinv);
     a_mul mean inv rmean rinv;
