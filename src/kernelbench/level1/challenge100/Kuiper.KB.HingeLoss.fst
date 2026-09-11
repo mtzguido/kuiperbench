@@ -108,7 +108,7 @@ fn copy_row_major_f32
     #(src |-> Frac f ss)
     #(core src |-> Frac f (to_seq (l2_row_major b n) ss))
     fn _ { tensor_concr src; };
-  gpu_memcpy_device_to_device (core dst) (core src) elems;
+  memcpy_device_to_device (core dst) (core src) elems;
   map_loc gpu_loc
     #(core src |-> Frac f (to_seq (l2_row_major b n) ss))
     #(src |-> Frac f ss)

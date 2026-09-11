@@ -54,7 +54,7 @@ let seq_map_id_eq (#a:Type) (s : Seq.seq a)
 
 (* ─────────────────────────────────────────────────────────────────────
    chest/seq bridge lemmas + tensor-level device memcpy helpers.  These
-   wrap the core [larray] [gpu_memcpy_*] primitives with the
+   wrap the core [larray] [memcpy_*] primitives with the
    [tensor_concr]/[tensor_abs] bridge (cf. Kuiper.Kernel.LogSoftmax),
    exposing postconditions in [chest1_to_seq] / [acc1] terms.  (Same
    helper block as in Kuiper.KB.CrossEntropyLoss; duplicated here because
@@ -144,7 +144,7 @@ fn t_memcpy_h2d
 {
   map_loc gpu_loc #(dst |-> gv) #(core dst |-> to_seq (l1_forward sz) gv)
     fn _ { tensor_concr dst; };
-  gpu_memcpy_host_to_device (core dst) src cnt;
+  memcpy_host_to_device (core dst) src cnt;
   let vl : erased (Seq.lseq a sz) = hide (reveal v <: Seq.lseq a sz);
   map_loc gpu_loc #(core dst |-> reveal vl) #(dst |-> from_seq (l1_forward sz) vl)
     fn _ {

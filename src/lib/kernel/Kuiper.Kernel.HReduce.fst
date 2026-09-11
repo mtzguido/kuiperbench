@@ -842,7 +842,7 @@ fn kf
     (**)strided_sum_is_sum pre_map_r (chest1_to_seq vr) nth;
     (**)chest_map_to_seq_map pre_map_r vr;
     (**)assert (pure (Seq.equal (Seq.slice (vr_partial pre_map_r (chest1_to_seq vr) nth) 0 nth) (vr_partial pre_map_r (chest1_to_seq vr) nth)));
-    gpu_write out (array1_read_from_slice sa 0sz);
+    Kuiper.Ref.write out (array1_read_from_slice sa 0sz);
     with ss. assert array1_pts_to_slice sa 0 nth ss;
     unfold array1_pts_to_slice sa;
     let css : chest1 et nth = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
@@ -1114,13 +1114,13 @@ fn reduce
   ensures
     pure (res %~ rsum (chest1_to_seq (chest_map pre_map_r vr)))
 {
-  let out = Kuiper.Ref.gpu_alloc0 #et ();
+  let out = Kuiper.Ref.alloc0 #et ();
   launch_sync (kernel pre_map pre_map_r nth lena a vr out);
 
   (* Bring back out result, free swap. *)
   let mut hout : et = zero #et;
-  Kuiper.Ref.gpu_memcpy_device_to_host hout out;
-  Kuiper.Ref.gpu_free out;
+  Kuiper.Ref.memcpy_device_to_host hout out;
+  Kuiper.Ref.free out;
 
   !hout;
 }
