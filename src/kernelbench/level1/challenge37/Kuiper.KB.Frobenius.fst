@@ -10,7 +10,6 @@ open Kuiper.Spec.Frobenius
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 module Copy = Kuiper.KB.Tensor.Copy
 
 (* Pointwise approximation: [square x %~ sq_step_r r] whenever
@@ -102,7 +101,7 @@ fn frobenius
   to_real_chest_to_seq (reveal va);
   let rss = frobenius_sumsq_r (to_real_seq (chest1_to_seq (reveal va)));
   assert pure (sumsq %~ rss);
-  RsqrtApprox.rsqrt_approx sumsq rss;
+  rsqrt_approx sumsq rss;
   to_real_seq_is_approx (chest1_to_seq (reveal va));
   frobenius_result_approx inv_norm (FStar.Math.Sqrt.rsqrt rss)
     (chest1_to_seq (reveal va))

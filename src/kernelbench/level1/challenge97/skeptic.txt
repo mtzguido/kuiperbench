@@ -27,8 +27,7 @@ real inputs; no real-valued intermediate existential mediates it.
 Numerical scope
 ---------------
 The scale is computed inside Kuiper as 1/sqrt(D). Its link to
-FStar.Math.Sqrt.rsqrt uses the repository's temporary local compatibility
-assumption pending the corresponding Kuiper floating-intrinsic theorem.
+FStar.Math.Sqrt.rsqrt uses the packaged Kuiper.Approximates.rsqrt_approx law.
 Softmax and the complete result use Kuiper's `%~` relation. Concrete numerical
 error bounds and guarantees for exceptional NaN/Inf behavior are intentionally
 out of scope.

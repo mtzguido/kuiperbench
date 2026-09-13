@@ -7,8 +7,7 @@ real-valued Frobenius normalization of the input.  The floating sum and
 reciprocal square root remain proof-local; there is no pure existential.
 
 (b) Is the proof genuine? YES. The challenge contains no local admit or
-magic. It uses the documented temporary `rsqrt_approx` compatibility
-assumption pending the corresponding upstream Kuiper law.
+magic. It uses the packaged `Kuiper.Approximates.rsqrt_approx` law.
 The proof chain is real: HReduce.reduce's postcondition gives
 res %~ rsum (seq_map pre_map_r vr); we instantiate pre_map = sq_step,
 pre_map_r = sq_step_r and discharge sq_step %~ sq_step_r by lifting

@@ -19,8 +19,7 @@ module Kuiper.KB.MeanVarNorm
      - Kuiper.Spec.Frobenius.affine_step (apply (inv, -mean*inv) via map_gpu)
    Per row uses the device-to-device offset memcpy primitive to copy a
    row in/out of a fixed-size scratch buffer.  Its direct real proof uses
-   the temporary [rsqrt_approx] compatibility assumption documented in the
-   repository patch. *)
+   the packaged [Kuiper.Approximates.rsqrt_approx] law. *)
 
 #lang-pulse
 open Kuiper

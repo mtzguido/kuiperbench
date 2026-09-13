@@ -14,8 +14,8 @@ public contract.
 "assume\|admit\|magic\|admit_smt_queries" turns up nothing in
 Kuiper.Spec.L2Norm.{fst,fsti} or Kuiper.KB.L2Norm.fst.  The proof
 mirrors Frobenius for the per-row body (sq_step %~ sq_step_r via
-a_mul; HReduce yields sumsq %~ frobenius_sumsq_r; the local
-rsqrt-approximation bridge connects that result to the mathematical
+a_mul; HReduce yields sumsq %~ frobenius_sumsq_r; the packaged
+rsqrt-approximation law connects that result to the mathematical
 reciprocal square root; map_gpu lays down the approximating result).
 The loop's invariant tracks "rows < vi
 already L2-normalised" and "rows ≥ vi unchanged from input"; the

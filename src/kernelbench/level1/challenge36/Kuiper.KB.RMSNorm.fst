@@ -6,8 +6,8 @@ module Kuiper.KB.RMSNorm
    Launch 2: map_gpu inv_rms_fn      → sum_sq[i]  = rsqrt(sum_sq[i]/C+ε)
    Launch 3: row_scale sum_sq x      → x[i,c] ← x[i,c] * sum_sq[i]
 
-   The direct real proof uses the temporary [rsqrt_approx]
-   compatibility assumption documented in the repository patch. *)
+   The direct real proof uses the packaged
+   [Kuiper.Approximates.rsqrt_approx] law. *)
 
 #lang-pulse
 open Kuiper
@@ -23,7 +23,6 @@ module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
 module RowScale = Kuiper.Kernel.RowScale
 module KS = Kuiper.Seq.Common
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 module Copy = Kuiper.KB.Tensor.Copy
 
 (* post_map for inv-rms.  The pre_map for the reduction itself is
@@ -77,7 +76,7 @@ let rmsnorm_row_aux
     assert (rss *. (1.0R /. FStar.Real.of_int c_n) ==
             rss /. FStar.Real.of_int c_n);
     assert (rarg >. 0.0R);
-    RsqrtApprox.rsqrt_approx (add (mul sumsq inv_c) eps) rarg;
+    rsqrt_approx (add (mul sumsq inv_c) eps) rarg;
     let rinv = FStar.Math.Sqrt.rsqrt rarg in
     let out = Kuiper.Kernel.RowScale.s_row_scale sfac sx in
     let aux (j:nat{j<c_n}) : Lemma

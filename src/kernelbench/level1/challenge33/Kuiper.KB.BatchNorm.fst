@@ -15,7 +15,6 @@ open Kuiper.Spec.BatchNorm
 module SZ = Kuiper.SizeT
 module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 module Copy = Kuiper.KB.Tensor.Copy
 module RealSqrt = FStar.Math.Sqrt
 module KS = Kuiper.Seq.Common
@@ -370,7 +369,13 @@ let row_batch_normalized_extend_forall
       (ensures
         forall (ci : nat). ci < vi + 1 ==>
           row_batch_normalized eps inv_n rx gamma beta sx_new ci)
-  = ()
+  = introduce forall (ci : nat). ci < vi + 1 ==>
+      row_batch_normalized eps inv_n rx gamma beta sx_new ci
+    with introduce _ ==> _
+    with (
+      if ci < vi then ()
+      else assert (ci == vi)
+    )
 
 (* Per-channel body: extract row, two reductions for sum and sumsq, two
    in-place affines (one for (x-μ)/σ, one for γ·+β), restore row. *)
@@ -492,7 +497,7 @@ fn batchnorm_channel
   a_mul mean mean rmean rmean;
   sub_approx m2 (mul mean mean) rm2 (rmean *. rmean);
   a_add var eps rvar (reveal reps);
-  RsqrtApprox.rsqrt_approx var_eps positive_rvar_eps;
+  rsqrt_approx var_eps positive_rvar_eps;
   a_mul mean inv rmean rinv;
   sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
 

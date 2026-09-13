@@ -22,8 +22,8 @@ The only non-trivial step is `row_reduce_partial_sq_approx`
 (Kuiper.Spec.RMSNorm.fst), which inducts on `row_reduce_partial`
 to re-express it as `seq_fold_left add zero (seq_map sq_step
 row)` and discharges the approx via `sum_is_approx`.  There is no local
-`admit` or `magic`; the proof uses the documented temporary
-`rsqrt_approx` compatibility assumption pending its upstream Kuiper law.
+`admit` or `magic`; the proof uses the packaged
+`Kuiper.Approximates.rsqrt_approx` law.
 
 (c) Edge cases
 --------------

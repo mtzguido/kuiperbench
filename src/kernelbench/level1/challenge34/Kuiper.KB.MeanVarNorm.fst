@@ -10,7 +10,6 @@ open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.MeanVarNorm
 module SZ = Kuiper.SizeT
-module RsqrtApprox = Kuiper.KB.Compat.RsqrtApprox
 module TensorCopy = Kuiper.KB.Tensor.Copy
 
 (* Proof-local description of the concrete floating intermediates.  The
@@ -73,7 +72,7 @@ let row_mean_var_real_from_witnesses
     to_real_ok eps;
     a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
     assert (var_eps %~ rarg);
-    RsqrtApprox.rsqrt_approx var_eps rarg;
+    rsqrt_approx var_eps rarg;
     let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
     assert (inv %~ rinv);
     a_mul mean inv rmean rinv;
