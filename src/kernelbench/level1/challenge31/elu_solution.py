@@ -20,8 +20,9 @@ kuiper_elu = load(
 )
 
 class ModelNew(nn.Module):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, alpha: float = 1.0):
         super().__init__()
+        self.alpha = alpha
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return kuiper_elu.kuiper_elu(x)
+        return kuiper_elu.kuiper_elu(x, self.alpha)

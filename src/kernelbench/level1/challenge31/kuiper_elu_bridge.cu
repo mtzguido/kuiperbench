@@ -8,7 +8,7 @@
 #include "Kuiper_KB_Elu.h"
 #include "Kuiper_KB_Elu.cu"
 
-torch::Tensor kuiper_elu_cuda(torch::Tensor X) {
+torch::Tensor kuiper_elu_cuda(torch::Tensor X, double alpha) {
     TORCH_CHECK(X.is_cuda() && X.is_contiguous(),
                 "kuiper #31: expected a contiguous CUDA tensor");
     TORCH_CHECK(X.scalar_type() == torch::kFloat32 ||
@@ -20,17 +20,18 @@ torch::Tensor kuiper_elu_cuda(torch::Tensor X) {
 
     const c10::cuda::CUDAGuard device_guard(X.device());
     if (X.scalar_type() == torch::kFloat32) {
-        float *output = Kuiper_KB_Elu_elu_alloc_f32(
-            (uint32_t)numel, X.data_ptr<float>());
+        float *output = Kuiper_KB_Elu_elu_alloc_f64_f32(
+            alpha, (uint32_t)numel, X.data_ptr<float>());
         return torch::from_blob(
             output, X.sizes(), [](void *p) { cudaFree(p); }, X.options());
     }
     double *output = Kuiper_KB_Elu_elu_alloc_f64(
-        (uint32_t)numel, X.data_ptr<double>());
+        alpha, (uint32_t)numel, X.data_ptr<double>());
     return torch::from_blob(
         output, X.sizes(), [](void *p) { cudaFree(p); }, X.options());
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-    m.def("kuiper_elu", &kuiper_elu_cuda, "Kuiper verified elu");
+    m.def("kuiper_elu", &kuiper_elu_cuda, "Kuiper verified elu",
+          pybind11::arg("x"), pybind11::arg("alpha") = 1.0);
 }

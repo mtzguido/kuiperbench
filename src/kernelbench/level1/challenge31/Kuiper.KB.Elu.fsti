@@ -4,34 +4,49 @@ module Kuiper.KB.Elu
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Seq.Common
+open Kuiper.Float.Casts
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 inline_for_extraction
-let elu_step (#t:Type0) {| floating t |} (x : t) : t =
-  let alpha = one in
+let elu_step (#t:Type0) {| floating t |} (alpha x : t) : t =
   if gt x zero then x else mul alpha (sub (fexp x) one)
 
 inline_for_extraction noextract
 type elu_fw_ty (t:Type0) {| floating t |} =
-  fn (lena : szp { lena <= max_blocks * max_threads })
+  fn (alpha : t)
+     (lena : szp { lena <= max_blocks * max_threads })
      (a : array1 t (l1_forward lena) { is_global a })
      (#s : chest1 t lena)
      preserves cpu
      requires  on gpu_loc (a |-> s)
-     ensures   on gpu_loc (a |-> chest_map elu_step s)
+     ensures   on gpu_loc (a |-> chest_map (elu_step alpha) s)
 
 val elu_fw_f32 : elu_fw_ty f32
 val elu_fw_f64 : elu_fw_ty f64
 
 inline_for_extraction noextract
 type elu_alloc_ty (t:Type0) {| floating t |} =
-  fn (lena : szp { lena <= max_blocks * max_threads })
+  fn (alpha : t)
+     (lena : szp { lena <= max_blocks * max_threads })
      (input : array1 t (l1_forward lena) { is_global input })
      (#s : chest1 t lena)
      (#f : perm)
      norewrite
      preserves cpu ** on gpu_loc (input |-> Frac f s)
      returns output : array1 t (l1_forward lena)
-     ensures on gpu_loc (output |-> mk1 (fun i -> elu_step (acc1 s i)))
+     ensures on gpu_loc (output |-> mk1 (fun i -> elu_step alpha (acc1 s i)))
 
 val elu_alloc_f32 : elu_alloc_ty f32
 val elu_alloc_f64 : elu_alloc_ty f64
+
+(* Convert the Python scalar inside the verification boundary. *)
+fn elu_alloc_f64_f32
+  (alpha : f64)
+  (lena : szp { lena <= max_blocks * max_threads })
+  (input : array1 f32 (l1_forward lena) { is_global input })
+  (#s : chest1 f32 lena)
+  (#f : perm)
+  norewrite
+  preserves cpu ** on gpu_loc (input |-> Frac f s)
+  returns output : array1 f32 (l1_forward lena)
+  ensures on gpu_loc
+    (output |-> mk1 (fun i -> elu_step (fcast alpha) (acc1 s i)))
