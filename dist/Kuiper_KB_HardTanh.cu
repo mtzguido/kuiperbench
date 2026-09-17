@@ -10,9 +10,10 @@ __hoisted_htanh_fw_f32_0(uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = 1.0f < x          ? 1.0f
-                                              : x < 0.0f - 1.0f ? 0.0f - 1.0f
-                                                                : x;
+        a[1024U * blockIdx.x + threadIdx.x] = (float) 1LL < x ? (float) 1LL
+                                              : x < (float) 0LL - (float) 1LL
+                                                  ? (float) 0LL - (float) 1LL
+                                                  : x;
     }
 }
 
@@ -35,9 +36,10 @@ __hoisted_htanh_fw_f64_0(uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = 1.0 < x         ? 1.0
-                                              : x < 0.0 - 1.0 ? 0.0 - 1.0
-                                                              : x;
+        a[1024U * blockIdx.x + threadIdx.x] = (double) 1LL < x ? (double) 1LL
+                                              : x < (double) 0LL - (double) 1LL
+                                                  ? (double) 0LL - (double) 1LL
+                                                  : x;
     }
 }
 
@@ -60,10 +62,10 @@ __hoisted_htanh_alloc_f32_0(uint32_t lena, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
-        output[1024U * blockIdx.x + threadIdx.x] = 1.0f < y ? 1.0f
-                                                   : y < 0.0f - 1.0f
-                                                       ? 0.0f - 1.0f
-                                                       : y;
+        output[1024U * blockIdx.x + threadIdx.x] =
+            (float) 1LL < y                 ? (float) 1LL
+            : y < (float) 0LL - (float) 1LL ? (float) 0LL - (float) 1LL
+                                            : y;
     }
 }
 
@@ -92,9 +94,10 @@ __hoisted_htanh_alloc_f64_0(uint32_t lena, double *input, double *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
-        output[1024U * blockIdx.x + threadIdx.x] = 1.0 < y         ? 1.0
-                                                   : y < 0.0 - 1.0 ? 0.0 - 1.0
-                                                                   : y;
+        output[1024U * blockIdx.x + threadIdx.x] =
+            (double) 1LL < y                  ? (double) 1LL
+            : y < (double) 0LL - (double) 1LL ? (double) 0LL - (double) 1LL
+                                              : y;
     }
 }
 

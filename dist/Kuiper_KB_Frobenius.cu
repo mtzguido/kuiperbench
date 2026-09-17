@@ -9,7 +9,7 @@ static void
 __hoisted_frobenius_fw_f32_0(uint32_t lena, float *a, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < lena; idx += 1024U) {
         float v = a[idx];
@@ -49,7 +49,7 @@ void Kuiper_KB_Frobenius_frobenius_fw_f32(uint32_t lena, float *a)
     KPR_KCALL(__hoisted_frobenius_fw_f32_0, 1U, 1024U, 4096U, s0, lena, a, out);
     MUST(cudaStreamSynchronize(s0));
     MUST(cudaStreamDestroy(s0));
-    float hout = 0.0f;
+    float hout = (float) 0LL;
     MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
     MUST(cudaFree(out));
     float inv_norm = rsqrtf(hout);

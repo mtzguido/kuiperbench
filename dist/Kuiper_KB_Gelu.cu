@@ -11,8 +11,8 @@ __hoisted_gelu_fw_f32_0(uint32_t lena, float *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            1.0f / (float) 2LL * x *
-            (1.0f + erff(x * (1.0f / sqrtf((float) 2LL))));
+            (float) 1LL / (float) 2LL * x *
+            ((float) 1LL + erff(x * ((float) 1LL / sqrtf((float) 2LL))));
     }
 }
 
@@ -36,8 +36,8 @@ __hoisted_gelu_fw_f64_0(uint32_t lena, double *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            1.0 / (double) 2LL * x *
-            (1.0 + erf(x * (1.0 / sqrt((double) 2LL))));
+            (double) 1LL / (double) 2LL * x *
+            ((double) 1LL + erf(x * ((double) 1LL / sqrt((double) 2LL))));
     }
 }
 
@@ -61,8 +61,8 @@ __hoisted_gelu_alloc_f32_0(uint32_t lena, float *input, float *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            1.0f / (float) 2LL * y *
-            (1.0f + erff(y * (1.0f / sqrtf((float) 2LL))));
+            (float) 1LL / (float) 2LL * y *
+            ((float) 1LL + erff(y * ((float) 1LL / sqrtf((float) 2LL))));
     }
 }
 
@@ -92,8 +92,8 @@ __hoisted_gelu_alloc_f64_0(uint32_t lena, double *input, double *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            1.0 / (double) 2LL * y *
-            (1.0 + erf(y * (1.0 / sqrt((double) 2LL))));
+            (double) 1LL / (double) 2LL * y *
+            ((double) 1LL + erf(y * ((double) 1LL / sqrt((double) 2LL))));
     }
 }
 

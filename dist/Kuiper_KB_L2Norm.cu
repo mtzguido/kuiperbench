@@ -9,7 +9,7 @@ static void
 __hoisted_l2norm_fw_f32_0(uint32_t d, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < d; idx1 += 1024U) {
         float v = scratch[idx1];
@@ -57,7 +57,7 @@ void Kuiper_KB_L2Norm_l2norm_fw_f32(uint32_t b, uint32_t d, float *x)
                   out);
         MUST(cudaStreamSynchronize(s10));
         MUST(cudaStreamDestroy(s10));
-        float hout = 0.0f;
+        float hout = (float) 0LL;
         MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
         MUST(cudaFree(out));
         float inv = rsqrtf(hout);

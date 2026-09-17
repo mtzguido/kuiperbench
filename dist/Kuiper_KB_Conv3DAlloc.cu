@@ -28,7 +28,7 @@ __hoisted_conv3d_general_f32_0(uint32_t b, uint32_t cin, uint32_t d_in,
         uint32_t od_s = r2 / how * stride;
         uint32_t oh_s = r3 / w_out * stride;
         uint32_t ow_s = r3 % w_out * stride;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < n_taps; k++) {
             uint32_t kk = k;
@@ -50,9 +50,9 @@ __hoisted_conv3d_general_f32_0(uint32_t b, uint32_t cin, uint32_t d_in,
                           ? gx[(((bi * cin + ic) * d_in + di) * h_in + hi) *
                                    w_in +
                                wi]
-                          : 0.0f;
+                          : (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite *
                    gw[(((oc * cin + ic) * kd + kd_i) * kh + kh_i) * kw + kw_i];
         }
@@ -202,7 +202,7 @@ static void
 __hoisted_conv3d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < cout)
-        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+        gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
 Kuiper_KB_Conv3DAlloc_conv3d_raw_result

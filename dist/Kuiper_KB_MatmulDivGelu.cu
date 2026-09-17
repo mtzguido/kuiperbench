@@ -13,7 +13,7 @@ __hoisted_matmul_div_gelu_f32_0(uint32_t batch, uint32_t input, uint32_t out,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / out;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % out;
         uint32_t k = 0U;
-        float sum = 0.0f;
+        float sum = (float) 0LL;
         for (; k < input; k++) {
             uint32_t vk = k;
             sum += x[trow * input + vk] * wt[vk * out + tcol];
@@ -48,8 +48,8 @@ __hoisted_matmul_div_gelu_f32_2(uint32_t batch, uint32_t out, float divisor,
     if (1024U * blockIdx.x + threadIdx.x < batch * out) {
         float x1 = y[1024U * blockIdx.x + threadIdx.x];
         y[1024U * blockIdx.x + threadIdx.x] =
-            x1 / divisor * (1.0f / (float) 2LL) *
-            (1.0f + erff(x1 / divisor / sqrtf((float) 2LL)));
+            x1 / divisor * ((float) 1LL / (float) 2LL) *
+            ((float) 1LL + erff(x1 / divisor / sqrtf((float) 2LL)));
     }
 }
 

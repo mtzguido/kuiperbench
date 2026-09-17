@@ -11,7 +11,7 @@ __hoisted_rmsnorm_fw_0(uint32_t hw, uint32_t c, float *x, uint32_t bhw,
 {
     if (1024U * blockIdx.x + threadIdx.x < bhw) {
         uint32_t ci_ref = 0U;
-        float acc_ref = 0.0f;
+        float acc_ref = (float) 0LL;
         for (; ci_ref < c; ci_ref++) {
             float v = x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw +
                         ci_ref * hw + (1024U * blockIdx.x + threadIdx.x) % hw];
@@ -51,7 +51,7 @@ __hoisted_rmsnorm_fw_2(uint32_t hw, uint32_t c, float *x, uint32_t bhw,
 void Kuiper_KB_RMSNorm_rmsnorm_fw(uint32_t b, uint32_t hw, uint32_t c,
                                   float eps, float *x)
 {
-    float inv_c = 1.0f / (float) (int64_t) (uint64_t) c;
+    float inv_c = (float) 1LL / (float) (int64_t) (uint64_t) c;
     uint32_t bhw = b * hw;
     float *sum_sq = (float *) KPR_GPU_ALLOC(sizeof(float), bhw);
     cudaStream_t s = KPR_FRESH_STREAM();

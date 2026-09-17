@@ -9,7 +9,7 @@ static void
 __hoisted_reduce_mean_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < d; idx += 1024U)
         acc += x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m];
@@ -42,7 +42,7 @@ __hoisted_reduce_mean_fw_f32_1(float *y, float inv_d, uint32_t bm)
 void Kuiper_KB_ReduceMean_reduce_mean_fw_f32(uint32_t b, uint32_t m, uint32_t d,
                                              float *x, float *y)
 {
-    float inv_d = 1.0f / (float) (int64_t) (uint64_t) d;
+    float inv_d = (float) 1LL / (float) (int64_t) (uint64_t) d;
     uint32_t bm = b * m;
     cudaStream_t s = KPR_FRESH_STREAM();
     KPR_SHMEM_FITS(4096U);
@@ -65,7 +65,7 @@ static void
 __hoisted_reduce_mean_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < d; idx += 1024U)
         acc += x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m];
@@ -99,7 +99,7 @@ float *Kuiper_KB_ReduceMean_reduce_mean_alloc_f32(uint32_t b, uint32_t m,
                                                   uint32_t d, float *x)
 {
     float *y = (float *) KPR_GPU_ALLOC(sizeof(float), b * m);
-    float inv_d = 1.0f / (float) (int64_t) (uint64_t) d;
+    float inv_d = (float) 1LL / (float) (int64_t) (uint64_t) d;
     uint32_t bm1 = b * m;
     cudaStream_t s = KPR_FRESH_STREAM();
     KPR_SHMEM_FITS(4096U);

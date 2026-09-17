@@ -23,7 +23,7 @@ __hoisted_conv2d_general_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
         uint32_t n_taps = cin * kh_kw;
         uint32_t oh_s = r2 / w_out * stride;
         uint32_t ow_s = r2 % w_out * stride;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < n_taps; k++) {
             uint32_t kk_v = k;
@@ -39,9 +39,9 @@ __hoisted_conv2d_general_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
                 uint32_t wi = w_signed - pad;
                 ite = hi < h_in && wi < w_in
                           ? gx[((bi * cin + ic) * h_in + hi) * w_in + wi]
-                          : 0.0f;
+                          : (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite * gw[((oc * cin + ic) * kh + kh_i) * kw + kw_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] = gbias[oc] + acc;

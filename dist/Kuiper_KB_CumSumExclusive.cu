@@ -8,7 +8,7 @@ __global__
 static void
 __hoisted_cumsum_exclusive_fw_f32_0(uint32_t d, float *input, float *output)
 {
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t di_ref = 0U;
     for (; di_ref < d; di_ref++) {
         uint32_t di_old_sz = di_ref;

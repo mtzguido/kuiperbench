@@ -60,6 +60,18 @@ let frobenius_result_approx
     in
     Classical.forall_intro aux
 
+let frobenius_map_post
+  (#n:nat) (inv : f32) (c : chest1 f32 n)
+  : Lemma
+      (requires inv %~ frobenius_inv_r (to_real_seq (chest1_to_seq c)))
+      (ensures frobenius_post (chest1_to_seq c)
+        (chest1_to_seq (chest_map (smul_step inv) c)))
+  = let s = chest1_to_seq c in
+    chest_map_to_seq (smul_step inv) c;
+    to_real_seq_is_approx s;
+    frobenius_result_approx inv (frobenius_inv_r (to_real_seq s))
+      s (to_real_seq s)
+
 (* Frobenius normalisation, layout-fixed to [l1_forward] for
    extraction.  Composes [HRed.reduce] (with a square pre-map) and
    [Map.map_gpu] (with a scalar-multiply step). *)
@@ -96,16 +108,12 @@ fn frobenius
 
   (* Bridge the chest-level result and the sum-of-squares back to the
      seq-level golden spec. *)
-  chest_map_to_seq (smul_step inv_norm) (reveal va);
   chest_map_to_seq sq_step_r (reveal vr);
   to_real_chest_to_seq (reveal va);
   let rss = frobenius_sumsq_r (to_real_seq (chest1_to_seq (reveal va)));
   assert pure (sumsq %~ rss);
   rsqrt_approx sumsq rss;
-  to_real_seq_is_approx (chest1_to_seq (reveal va));
-  frobenius_result_approx inv_norm (FStar.Math.Sqrt.rsqrt rss)
-    (chest1_to_seq (reveal va))
-    (to_real_seq (chest1_to_seq (reveal va)));
+  frobenius_map_post inv_norm (reveal va);
   ()
 }
 

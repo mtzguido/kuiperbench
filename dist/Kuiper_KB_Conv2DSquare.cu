@@ -26,7 +26,7 @@ __hoisted_conv2d_square_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
         uint32_t n_taps = cin * kh_kw;
         uint32_t oh_s = r2 / h_out;
         uint32_t ow_s = r2 % h_out;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k1 = 0U;
         for (; k1 < n_taps; k1++) {
             uint32_t kk_v = k1;
@@ -42,9 +42,9 @@ __hoisted_conv2d_square_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
                 uint32_t wi = w_signed - 0U;
                 ite = hi < h_in && wi < h_in
                           ? gx[((bi * cin + ic) * h_in + hi) * h_in + wi]
-                          : 0.0f;
+                          : (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite * gw[((oc * cin + ic) * k + kh_i) * k + kw_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] = gbias[oc] + acc;
@@ -74,7 +74,7 @@ static void
 __hoisted_conv2d_square63_alloc_f32_0(float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < 128U)
-        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+        gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
 float *Kuiper_KB_Conv2DSquare_conv2d_square63_alloc_f32(float *gx, float *gw)

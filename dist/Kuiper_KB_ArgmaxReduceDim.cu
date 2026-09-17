@@ -12,7 +12,7 @@ __hoisted_argmaxreduce_dim_fw_f32_0(uint32_t m, uint32_t d, float *x,
     if (1024U * blockIdx.x + threadIdx.x < bm) {
         uint32_t ci_ref = 0U;
         uint32_t bi_ref = 0U;
-        float bv_ref = -INFINITY;
+        float bv_ref = (float) 0LL - INFINITY;
         for (; ci_ref < d; ci_ref++) {
             uint32_t ci_v = ci_ref;
             float v = x[(1024U * blockIdx.x + threadIdx.x) / m * d * m +
@@ -50,7 +50,7 @@ __hoisted_argmaxreduce_dim_alloc_f32_0(uint32_t m, uint32_t d, float *x,
     if (1024U * blockIdx.x + threadIdx.x < bm1) {
         uint32_t ci_ref = 0U;
         uint32_t bi_ref = 0U;
-        float bv_ref = -INFINITY;
+        float bv_ref = (float) 0LL - INFINITY;
         for (; ci_ref < d; ci_ref++) {
             uint32_t ci_v = ci_ref;
             float v = x[(1024U * blockIdx.x + threadIdx.x) / m * d * m +

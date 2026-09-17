@@ -14,7 +14,7 @@ __hoisted_gemm_sigmoid_scale_residual_f32_0(uint32_t batch, uint32_t input,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / out;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % out;
         uint32_t k = 0U;
-        float sum = 0.0f;
+        float sum = (float) 0LL;
         for (; k < input; k++) {
             uint32_t vk = k;
             sum += x[trow * input + vk] * wt[vk * out + tcol];
@@ -49,7 +49,7 @@ __hoisted_gemm_sigmoid_scale_residual_f32_2(uint32_t batch, uint32_t out,
     if (1024U * blockIdx.x + threadIdx.x < batch * out) {
         float x1 = y[1024U * blockIdx.x + threadIdx.x];
         y[1024U * blockIdx.x + threadIdx.x] =
-            1.0f / (1.0f + expf(0.0f - x1)) * sf + x1;
+            (float) 1LL / ((float) 1LL + expf((float) 0LL - x1)) * sf + x1;
     }
 }
 

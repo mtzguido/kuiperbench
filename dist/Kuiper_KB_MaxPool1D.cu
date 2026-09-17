@@ -25,9 +25,9 @@ __hoisted_maxpool1d_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p, uint32_t d,
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
-        float acc = -INFINITY;
+        float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = -INFINITY;
+        float buf = (float) 0LL - INFINITY;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -36,7 +36,7 @@ __hoisted_maxpool1d_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p, uint32_t d,
             if (in_bounds)
                 dpos_ref = pos - p;
             float raw = input[r_sz * l + dpos_ref];
-            acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
+            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
         }
         output[r_sz * l_out + j_sz] = acc;
     }

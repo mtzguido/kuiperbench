@@ -13,8 +13,8 @@ __hoisted_gemm_naive3_alloc_f32_0(uint32_t m, uint32_t n, uint32_t k, float *a,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % n;
         uint32_t k1 = 0U;
-        float acc = 0.0f;
-        float c1 = 0.0f;
+        float acc = (float) 0LL;
+        float c1 = (float) 0LL;
         for (; k1 < k; k1++) {
             uint32_t __anf0 = k1;
             float old_acc = acc;
@@ -55,7 +55,7 @@ __hoisted_gemm_naive1_alloc_f32_0(uint32_t n, uint32_t k, float *a, float *b,
     uint32_t trow = blockIdx.x / n;
     uint32_t tcol = blockIdx.x % n;
     uint32_t k1 = 0U;
-    float sum = 0.0f;
+    float sum = (float) 0LL;
     for (; k1 < k; k1++) {
         uint32_t vk = k1;
         sum += a[trow * k + vk] * b[vk * n + tcol];

@@ -9,7 +9,7 @@ static void
 __hoisted_reduce_sum_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < d; idx += 1024U)
         acc += x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m];
@@ -47,7 +47,7 @@ static void
 __hoisted_reduce_sum_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < d; idx += 1024U)
         acc += x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m];

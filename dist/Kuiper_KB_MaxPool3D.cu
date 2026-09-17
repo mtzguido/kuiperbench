@@ -26,9 +26,9 @@ __hoisted_maxpool3d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
-        float acc = -INFINITY;
+        float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = -INFINITY;
+        float buf = (float) 0LL - INFINITY;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -37,7 +37,7 @@ __hoisted_maxpool3d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
             if (in_bounds)
                 dpos_ref = pos - p;
             float raw = input[r_sz * l + dpos_ref];
-            acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
+            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
         }
         output[r_sz * l_out + j_sz] = acc;
     }
@@ -72,9 +72,9 @@ __hoisted_maxpool3d_raw_alloc_f32_0(uint32_t k, uint32_t s, uint32_t p,
     if (1024U * blockIdx.x + threadIdx.x < rows_h * ho) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / ho;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % ho;
-        float acc = -INFINITY;
+        float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = -INFINITY;
+        float buf = (float) 0LL - INFINITY;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -84,7 +84,7 @@ __hoisted_maxpool3d_raw_alloc_f32_0(uint32_t k, uint32_t s, uint32_t p,
                 dpos_ref = pos - p;
             float raw =
                 mid_h_in[r_sz / wo * h * wo + dpos_ref * wo + r_sz % wo];
-            acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
+            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
         }
         mid_h[r_sz / wo * ho * wo + j_sz * wo + r_sz % wo] = acc;
     }
@@ -103,9 +103,9 @@ __hoisted_maxpool3d_raw_alloc_f32_1(uint32_t k, uint32_t s, uint32_t p,
     if (1024U * blockIdx.x + threadIdx.x < rows_d * do_) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / do_;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % do_;
-        float acc = -INFINITY;
+        float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = -INFINITY;
+        float buf = (float) 0LL - INFINITY;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -115,7 +115,7 @@ __hoisted_maxpool3d_raw_alloc_f32_1(uint32_t k, uint32_t s, uint32_t p,
                 dpos_ref = pos - p;
             float raw = mid_d_in[r_sz / (ho * wo) * depth * ho * wo +
                                  dpos_ref * ho * wo + r_sz % (ho * wo)];
-            acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
+            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
         }
         out[r_sz / (ho * wo) * do_ * ho * wo + j_sz * ho * wo +
             r_sz % (ho * wo)] = acc;

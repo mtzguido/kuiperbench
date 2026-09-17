@@ -36,7 +36,7 @@ uint32_t Kuiper_KB_AvgPool2D_pool_out_len_1d_sz(uint32_t l, uint32_t k,
 
 float Kuiper_KB_AvgPool2D_avgpool_recip_f32(uint32_t k)
 {
-    return 1.0f / (float) (int64_t) (uint64_t) k;
+    return (float) 1LL / (float) (int64_t) (uint64_t) k;
 }
 
 __global__
@@ -52,9 +52,9 @@ __hoisted_avgpool2d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t di_ref = 0U;
-        float buf = 0.0f;
+        float buf = (float) 0LL;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -63,7 +63,7 @@ __hoisted_avgpool2d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
             if (in_bounds)
                 dpos_ref = pos - p;
             float raw = input[r_sz * l + dpos_ref];
-            acc += in_bounds ? raw : 0.0f;
+            acc += in_bounds ? raw : (float) 0LL;
         }
         output[r_sz * l_out + j_sz] = acc;
     }
@@ -96,9 +96,9 @@ __hoisted_avgpool2d_half_alloc_0(uint32_t h, uint32_t w_out, float *mid_h_in,
     if (1024U * blockIdx.x + threadIdx.x < rows_h * h_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / h_out;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % h_out;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t di_ref = 0U;
-        float buf = 0.0f;
+        float buf = (float) 0LL;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < 11U; di_ref++) {
             uint32_t pos = j_sz * 11U + di_ref;
@@ -108,7 +108,7 @@ __hoisted_avgpool2d_half_alloc_0(uint32_t h, uint32_t w_out, float *mid_h_in,
                 dpos_ref = pos - 0U;
             float raw = mid_h_in[r_sz / w_out * h * w_out + dpos_ref * w_out +
                                  r_sz % w_out];
-            acc += in_bounds ? raw : 0.0f;
+            acc += in_bounds ? raw : (float) 0LL;
         }
         out[r_sz / w_out * h_out * w_out + j_sz * w_out + r_sz % w_out] = acc;
     }

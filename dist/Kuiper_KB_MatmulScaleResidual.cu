@@ -14,7 +14,7 @@ __hoisted_matmul_scale_residual_f32_0(uint32_t batch, uint32_t input,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / out;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % out;
         uint32_t k = 0U;
-        float sum = 0.0f;
+        float sum = (float) 0LL;
         for (; k < input; k++) {
             uint32_t vk = k;
             sum += x[trow * input + vk] * wt[vk * out + tcol];

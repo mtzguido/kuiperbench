@@ -10,7 +10,9 @@ __hoisted_sigmoid_fw_f32_0(uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] =
-            1.0f / (1.0f + expf(0.0f - a[1024U * blockIdx.x + threadIdx.x]));
+            (float) 1LL /
+            ((float) 1LL +
+             expf((float) 0LL - a[1024U * blockIdx.x + threadIdx.x]));
 }
 
 void Kuiper_KB_Sigmoid_sigmoid_fw_f32(uint32_t lena, float *a)
@@ -32,7 +34,9 @@ __hoisted_sigmoid_fw_f64_0(uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] =
-            1.0 / (1.0 + exp(0.0 - a[1024U * blockIdx.x + threadIdx.x]));
+            (double) 1LL /
+            ((double) 1LL +
+             exp((double) 0LL - a[1024U * blockIdx.x + threadIdx.x]));
 }
 
 void Kuiper_KB_Sigmoid_sigmoid_fw_f64(uint32_t lena, double *a)
@@ -54,8 +58,9 @@ __hoisted_sigmoid_alloc_f32_0(uint32_t lena, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         output[1024U * blockIdx.x + threadIdx.x] =
-            1.0f /
-            (1.0f + expf(0.0f - input[1024U * blockIdx.x + threadIdx.x]));
+            (float) 1LL /
+            ((float) 1LL +
+             expf((float) 0LL - input[1024U * blockIdx.x + threadIdx.x]));
 }
 
 float *Kuiper_KB_Sigmoid_sigmoid_alloc_f32(uint32_t lena, float *input)
@@ -83,7 +88,9 @@ __hoisted_sigmoid_alloc_f64_0(uint32_t lena, double *input, double *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         output[1024U * blockIdx.x + threadIdx.x] =
-            1.0 / (1.0 + exp(0.0 - input[1024U * blockIdx.x + threadIdx.x]));
+            (double) 1LL /
+            ((double) 1LL +
+             exp((double) 0LL - input[1024U * blockIdx.x + threadIdx.x]));
 }
 
 double *Kuiper_KB_Sigmoid_sigmoid_alloc_f64(uint32_t lena, double *input)

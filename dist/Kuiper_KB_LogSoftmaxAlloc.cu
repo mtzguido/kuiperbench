@@ -9,7 +9,7 @@ static void
 __hoisted_logsoftmax_alloc_f32_0(uint32_t cols, float *output, float *sums)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < cols; idx += 1024U) {
         float v_ = expf(output[blockIdx.x * cols + idx]);
@@ -84,7 +84,7 @@ static void
 __hoisted_logsoftmax_alloc_f64_0(uint32_t cols, double *output, double *sums)
 {
     double *sa = (double *) KPR_SHMEM_AT(0U);
-    double acc = 0.0;
+    double acc = (double) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < cols; idx += 1024U) {
         double v_ = exp(output[blockIdx.x * cols + idx]);

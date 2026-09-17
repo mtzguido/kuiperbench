@@ -11,10 +11,10 @@ __hoisted_selu_fw_f32_0(uint32_t lena, float *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
         float ite;
-        if (0.0f < x)
+        if ((float) 0LL < x)
             ite = x;
         else
-            ite = 1.6732632423543772848 * (expf(x) - 1.0f);
+            ite = 1.6732632423543772848 * (expf(x) - (float) 1LL);
         a[1024U * blockIdx.x + threadIdx.x] = 1.0507009873554804934 * ite;
     }
 }
@@ -39,10 +39,10 @@ __hoisted_selu_fw_f64_0(uint32_t lena, double *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
         double ite;
-        if (0.0 < x)
+        if ((double) 0LL < x)
             ite = x;
         else
-            ite = 1.6732632423543772848 * (exp(x) - 1.0);
+            ite = 1.6732632423543772848 * (exp(x) - (double) 1LL);
         a[1024U * blockIdx.x + threadIdx.x] = 1.0507009873554804934 * ite;
     }
 }
@@ -67,10 +67,10 @@ __hoisted_selu_alloc_f32_0(uint32_t lena, float *input, float *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         float ite;
-        if (0.0f < y)
+        if ((float) 0LL < y)
             ite = y;
         else
-            ite = 1.6732632423543772848 * (expf(y) - 1.0f);
+            ite = 1.6732632423543772848 * (expf(y) - (float) 1LL);
         output[1024U * blockIdx.x + threadIdx.x] = 1.0507009873554804934 * ite;
     }
 }
@@ -101,10 +101,10 @@ __hoisted_selu_alloc_f64_0(uint32_t lena, double *input, double *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
         double ite;
-        if (0.0 < y)
+        if ((double) 0LL < y)
             ite = y;
         else
-            ite = 1.6732632423543772848 * (exp(y) - 1.0);
+            ite = 1.6732632423543772848 * (exp(y) - (double) 1LL);
         output[1024U * blockIdx.x + threadIdx.x] = 1.0507009873554804934 * ite;
     }
 }
