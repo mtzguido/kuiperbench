@@ -15,7 +15,7 @@ __hoisted_batched_gemm_f32_0(uint32_t batch, uint32_t rows, uint32_t shared,
         uint32_t trow = rest / cols;
         uint32_t tcol = rest % cols;
         uint32_t k = 0U;
-        float sum = 0.0f;
+        float sum = (float) 0LL;
         for (; k < shared; k++) {
             uint32_t vk = k;
             sum += a[page * rows * shared + trow * shared + vk] *

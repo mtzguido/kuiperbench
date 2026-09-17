@@ -13,8 +13,8 @@ __hoisted_matmul_f32_atb_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % n;
         uint32_t k1 = 0U;
-        float acc = 0.0f;
-        float c = 0.0f;
+        float acc = (float) 0LL;
+        float c = (float) 0LL;
         for (; k1 < k; k1++) {
             uint32_t __anf0 = k1;
             float old_acc = acc;
@@ -50,8 +50,8 @@ __hoisted_matmul_f32_abt_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % n;
         uint32_t k1 = 0U;
-        float acc = 0.0f;
-        float c = 0.0f;
+        float acc = (float) 0LL;
+        float c = (float) 0LL;
         for (; k1 < k; k1++) {
             uint32_t __anf0 = k1;
             float old_acc = acc;
@@ -87,8 +87,8 @@ __hoisted_matmul_f32_atbt_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % n;
         uint32_t k1 = 0U;
-        float acc = 0.0f;
-        float c = 0.0f;
+        float acc = (float) 0LL;
+        float c = (float) 0LL;
         for (; k1 < k; k1++) {
             uint32_t __anf0 = k1;
             float old_acc = acc;

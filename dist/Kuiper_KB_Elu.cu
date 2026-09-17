@@ -11,10 +11,10 @@ __hoisted_elu_fw_f32_0(float alpha, uint32_t lena, float *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
         float ite;
-        if (0.0f < x)
+        if ((float) 0LL < x)
             ite = x;
         else
-            ite = alpha * (expf(x) - 1.0f);
+            ite = alpha * (expf(x) - (float) 1LL);
         a[1024U * blockIdx.x + threadIdx.x] = ite;
     }
 }
@@ -39,10 +39,10 @@ __hoisted_elu_fw_f64_0(double alpha, uint32_t lena, double *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
         double ite;
-        if (0.0 < x)
+        if ((double) 0LL < x)
             ite = x;
         else
-            ite = alpha * (exp(x) - 1.0);
+            ite = alpha * (exp(x) - (double) 1LL);
         a[1024U * blockIdx.x + threadIdx.x] = ite;
     }
 }
@@ -68,10 +68,10 @@ __hoisted_elu_alloc_f32_0(float alpha, uint32_t lena, float *input,
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         float ite;
-        if (0.0f < y)
+        if ((float) 0LL < y)
             ite = y;
         else
-            ite = alpha * (expf(y) - 1.0f);
+            ite = alpha * (expf(y) - (float) 1LL);
         output[1024U * blockIdx.x + threadIdx.x] = ite;
     }
 }
@@ -103,10 +103,10 @@ __hoisted_elu_alloc_f64_0(double alpha, uint32_t lena, double *input,
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
         double ite;
-        if (0.0 < y)
+        if ((double) 0LL < y)
             ite = y;
         else
-            ite = alpha * (exp(y) - 1.0);
+            ite = alpha * (exp(y) - (double) 1LL);
         output[1024U * blockIdx.x + threadIdx.x] = ite;
     }
 }
@@ -138,10 +138,10 @@ __hoisted_elu_alloc_f64_f32_0(double alpha, uint32_t lena, float *input,
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         float ite;
-        if (0.0f < y)
+        if ((float) 0LL < y)
             ite = y;
         else
-            ite = (float) alpha * (expf(y) - 1.0f);
+            ite = (float) alpha * (expf(y) - (float) 1LL);
         output[1024U * blockIdx.x + threadIdx.x] = ite;
     }
 }

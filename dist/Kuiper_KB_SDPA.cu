@@ -71,7 +71,7 @@ static void
 __hoisted_row_softmax_rm_f32_2(uint32_t n, uint32_t nth, float *a, float *sums)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < n; idx += nth) {
         float v_ = expf(a[blockIdx.x * n + idx]);
@@ -169,7 +169,7 @@ __hoisted_sdpa_f32_0(uint32_t s, uint32_t d, float *gQ, float *gK, uint32_t bh,
         uint32_t trow = rest / s;
         uint32_t tcol = rest % s;
         uint32_t k = 0U;
-        float sum = 0.0f;
+        float sum = (float) 0LL;
         for (; k < d; k++) {
             uint32_t vk = k;
             sum += gQ[page * s * d + trow * d + vk] *

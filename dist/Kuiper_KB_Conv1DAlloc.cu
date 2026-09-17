@@ -18,7 +18,7 @@ __hoisted_conv1d_general_f32_0(uint32_t b, uint32_t cin, uint32_t l_in,
         uint32_t oc = r1 / l_out;
         uint32_t n_taps = cin * kk;
         uint32_t ol_s = r1 % l_out * stride;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < n_taps; k++) {
             uint32_t kk_v = k;
@@ -28,9 +28,9 @@ __hoisted_conv1d_general_f32_0(uint32_t b, uint32_t cin, uint32_t l_in,
             float ite;
             if (pad <= l_signed) {
                 uint32_t li = l_signed - pad;
-                ite = li < l_in ? gx[(bi * cin + ic) * l_in + li] : 0.0f;
+                ite = li < l_in ? gx[(bi * cin + ic) * l_in + li] : (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite * gw[(oc * cin + ic) * kk + k_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] = gbias[oc] + acc;
@@ -129,7 +129,7 @@ static void
 __hoisted_conv1d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < cout)
-        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+        gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
 Kuiper_KB_Conv1DAlloc_conv1d_raw_result

@@ -10,7 +10,7 @@ __hoisted_softsign_fw_f32_0(uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = x / (1.0f + fabsf(x));
+        a[1024U * blockIdx.x + threadIdx.x] = x / ((float) 1LL + fabsf(x));
     }
 }
 
@@ -33,7 +33,7 @@ __hoisted_softsign_fw_f64_0(uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = x / (1.0 + fabs(x));
+        a[1024U * blockIdx.x + threadIdx.x] = x / ((double) 1LL + fabs(x));
     }
 }
 
@@ -56,7 +56,7 @@ __hoisted_softsign_alloc_f32_0(uint32_t lena, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
-        output[1024U * blockIdx.x + threadIdx.x] = y / (1.0f + fabsf(y));
+        output[1024U * blockIdx.x + threadIdx.x] = y / ((float) 1LL + fabsf(y));
     }
 }
 
@@ -85,7 +85,7 @@ __hoisted_softsign_alloc_f64_0(uint32_t lena, double *input, double *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
-        output[1024U * blockIdx.x + threadIdx.x] = y / (1.0 + fabs(y));
+        output[1024U * blockIdx.x + threadIdx.x] = y / ((double) 1LL + fabs(y));
     }
 }
 

@@ -10,7 +10,7 @@ __hoisted_softplus_fw_f32_0(uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] =
-            logf(1.0f + expf(a[1024U * blockIdx.x + threadIdx.x]));
+            logf((float) 1LL + expf(a[1024U * blockIdx.x + threadIdx.x]));
 }
 
 void Kuiper_KB_Softplus_softplus_fw_f32(uint32_t lena, float *a)
@@ -32,7 +32,7 @@ __hoisted_softplus_fw_f64_0(uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] =
-            log(1.0 + exp(a[1024U * blockIdx.x + threadIdx.x]));
+            log((double) 1LL + exp(a[1024U * blockIdx.x + threadIdx.x]));
 }
 
 void Kuiper_KB_Softplus_softplus_fw_f64(uint32_t lena, double *a)
@@ -54,7 +54,7 @@ __hoisted_softplus_alloc_f32_0(uint32_t lena, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         output[1024U * blockIdx.x + threadIdx.x] =
-            logf(1.0f + expf(input[1024U * blockIdx.x + threadIdx.x]));
+            logf((float) 1LL + expf(input[1024U * blockIdx.x + threadIdx.x]));
 }
 
 float *Kuiper_KB_Softplus_softplus_alloc_f32(uint32_t lena, float *input)
@@ -82,7 +82,7 @@ __hoisted_softplus_alloc_f64_0(uint32_t lena, double *input, double *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         output[1024U * blockIdx.x + threadIdx.x] =
-            log(1.0 + exp(input[1024U * blockIdx.x + threadIdx.x]));
+            log((double) 1LL + exp(input[1024U * blockIdx.x + threadIdx.x]));
 }
 
 double *Kuiper_KB_Softplus_softplus_alloc_f64(uint32_t lena, double *input)

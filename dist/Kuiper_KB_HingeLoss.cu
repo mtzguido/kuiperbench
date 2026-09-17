@@ -13,7 +13,8 @@ __hoisted_hinge_loss_broadcast_f32_0(uint32_t b, uint32_t n, float *targets,
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / b;
         uint32_t col = (1024U * blockIdx.x + threadIdx.x) % b;
         uint32_t ni = col * n + row;
-        scratch[ni] = fmaxf(0.0f, 1.0f - scratch[col * n + row] * targets[row]);
+        scratch[ni] = fmaxf((float) 0LL, (float) 1LL - scratch[col * n + row] *
+                                                           targets[row]);
     }
 }
 
@@ -25,7 +26,7 @@ static void
 __hoisted_hinge_loss_broadcast_f32_1(uint32_t elems, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < elems; idx += 1024U)
         acc += scratch[idx];
@@ -76,7 +77,7 @@ float *Kuiper_KB_HingeLoss_hinge_loss_broadcast_f32(uint32_t b, uint32_t n,
               scratch, out0);
     MUST(cudaStreamSynchronize(s1));
     MUST(cudaStreamDestroy(s1));
-    float hout = 0.0f;
+    float hout = (float) 0LL;
     MUST(cudaMemcpy(&hout, out0, sizeof(float), cudaMemcpyDeviceToHost));
     MUST(cudaFree(out0));
     float sum = hout;

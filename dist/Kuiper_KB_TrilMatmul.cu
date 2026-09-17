@@ -11,7 +11,7 @@ __hoisted_tril_matmul_f32_0(uint32_t n, float *gA, float *gB, float *y)
     if (1024U * blockIdx.x + threadIdx.x < n * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
         uint32_t col = (1024U * blockIdx.x + threadIdx.x) % n;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = row;
         for (; k <= col; k++) {
             uint32_t kk = k;

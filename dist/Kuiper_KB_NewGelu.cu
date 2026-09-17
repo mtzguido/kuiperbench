@@ -12,7 +12,7 @@ __hoisted_newgelu_fw_f32_0(float half, float c, float k, uint32_t lena,
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            half * x * (1.0f + tanhf(c * (x + k * (x * x * x))));
+            half * x * ((float) 1LL + tanhf(c * (x + k * (x * x * x))));
     }
 }
 
@@ -38,7 +38,7 @@ __hoisted_newgelu_fw_f64_0(double half, double c, double k, uint32_t lena,
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            half * x * (1.0 + tanh(c * (x + k * (x * x * x))));
+            half * x * ((double) 1LL + tanh(c * (x + k * (x * x * x))));
     }
 }
 
@@ -64,7 +64,7 @@ __hoisted_newgelu_alloc_f32_0(uint32_t lena, float *input, float *output)
         float y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
             0.5 * y *
-            (1.0f +
+            ((float) 1LL +
              tanhf(0.79788456080286535588 * (y + 0.044715 * (y * y * y))));
     }
 }
@@ -96,7 +96,8 @@ __hoisted_newgelu_alloc_f64_0(uint32_t lena, double *input, double *output)
         double y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
             0.5 * y *
-            (1.0 + tanh(0.79788456080286535588 * (y + 0.044715 * (y * y * y))));
+            ((double) 1LL +
+             tanh(0.79788456080286535588 * (y + 0.044715 * (y * y * y))));
     }
 }
 

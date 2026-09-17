@@ -11,7 +11,7 @@ __hoisted_swish_fw_f32_0(uint32_t lena, float *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            x * (1.0f / (1.0f + expf(0.0f - x)));
+            x * ((float) 1LL / ((float) 1LL + expf((float) 0LL - x)));
     }
 }
 
@@ -34,7 +34,8 @@ __hoisted_swish_fw_f64_0(uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = x * (1.0 / (1.0 + exp(0.0 - x)));
+        a[1024U * blockIdx.x + threadIdx.x] =
+            x * ((double) 1LL / ((double) 1LL + exp((double) 0LL - x)));
     }
 }
 
@@ -58,7 +59,7 @@ __hoisted_swish_alloc_f32_0(uint32_t lena, float *input, float *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            y * (1.0f / (1.0f + expf(0.0f - y)));
+            y * ((float) 1LL / ((float) 1LL + expf((float) 0LL - y)));
     }
 }
 
@@ -88,7 +89,7 @@ __hoisted_swish_alloc_f64_0(uint32_t lena, double *input, double *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            y * (1.0 / (1.0 + exp(0.0 - y)));
+            y * ((double) 1LL / ((double) 1LL + exp((double) 0LL - y)));
     }
 }
 

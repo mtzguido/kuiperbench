@@ -9,7 +9,7 @@ static void
 __hoisted_convt3d_grouped72_alloc_f32_0(float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < 32U)
-        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+        gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
 __global__
@@ -29,7 +29,7 @@ __hoisted_convt3d_grouped72_alloc_f32_1(float *gx, float *gw, float *gbias,
         uint32_t od_pd = r2 / 4608U + 1U;
         uint32_t oh_ph = r3 / 96U + 2U;
         uint32_t ow_pw = r3 % 96U + 3U;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < 840U; k++) {
             uint32_t kk = k;
@@ -61,11 +61,11 @@ __hoisted_convt3d_grouped72_alloc_f32_1(float *gx, float *gw, float *gbias,
                                     hi) *
                                        48U +
                                    wi]
-                              : 0.0f;
+                              : (float) 0LL;
                 } else
-                    ite = 0.0f;
+                    ite = (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc +=
                 ite *
                 gw[(((ic * 8U + oc_pg) * 3U + kd_i) * 5U + kh_i) * 7U + kw_i];

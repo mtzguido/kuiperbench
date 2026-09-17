@@ -14,7 +14,7 @@ __hoisted_matmul_sub_mul_relu_f32_0(uint32_t batch, uint32_t input,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / out;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % out;
         uint32_t k = 0U;
-        float sum = 0.0f;
+        float sum = (float) 0LL;
         for (; k < input; k++) {
             uint32_t vk = k;
             sum += x[trow * input + vk] * wt[vk * out + tcol];
@@ -47,8 +47,8 @@ __hoisted_matmul_sub_mul_relu_f32_2(uint32_t batch, uint32_t out, float sub_v,
                                     float mul_v, float *y)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch * out)
-        y[1024U * blockIdx.x + threadIdx.x] =
-            fmaxf((y[1024U * blockIdx.x + threadIdx.x] - sub_v) * mul_v, 0.0f);
+        y[1024U * blockIdx.x + threadIdx.x] = fmaxf(
+            (y[1024U * blockIdx.x + threadIdx.x] - sub_v) * mul_v, (float) 0LL);
 }
 
 void Kuiper_KB_MatmulSubMulRelu_matmul_sub_mul_relu_f32(

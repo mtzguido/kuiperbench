@@ -12,7 +12,7 @@ __hoisted_masked_cumsum_fw_f32_0(float *input, uint8_t *mask, uint32_t n1,
     if (1024U * blockIdx.x + threadIdx.x < n1) {
         float x1 = input[1024U * blockIdx.x + threadIdx.x];
         scratch[1024U * blockIdx.x + threadIdx.x] =
-            mask[1024U * blockIdx.x + threadIdx.x] == 0U ? 0.0f : x1;
+            mask[1024U * blockIdx.x + threadIdx.x] == 0U ? (float) 0LL : x1;
     }
 }
 
@@ -23,7 +23,7 @@ __global__
 static void
 __hoisted_masked_cumsum_fw_f32_1(uint32_t d, float *output, float *scratch)
 {
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t di_ref = 0U;
     for (; di_ref < d; di_ref++) {
         uint32_t di_old_sz = di_ref;

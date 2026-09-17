@@ -9,7 +9,7 @@ static void
 __hoisted_convt2d_grouped75_alloc_f32_0(float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < 64U)
-        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+        gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
 __global__
@@ -31,7 +31,7 @@ __hoisted_convt2d_grouped75_alloc_f32_1(float *gx, float *gw, float *gbias,
         uint32_t ow_pw =
             (1024U * blockIdx.x + threadIdx.x) % 12599168U % 196862U % 766U +
             2U;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < 120U; k++) {
             uint32_t kk = k;
@@ -56,11 +56,11 @@ __hoisted_convt2d_grouped75_alloc_f32_1(float *gx, float *gw, float *gbias,
                                     hi) *
                                        256U +
                                    wi]
-                              : 0.0f;
+                              : (float) 0LL;
                 } else
-                    ite = 0.0f;
+                    ite = (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite * gw[((ic * 16U + oc_pg) * 3U + kh_i) * 5U + kw_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] =

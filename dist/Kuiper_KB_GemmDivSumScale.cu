@@ -14,8 +14,8 @@ __hoisted_gemm_div_sum_scale_f32_0(uint32_t batch, uint32_t input,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / hidden;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % hidden;
         uint32_t k1 = 0U;
-        float acc = 0.0f;
-        float c = 0.0f;
+        float acc = (float) 0LL;
+        float c = (float) 0LL;
         for (; k1 < input; k1++) {
             uint32_t __anf0 = k1;
             float old_acc = acc;
@@ -37,7 +37,7 @@ static void
 __hoisted_gemm_div_sum_scale_f32_1(uint32_t hidden, float *y, float *gC)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < hidden; idx += 1024U)
         acc += gC[blockIdx.x * hidden + idx];

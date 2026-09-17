@@ -9,7 +9,7 @@ static void
 __hoisted_row_log_softmax_rm_f32_0(uint32_t n, float *a, float *sums)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < n; idx += 1024U) {
         float v_ = expf(a[blockIdx.x * n + idx]);
@@ -73,7 +73,7 @@ static void
 __hoisted_row_log_softmax_rm_f64_0(uint32_t n, double *a, double *sums)
 {
     double *sa1 = (double *) KPR_SHMEM_AT(0U);
-    double acc = 0.0;
+    double acc = (double) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < n; idx += 1024U) {
         double v_ = exp(a[blockIdx.x * n + idx]);

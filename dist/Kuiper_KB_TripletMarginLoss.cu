@@ -47,7 +47,7 @@ static void
 __hoisted_triplet_fw_f32_1(uint32_t d, float *scratch_a, float *out)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < d; idx1 += 1024U)
         acc += scratch_a[idx1];
@@ -89,7 +89,7 @@ static void
 __hoisted_triplet_fw_f32_3(uint32_t d, float *scratch_a, float *out)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < d; idx1 += 1024U)
         acc += scratch_a[idx1];
@@ -116,7 +116,7 @@ static void
 __hoisted_triplet_fw_f32_4(uint32_t b, float *t_dev, float *out)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < b; idx1 += 1024U)
         acc += t_dev[idx1];
@@ -142,7 +142,7 @@ float *Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
                                                   float *negative)
 {
     float margin = (float) margin64;
-    float inv_b = 1.0f / (float) (int64_t) (uint64_t) b;
+    float inv_b = (float) 1LL / (float) (int64_t) (uint64_t) b;
     float *scratch_a = (float *) KPR_GPU_ALLOC(sizeof(float), d);
     float *scratch_b = (float *) KPR_GPU_ALLOC(sizeof(float), d);
     float *t_dev = (float *) KPR_GPU_ALLOC(sizeof(float), b);
@@ -173,7 +173,7 @@ float *Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
                   scratch_a, out);
         MUST(cudaStreamSynchronize(s1));
         MUST(cudaStreamDestroy(s1));
-        float hout = 0.0f;
+        float hout = (float) 0LL;
         MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
         MUST(cudaFree(out));
         float d_ap_r = sqrtf(hout);
@@ -196,10 +196,10 @@ float *Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
                   out0);
         MUST(cudaStreamSynchronize(s));
         MUST(cudaStreamDestroy(s));
-        float hout0 = 0.0f;
+        float hout0 = (float) 0LL;
         MUST(cudaMemcpy(&hout0, out0, sizeof(float), cudaMemcpyDeviceToHost));
         MUST(cudaFree(out0));
-        t_host[i] = fmaxf(0.0f, d_ap_r - sqrtf(hout0) + margin);
+        t_host[i] = fmaxf((float) 0LL, d_ap_r - sqrtf(hout0) + margin);
     }
     MUST(cudaMemcpy(t_dev, t_host, (uint32_t) sizeof(float) * b,
                     cudaMemcpyHostToDevice));
@@ -209,7 +209,7 @@ float *Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,
     KPR_KCALL(__hoisted_triplet_fw_f32_4, 1U, 1024U, 4096U, s, b, t_dev, out);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
-    float hout = 0.0f;
+    float hout = (float) 0LL;
     MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
     MUST(cudaFree(out));
     float m = hout * inv_b;

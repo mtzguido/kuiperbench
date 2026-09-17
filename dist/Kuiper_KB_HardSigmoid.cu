@@ -11,10 +11,10 @@ __hoisted_hsig_fw_f32_0(uint32_t lena, float *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            (float) 3LL <= x ? 1.0f
-            : x <= 0.0f - (float) 3LL
-                ? 0.0f
-                : x * (1.0f / (float) 6LL) + 1.0f / (float) 2LL;
+            (float) 3LL <= x ? (float) 1LL
+            : x <= (float) 0LL - (float) 3LL
+                ? (float) 0LL
+                : x * ((float) 1LL / (float) 6LL) + (float) 1LL / (float) 2LL;
     }
 }
 
@@ -38,10 +38,11 @@ __hoisted_hsig_fw_f64_0(uint32_t lena, double *a)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
         a[1024U * blockIdx.x + threadIdx.x] =
-            (double) 3LL <= x ? 1.0
-            : x <= 0.0 - (double) 3LL
-                ? 0.0
-                : x * (1.0 / (double) 6LL) + 1.0 / (double) 2LL;
+            (double) 3LL <= x ? (double) 1LL
+            : x <= (double) 0LL - (double) 3LL
+                ? (double) 0LL
+                : x * ((double) 1LL / (double) 6LL) +
+                      (double) 1LL / (double) 2LL;
     }
 }
 
@@ -65,10 +66,10 @@ __hoisted_hsig_alloc_f32_0(uint32_t lena, float *input, float *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            (float) 3LL <= y ? 1.0f
-            : y <= 0.0f - (float) 3LL
-                ? 0.0f
-                : y * (1.0f / (float) 6LL) + 1.0f / (float) 2LL;
+            (float) 3LL <= y ? (float) 1LL
+            : y <= (float) 0LL - (float) 3LL
+                ? (float) 0LL
+                : y * ((float) 1LL / (float) 6LL) + (float) 1LL / (float) 2LL;
     }
 }
 
@@ -98,10 +99,11 @@ __hoisted_hsig_alloc_f64_0(uint32_t lena, double *input, double *output)
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            (double) 3LL <= y ? 1.0
-            : y <= 0.0 - (double) 3LL
-                ? 0.0
-                : y * (1.0 / (double) 6LL) + 1.0 / (double) 2LL;
+            (double) 3LL <= y ? (double) 1LL
+            : y <= (double) 0LL - (double) 3LL
+                ? (double) 0LL
+                : y * ((double) 1LL / (double) 6LL) +
+                      (double) 1LL / (double) 2LL;
     }
 }
 

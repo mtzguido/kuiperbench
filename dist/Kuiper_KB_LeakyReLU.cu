@@ -10,7 +10,7 @@ __hoisted_leaky_relu_fw_f32_0(float slope, uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = 0.0f < x ? x : x * slope;
+        a[1024U * blockIdx.x + threadIdx.x] = (float) 0LL < x ? x : x * slope;
     }
 }
 
@@ -33,7 +33,7 @@ __hoisted_leaky_relu_fw_f64_0(double slope, uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
-        a[1024U * blockIdx.x + threadIdx.x] = 0.0 < x ? x : x * slope;
+        a[1024U * blockIdx.x + threadIdx.x] = (double) 0LL < x ? x : x * slope;
     }
 }
 
@@ -59,7 +59,7 @@ __hoisted_leaky_relu_alloc_f64_f32_0(double slope, uint32_t lena, float *input,
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
         output[1024U * blockIdx.x + threadIdx.x] =
-            0.0f < y ? y : y * (float) slope;
+            (float) 0LL < y ? y : y * (float) slope;
     }
 }
 
@@ -89,7 +89,8 @@ __hoisted_relu_alloc_f32_0(uint32_t lena, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
-        output[1024U * blockIdx.x + threadIdx.x] = 0.0f < y ? y : y * 0.0f;
+        output[1024U * blockIdx.x + threadIdx.x] =
+            (float) 0LL < y ? y : y * (float) 0LL;
     }
 }
 

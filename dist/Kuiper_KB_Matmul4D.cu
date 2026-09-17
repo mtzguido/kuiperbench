@@ -13,8 +13,8 @@ __hoisted_matmul4d_f32_0(uint32_t l, uint32_t k, float *gA, float *gB,
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / k;
         uint32_t tcol = (1024U * blockIdx.x + threadIdx.x) % k;
         uint32_t k1 = 0U;
-        float acc = 0.0f;
-        float c = 0.0f;
+        float acc = (float) 0LL;
+        float c = (float) 0LL;
         for (; k1 < l; k1++) {
             uint32_t __anf0 = k1;
             float old_acc = acc;

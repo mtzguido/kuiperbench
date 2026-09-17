@@ -36,7 +36,7 @@ uint32_t Kuiper_KB_AvgPool3D_pool_out_len_1d_sz(uint32_t l, uint32_t k,
 
 float Kuiper_KB_AvgPool3D_avgpool_recip_f32(uint32_t k)
 {
-    return 1.0f / (float) (int64_t) (uint64_t) k;
+    return (float) 1LL / (float) (int64_t) (uint64_t) k;
 }
 
 __global__
@@ -52,9 +52,9 @@ __hoisted_avgpool3d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t di_ref = 0U;
-        float buf = 0.0f;
+        float buf = (float) 0LL;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -63,7 +63,7 @@ __hoisted_avgpool3d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
             if (in_bounds)
                 dpos_ref = pos - p;
             float raw = input[r_sz * l + dpos_ref];
-            acc += in_bounds ? raw : 0.0f;
+            acc += in_bounds ? raw : (float) 0LL;
         }
         output[r_sz * l_out + j_sz] = acc;
     }
@@ -112,9 +112,9 @@ __hoisted_avgpool3d_full_alloc_f32_0(uint32_t kh, uint32_t sh, uint32_t ph,
     if (1024U * blockIdx.x + threadIdx.x < rows_h * ho) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / ho;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % ho;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t di_ref = 0U;
-        float buf = 0.0f;
+        float buf = (float) 0LL;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < kh; di_ref++) {
             uint32_t pos = j_sz * sh + di_ref * dh;
@@ -124,7 +124,7 @@ __hoisted_avgpool3d_full_alloc_f32_0(uint32_t kh, uint32_t sh, uint32_t ph,
                 dpos_ref = pos - ph;
             float raw =
                 mid_h_in[r_sz / wo * h * wo + dpos_ref * wo + r_sz % wo];
-            acc += in_bounds ? raw : 0.0f;
+            acc += in_bounds ? raw : (float) 0LL;
         }
         mid_h[r_sz / wo * ho * wo + j_sz * wo + r_sz % wo] = acc;
     }
@@ -143,9 +143,9 @@ __hoisted_avgpool3d_full_alloc_f32_1(uint32_t kd, uint32_t sd, uint32_t pd,
     if (1024U * blockIdx.x + threadIdx.x < rows_d * do_) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / do_;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % do_;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t di_ref = 0U;
-        float buf = 0.0f;
+        float buf = (float) 0LL;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < kd; di_ref++) {
             uint32_t pos = j_sz * sd + di_ref * dd;
@@ -155,7 +155,7 @@ __hoisted_avgpool3d_full_alloc_f32_1(uint32_t kd, uint32_t sd, uint32_t pd,
                 dpos_ref = pos - pd;
             float raw = mid_d_in[r_sz / (ho * wo) * depth * ho * wo +
                                  dpos_ref * ho * wo + r_sz % (ho * wo)];
-            acc += in_bounds ? raw : 0.0f;
+            acc += in_bounds ? raw : (float) 0LL;
         }
         out[r_sz / (ho * wo) * do_ * ho * wo + j_sz * ho * wo +
             r_sz % (ho * wo)] = acc;

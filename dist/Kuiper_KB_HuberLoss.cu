@@ -32,8 +32,8 @@ __hoisted_huber_loss_fw_f32_0(uint32_t n, float *targets, float *scratch)
     if (1024U * blockIdx.x + threadIdx.x < n) {
         float d = scratch[1024U * blockIdx.x + threadIdx.x] -
                   targets[1024U * blockIdx.x + threadIdx.x];
-        float ad = fmaxf(d, 0.0f - d);
-        float e = fmaxf(ad - 1.0f, 0.0f);
+        float ad = fmaxf(d, (float) 0LL - d);
+        float e = fmaxf(ad - (float) 1LL, (float) 0LL);
         float m = ad - e;
         scratch[1024U * blockIdx.x + threadIdx.x] = m * m / (float) 2LL + e;
     }
@@ -47,7 +47,7 @@ static void
 __hoisted_huber_loss_fw_f32_1(uint32_t n, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < n; idx += 1024U)
         acc += scratch[idx];
@@ -85,7 +85,7 @@ float *Kuiper_KB_HuberLoss_huber_loss_fw_f32(uint32_t n, float *predictions,
               out);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
-    float hout = 0.0f;
+    float hout = (float) 0LL;
     MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
     MUST(cudaFree(out));
     float res = hout / (float) (int64_t) (uint64_t) n;

@@ -44,7 +44,7 @@ static void
 __hoisted_mse_loss_fw_f32_1(uint32_t n, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < n; idx += 1024U)
         acc += scratch[idx];
@@ -82,7 +82,7 @@ float *Kuiper_KB_MSELoss_mse_loss_fw_f32(uint32_t n, float *predictions,
               out);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
-    float hout = 0.0f;
+    float hout = (float) 0LL;
     MUST(cudaMemcpy(&hout, out, sizeof(float), cudaMemcpyDeviceToHost));
     MUST(cudaFree(out));
     float res = hout / (float) (int64_t) (uint64_t) n;

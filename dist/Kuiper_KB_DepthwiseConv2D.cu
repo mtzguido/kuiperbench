@@ -28,7 +28,7 @@ __hoisted_dwconv2d_f32_0(uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in,
         uint32_t n_taps = kh * kw;
         uint32_t oh_s = r2 / w_out * stride;
         uint32_t ow_s = r2 % w_out * stride;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < n_taps; k++) {
             uint32_t kk_v = k;
@@ -42,9 +42,9 @@ __hoisted_dwconv2d_f32_0(uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in,
                 uint32_t wi = w_signed - pad;
                 ite = hi < h_in && wi < w_in
                           ? gx[((bi * c + ci) * h_in + hi) * w_in + wi]
-                          : 0.0f;
+                          : (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite * gw[(ci * kh + kh_i) * kw + kw_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] = gbias[ci] + acc;
@@ -87,7 +87,7 @@ __hoisted_dwconv2d_alloc_f32_0(uint32_t b, uint32_t c, uint32_t h_in,
         uint32_t n_taps = kh * kw;
         uint32_t oh_s = r2 / w_out * stride;
         uint32_t ow_s = r2 % w_out * stride;
-        float acc = 0.0f;
+        float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < n_taps; k++) {
             uint32_t kk_v = k;
@@ -101,9 +101,9 @@ __hoisted_dwconv2d_alloc_f32_0(uint32_t b, uint32_t c, uint32_t h_in,
                 uint32_t wi = w_signed - pad;
                 ite = hi < h_in && wi < w_in
                           ? gx[((bi * c + ci) * h_in + hi) * w_in + wi]
-                          : 0.0f;
+                          : (float) 0LL;
             } else
-                ite = 0.0f;
+                ite = (float) 0LL;
             acc += ite * gw[(ci * kh + kh_i) * kw + kw_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] = gbias[ci] + acc;
@@ -198,7 +198,7 @@ static void
 __hoisted_dwconv2d_raw_alloc_zero_f32_0(uint32_t c, float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < c)
-        gbias[1024U * blockIdx.x + threadIdx.x] = 0.0f;
+        gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
 Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_result

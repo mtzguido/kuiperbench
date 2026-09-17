@@ -9,7 +9,7 @@ static void
 __hoisted_mean_var_norm_0(uint32_t d, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < d; idx1 += 1024U)
         acc += scratch[idx1];
@@ -36,7 +36,7 @@ static void
 __hoisted_mean_var_norm_1(uint32_t d, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = 0.0f;
+    float acc = (float) 0LL;
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < d; idx1 += 1024U) {
         float v = scratch[idx1];
@@ -87,7 +87,7 @@ void Kuiper_KB_MeanVarNorm_mean_var_norm(uint32_t b, uint32_t d, float eps,
                   out0);
         MUST(cudaStreamSynchronize(s0));
         MUST(cudaStreamDestroy(s0));
-        float hout = 0.0f;
+        float hout = (float) 0LL;
         MUST(cudaMemcpy(&hout, out0, sizeof(float), cudaMemcpyDeviceToHost));
         MUST(cudaFree(out0));
         float mean = hout * inv_d;
@@ -98,11 +98,11 @@ void Kuiper_KB_MeanVarNorm_mean_var_norm(uint32_t b, uint32_t d, float eps,
                   out);
         MUST(cudaStreamSynchronize(s1));
         MUST(cudaStreamDestroy(s1));
-        float hout0 = 0.0f;
+        float hout0 = (float) 0LL;
         MUST(cudaMemcpy(&hout0, out, sizeof(float), cudaMemcpyDeviceToHost));
         MUST(cudaFree(out));
         float inv = rsqrtf(hout0 * inv_d - mean * mean + eps);
-        float neg_mean_inv = 0.0f - mean * inv;
+        float neg_mean_inv = (float) 0LL - mean * inv;
         cudaStream_t s = KPR_FRESH_STREAM();
         KPR_KCALL(__hoisted_mean_var_norm_2,
                   d / 1024U + (uint32_t) (d % 1024U != 0U), 1024U, 0U, s, d,
@@ -120,7 +120,7 @@ void Kuiper_KB_MeanVarNorm_mean_var_norm_fw(uint32_t b, uint32_t d, float eps,
                                             float *x)
 {
     Kuiper_KB_MeanVarNorm_mean_var_norm(
-        b, d, eps, 1.0f / (float) (int64_t) (uint64_t) d, x);
+        b, d, eps, (float) 1LL / (float) (int64_t) (uint64_t) d, x);
 }
 
 void (*Kuiper_KB_MeanVarNorm_mean_var_norm_fw_f32)(uint32_t x0, uint32_t x1,
