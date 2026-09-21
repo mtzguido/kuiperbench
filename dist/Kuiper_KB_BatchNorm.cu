@@ -1,13 +1,13 @@
 
 #include "Kuiper_KB_BatchNorm.h"
 
-__global__
-/**
-  hoisted when extracting batchnorm_fw_f32
-*/
-static void
-__hoisted_batchnorm_fw_f32_0(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                             uint32_t i, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting batchnorm_fw_f32
+    */
+    static void __hoisted_batchnorm_fw_f32_0(uint32_t c, uint32_t hw,
+                                             uint32_t nhw, float *x, uint32_t i,
+                                             float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -31,13 +31,13 @@ __hoisted_batchnorm_fw_f32_0(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting batchnorm_fw_f32
-*/
-static void
-__hoisted_batchnorm_fw_f32_1(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                             uint32_t i, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting batchnorm_fw_f32
+    */
+    static void __hoisted_batchnorm_fw_f32_1(uint32_t c, uint32_t hw,
+                                             uint32_t nhw, float *x, uint32_t i,
+                                             float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -62,13 +62,13 @@ __hoisted_batchnorm_fw_f32_1(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting batchnorm_fw_f32
-*/
-static void
-__hoisted_batchnorm_fw_f32_2(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                             uint32_t i, float inv, float neg_mean_inv)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting batchnorm_fw_f32
+    */
+    static void __hoisted_batchnorm_fw_f32_2(uint32_t c, uint32_t hw,
+                                             uint32_t nhw, float *x, uint32_t i,
+                                             float inv, float neg_mean_inv)
 {
     if (1024U * blockIdx.x + threadIdx.x < nhw)
         x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
@@ -79,13 +79,13 @@ __hoisted_batchnorm_fw_f32_2(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
             neg_mean_inv;
 }
 
-__global__
-/**
-  hoisted when extracting batchnorm_fw_f32
-*/
-static void
-__hoisted_batchnorm_fw_f32_3(uint32_t c, uint32_t hw, uint32_t nhw, float *x,
-                             uint32_t i, float g_c, float b_c)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting batchnorm_fw_f32
+    */
+    static void __hoisted_batchnorm_fw_f32_3(uint32_t c, uint32_t hw,
+                                             uint32_t nhw, float *x, uint32_t i,
+                                             float g_c, float b_c)
 {
     if (1024U * blockIdx.x + threadIdx.x < nhw)
         x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +

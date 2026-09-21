@@ -1,12 +1,12 @@
 
 #include "Klas_RowScale.h"
 
-__global__
-/**
-  hoisted when extracting rowscale_f16_rowmajor
-*/
-static void
-__hoisted_rowscale_f16_rowmajor_0(uint32_t m, uint32_t n, half *a, half *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f16_rowmajor
+    */
+    static void __hoisted_rowscale_f16_rowmajor_0(uint32_t m, uint32_t n,
+                                                  half *a, half *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -27,12 +27,12 @@ void Klas_RowScale_rowscale_f16_rowmajor(uint32_t m, uint32_t n, half *a,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting rowscale_f16_colmajor
-*/
-static void
-__hoisted_rowscale_f16_colmajor_0(uint32_t m, uint32_t n, half *a, half *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f16_colmajor
+    */
+    static void __hoisted_rowscale_f16_colmajor_0(uint32_t m, uint32_t n,
+                                                  half *a, half *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -53,12 +53,12 @@ void Klas_RowScale_rowscale_f16_colmajor(uint32_t m, uint32_t n, half *a,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting rowscale_f32_rowmajor
-*/
-static void
-__hoisted_rowscale_f32_rowmajor_0(uint32_t m, uint32_t n, float *a, float *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f32_rowmajor
+    */
+    static void __hoisted_rowscale_f32_rowmajor_0(uint32_t m, uint32_t n,
+                                                  float *a, float *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -78,12 +78,12 @@ void Klas_RowScale_rowscale_f32_rowmajor(uint32_t m, uint32_t n, float *a,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting rowscale_f32_colmajor
-*/
-static void
-__hoisted_rowscale_f32_colmajor_0(uint32_t m, uint32_t n, float *a, float *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f32_colmajor
+    */
+    static void __hoisted_rowscale_f32_colmajor_0(uint32_t m, uint32_t n,
+                                                  float *a, float *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -103,12 +103,12 @@ void Klas_RowScale_rowscale_f32_colmajor(uint32_t m, uint32_t n, float *a,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting rowscale_f64_rowmajor
-*/
-static void
-__hoisted_rowscale_f64_rowmajor_0(uint32_t m, uint32_t n, double *a, double *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f64_rowmajor
+    */
+    static void __hoisted_rowscale_f64_rowmajor_0(uint32_t m, uint32_t n,
+                                                  double *a, double *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -128,12 +128,12 @@ void Klas_RowScale_rowscale_f64_rowmajor(uint32_t m, uint32_t n, double *a,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting rowscale_f64_colmajor
-*/
-static void
-__hoisted_rowscale_f64_colmajor_0(uint32_t m, uint32_t n, double *a, double *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f64_colmajor
+    */
+    static void __hoisted_rowscale_f64_colmajor_0(uint32_t m, uint32_t n,
+                                                  double *a, double *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;

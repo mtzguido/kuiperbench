@@ -8,19 +8,16 @@ uint32_t Kuiper_KB_ConvT3DGeneral_convt_out_dim(uint32_t n, uint32_t s,
     return (n - 1U) * s + d * (k - 1U) + opad + 1U - 2U * p;
 }
 
-__global__
-/**
-  hoisted when extracting convt3d_general_f32
-*/
-static void
-__hoisted_convt3d_general_f32_0(uint32_t b, uint32_t cin, uint32_t d_in,
-                                uint32_t h_in, uint32_t w_in, uint32_t cout,
-                                uint32_t kd, uint32_t kh, uint32_t kw,
-                                uint32_t sd, uint32_t sh, uint32_t sw,
-                                uint32_t pd, uint32_t ph, uint32_t pw,
-                                uint32_t dd, uint32_t dh, uint32_t dw,
-                                uint32_t d_out, uint32_t h_out, uint32_t w_out,
-                                float *gx, float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting convt3d_general_f32
+    */
+    static void __hoisted_convt3d_general_f32_0(
+        uint32_t b, uint32_t cin, uint32_t d_in, uint32_t h_in, uint32_t w_in,
+        uint32_t cout, uint32_t kd, uint32_t kh, uint32_t kw, uint32_t sd,
+        uint32_t sh, uint32_t sw, uint32_t pd, uint32_t ph, uint32_t pw,
+        uint32_t dd, uint32_t dh, uint32_t dw, uint32_t d_out, uint32_t h_out,
+        uint32_t w_out, float *gx, float *gw, float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * cout * d_out * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -243,12 +240,12 @@ Kuiper_KB_ConvT3DGeneral_convt3d_raw_alloc_bias_f32(
         .d_out = d_out0, .h_out = h_out, .w_out = w_out, .output = gy});
 }
 
-__global__
-/**
-  hoisted when extracting convt3d_raw_alloc_zero_f32
-*/
-static void
-__hoisted_convt3d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting convt3d_raw_alloc_zero_f32
+    */
+    static void __hoisted_convt3d_raw_alloc_zero_f32_0(uint32_t cout,
+                                                       float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < cout)
         gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;

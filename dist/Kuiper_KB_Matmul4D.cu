@@ -1,13 +1,12 @@
 
 #include "Kuiper_KB_Matmul4D.h"
 
-__global__
-/**
-  hoisted when extracting matmul4d_f32
-*/
-static void
-__hoisted_matmul4d_f32_0(uint32_t l, uint32_t k, float *gA, float *gB,
-                         float *gC, uint32_t nm)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul4d_f32
+    */
+    static void __hoisted_matmul4d_f32_0(uint32_t l, uint32_t k, float *gA,
+                                         float *gB, float *gC, uint32_t nm)
 {
     if (1024U * blockIdx.x + threadIdx.x < nm * k) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / k;

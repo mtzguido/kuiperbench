@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_RowScaleAlloc.h"
 
-__global__
-/**
-  hoisted when extracting rowscale_f32_rowmajor
-*/
-static void
-__hoisted_rowscale_f32_rowmajor_0(uint32_t m, uint32_t n, float *a, float *b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rowscale_f32_rowmajor
+    */
+    static void __hoisted_rowscale_f32_rowmajor_0(uint32_t m, uint32_t n,
+                                                  float *a, float *b)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;

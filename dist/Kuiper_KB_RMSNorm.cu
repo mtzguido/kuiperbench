@@ -1,13 +1,12 @@
 
 #include "Kuiper_KB_RMSNorm.h"
 
-__global__
-/**
-  hoisted when extracting rmsnorm_fw
-*/
-static void
-__hoisted_rmsnorm_fw_0(uint32_t hw, uint32_t c, float *x, uint32_t bhw,
-                       float *sum_sq)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rmsnorm_fw
+    */
+    static void __hoisted_rmsnorm_fw_0(uint32_t hw, uint32_t c, float *x,
+                                       uint32_t bhw, float *sum_sq)
 {
     if (1024U * blockIdx.x + threadIdx.x < bhw) {
         uint32_t ci_ref = 0U;
@@ -21,25 +20,24 @@ __hoisted_rmsnorm_fw_0(uint32_t hw, uint32_t c, float *x, uint32_t bhw,
     }
 }
 
-__global__
-/**
-  hoisted when extracting rmsnorm_fw
-*/
-static void
-__hoisted_rmsnorm_fw_1(float eps, float inv_c, uint32_t bhw, float *sum_sq)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rmsnorm_fw
+    */
+    static void __hoisted_rmsnorm_fw_1(float eps, float inv_c, uint32_t bhw,
+                                       float *sum_sq)
 {
     if (1024U * blockIdx.x + threadIdx.x < bhw)
         sum_sq[1024U * blockIdx.x + threadIdx.x] =
             rsqrtf(sum_sq[1024U * blockIdx.x + threadIdx.x] * inv_c + eps);
 }
 
-__global__
-/**
-  hoisted when extracting rmsnorm_fw
-*/
-static void
-__hoisted_rmsnorm_fw_2(uint32_t hw, uint32_t c, float *x, uint32_t bhw,
-                       float *sum_sq)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting rmsnorm_fw
+    */
+    static void __hoisted_rmsnorm_fw_2(uint32_t hw, uint32_t c, float *x,
+                                       uint32_t bhw, float *sum_sq)
 {
     if (1024U * blockIdx.x + threadIdx.x < bhw * c) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / c;

@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_HuberLoss.h"
 
-__global__
-/**
-  hoisted when extracting huber_scalar_out_f32
-*/
-static void
-__hoisted_huber_scalar_out_f32_0(float x, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting huber_scalar_out_f32
+    */
+    static void __hoisted_huber_scalar_out_f32_0(float x, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < 1U)
         out[1024U * blockIdx.x + threadIdx.x] = x;
@@ -22,12 +21,12 @@ float *Kuiper_KB_HuberLoss_huber_scalar_out_f32(float x)
     return out;
 }
 
-__global__
-/**
-  hoisted when extracting huber_loss_fw_f32
-*/
-static void
-__hoisted_huber_loss_fw_f32_0(uint32_t n, float *targets, float *scratch)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting huber_loss_fw_f32
+    */
+    static void __hoisted_huber_loss_fw_f32_0(uint32_t n, float *targets,
+                                              float *scratch)
 {
     if (1024U * blockIdx.x + threadIdx.x < n) {
         float d = scratch[1024U * blockIdx.x + threadIdx.x] -
@@ -39,12 +38,12 @@ __hoisted_huber_loss_fw_f32_0(uint32_t n, float *targets, float *scratch)
     }
 }
 
-__global__
-/**
-  hoisted when extracting huber_loss_fw_f32
-*/
-static void
-__hoisted_huber_loss_fw_f32_1(uint32_t n, float *scratch, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting huber_loss_fw_f32
+    */
+    static void __hoisted_huber_loss_fw_f32_1(uint32_t n, float *scratch,
+                                              float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;

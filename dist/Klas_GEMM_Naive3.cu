@@ -1,14 +1,14 @@
 
 #include "Klas_GEMM_Naive3.h"
 
-__global__
-/**
-  hoisted when extracting g_matmul_bf16_rrr
-*/
-static void
-__hoisted_g_matmul_bf16_rrr_0(uint32_t m, uint32_t n, uint32_t k,
-                              __nv_bfloat16 *gA, __nv_bfloat16 *gB,
-                              __nv_bfloat16 *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting g_matmul_bf16_rrr
+    */
+    static void __hoisted_g_matmul_bf16_rrr_0(uint32_t m, uint32_t n,
+                                              uint32_t k, __nv_bfloat16 *gA,
+                                              __nv_bfloat16 *gB,
+                                              __nv_bfloat16 *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -42,13 +42,12 @@ void Klas_GEMM_Naive3_g_matmul_bf16_rrr(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting g_matmul_f32_rrr
-*/
-static void
-__hoisted_g_matmul_f32_rrr_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
-                             float *gB, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting g_matmul_f32_rrr
+    */
+    static void __hoisted_g_matmul_f32_rrr_0(uint32_t m, uint32_t n, uint32_t k,
+                                             float *gA, float *gB, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -79,13 +78,12 @@ void Klas_GEMM_Naive3_g_matmul_f32_rrr(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting g_matmul_f64_rrr
-*/
-static void
-__hoisted_g_matmul_f64_rrr_0(uint32_t m, uint32_t n, uint32_t k, double *gA,
-                             double *gB, double *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting g_matmul_f64_rrr
+    */
+    static void __hoisted_g_matmul_f64_rrr_0(uint32_t m, uint32_t n, uint32_t k,
+                                             double *gA, double *gB, double *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -116,14 +114,14 @@ void Klas_GEMM_Naive3_g_matmul_f64_rrr(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting g_matmul_bf16_ccc
-*/
-static void
-__hoisted_g_matmul_bf16_ccc_0(uint32_t m, uint32_t n, uint32_t k,
-                              __nv_bfloat16 *gA, __nv_bfloat16 *gB,
-                              __nv_bfloat16 *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting g_matmul_bf16_ccc
+    */
+    static void __hoisted_g_matmul_bf16_ccc_0(uint32_t m, uint32_t n,
+                                              uint32_t k, __nv_bfloat16 *gA,
+                                              __nv_bfloat16 *gB,
+                                              __nv_bfloat16 *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -157,13 +155,12 @@ void Klas_GEMM_Naive3_g_matmul_bf16_ccc(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting g_matmul_f32_ccc
-*/
-static void
-__hoisted_g_matmul_f32_ccc_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
-                             float *gB, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting g_matmul_f32_ccc
+    */
+    static void __hoisted_g_matmul_f32_ccc_0(uint32_t m, uint32_t n, uint32_t k,
+                                             float *gA, float *gB, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -194,13 +191,12 @@ void Klas_GEMM_Naive3_g_matmul_f32_ccc(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting g_matmul_f64_ccc
-*/
-static void
-__hoisted_g_matmul_f64_ccc_0(uint32_t m, uint32_t n, uint32_t k, double *gA,
-                             double *gB, double *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting g_matmul_f64_ccc
+    */
+    static void __hoisted_g_matmul_f64_ccc_0(uint32_t m, uint32_t n, uint32_t k,
+                                             double *gA, double *gB, double *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;

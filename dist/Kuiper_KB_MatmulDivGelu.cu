@@ -1,13 +1,13 @@
 
 #include "Kuiper_KB_MatmulDivGelu.h"
 
-__global__
-/**
-  hoisted when extracting matmul_div_gelu_f32
-*/
-static void
-__hoisted_matmul_div_gelu_f32_0(uint32_t batch, uint32_t input, uint32_t out,
-                                float *x, float *wt, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul_div_gelu_f32
+    */
+    static void __hoisted_matmul_div_gelu_f32_0(uint32_t batch, uint32_t input,
+                                                uint32_t out, float *x,
+                                                float *wt, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch * out) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / out;
@@ -22,13 +22,13 @@ __hoisted_matmul_div_gelu_f32_0(uint32_t batch, uint32_t input, uint32_t out,
     }
 }
 
-__global__
-/**
-  hoisted when extracting matmul_div_gelu_f32
-*/
-static void
-__hoisted_matmul_div_gelu_f32_1(uint32_t batch, uint32_t out, float *bias,
-                                float *y, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul_div_gelu_f32
+    */
+    static void __hoisted_matmul_div_gelu_f32_1(uint32_t batch, uint32_t out,
+                                                float *bias, float *y,
+                                                float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch * out) {
         uint32_t j = (1024U * blockIdx.x + threadIdx.x) % out;
@@ -37,13 +37,12 @@ __hoisted_matmul_div_gelu_f32_1(uint32_t batch, uint32_t out, float *bias,
     }
 }
 
-__global__
-/**
-  hoisted when extracting matmul_div_gelu_f32
-*/
-static void
-__hoisted_matmul_div_gelu_f32_2(uint32_t batch, uint32_t out, float divisor,
-                                float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul_div_gelu_f32
+    */
+    static void __hoisted_matmul_div_gelu_f32_2(uint32_t batch, uint32_t out,
+                                                float divisor, float *y)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch * out) {
         float x1 = y[1024U * blockIdx.x + threadIdx.x];

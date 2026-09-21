@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_AvgPool2D.h"
 
-__global__
-/**
-  hoisted when extracting smul_fw_f32
-*/
-static void
-__hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_f32
+    */
+    static void __hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -39,15 +38,13 @@ float Kuiper_KB_AvgPool2D_avgpool_recip_f32(uint32_t k)
     return (float) 1LL / (float) (int64_t) (uint64_t) k;
 }
 
-__global__
-/**
-  hoisted when extracting avgpool2d_axis_fw_rm_f32
-*/
-static void
-__hoisted_avgpool2d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
-                                     uint32_t d, uint32_t bc, uint32_t l,
-                                     uint32_t l_out, float *input,
-                                     float *output)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting avgpool2d_axis_fw_rm_f32
+    */
+    static void __hoisted_avgpool2d_axis_fw_rm_f32_0(
+        uint32_t k, uint32_t s, uint32_t p, uint32_t d, uint32_t bc, uint32_t l,
+        uint32_t l_out, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
@@ -85,13 +82,14 @@ void Kuiper_KB_AvgPool2D_avgpool2d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-__global__
-/**
-  hoisted when extracting avgpool2d_half_alloc
-*/
-static void
-__hoisted_avgpool2d_half_alloc_0(uint32_t h, uint32_t w_out, float *mid_h_in,
-                                 uint32_t h_out, uint32_t rows_h, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting avgpool2d_half_alloc
+    */
+    static void __hoisted_avgpool2d_half_alloc_0(uint32_t h, uint32_t w_out,
+                                                 float *mid_h_in,
+                                                 uint32_t h_out,
+                                                 uint32_t rows_h, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < rows_h * h_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / h_out;
@@ -138,13 +136,13 @@ float *Kuiper_KB_AvgPool2D_avgpool2d_half_alloc(uint32_t bc, uint32_t h,
     return out;
 }
 
-__global__
-/**
-  hoisted when extracting avgpool2d_full_alloc_f32
-*/
-static void
-__hoisted_avgpool2d_full_alloc_f32_0(float *flat0, float *flat1, float *out,
-                                     uint32_t ntotal)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting avgpool2d_full_alloc_f32
+    */
+    static void __hoisted_avgpool2d_full_alloc_f32_0(float *flat0, float *flat1,
+                                                     float *out,
+                                                     uint32_t ntotal)
 {
     if (1024U * blockIdx.x + threadIdx.x < ntotal)
         out[1024U * blockIdx.x + threadIdx.x] =

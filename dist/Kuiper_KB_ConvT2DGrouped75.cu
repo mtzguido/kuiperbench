@@ -1,24 +1,22 @@
 
 #include "Kuiper_KB_ConvT2DGrouped75.h"
 
-__global__
-/**
-  hoisted when extracting convt2d_grouped75_alloc_f32
-*/
-static void
-__hoisted_convt2d_grouped75_alloc_f32_0(float *gbias)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting convt2d_grouped75_alloc_f32
+    */
+    static void __hoisted_convt2d_grouped75_alloc_f32_0(float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < 64U)
         gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
-__global__
-/**
-  hoisted when extracting convt2d_grouped75_alloc_f32
-*/
-static void
-__hoisted_convt2d_grouped75_alloc_f32_1(float *gx, float *gw, float *gbias,
-                                        float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting convt2d_grouped75_alloc_f32
+    */
+    static void __hoisted_convt2d_grouped75_alloc_f32_1(float *gx, float *gw,
+                                                        float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < 201586688U) {
         uint32_t g =

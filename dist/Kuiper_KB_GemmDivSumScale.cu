@@ -1,14 +1,14 @@
 
 #include "Kuiper_KB_GemmDivSumScale.h"
 
-__global__
-/**
-  hoisted when extracting gemm_div_sum_scale_f32
-*/
-static void
-__hoisted_gemm_div_sum_scale_f32_0(uint32_t batch, uint32_t input,
-                                   uint32_t hidden, float *x, float *wt,
-                                   float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting gemm_div_sum_scale_f32
+    */
+    static void __hoisted_gemm_div_sum_scale_f32_0(uint32_t batch,
+                                                   uint32_t input,
+                                                   uint32_t hidden, float *x,
+                                                   float *wt, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch * hidden) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / hidden;
@@ -29,12 +29,12 @@ __hoisted_gemm_div_sum_scale_f32_0(uint32_t batch, uint32_t input,
     }
 }
 
-__global__
-/**
-  hoisted when extracting gemm_div_sum_scale_f32
-*/
-static void
-__hoisted_gemm_div_sum_scale_f32_1(uint32_t hidden, float *y, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting gemm_div_sum_scale_f32
+    */
+    static void __hoisted_gemm_div_sum_scale_f32_1(uint32_t hidden, float *y,
+                                                   float *gC)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -56,12 +56,12 @@ __hoisted_gemm_div_sum_scale_f32_1(uint32_t hidden, float *y, float *gC)
         y[blockIdx.x] = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting gemm_div_sum_scale_f32
-*/
-static void
-__hoisted_gemm_div_sum_scale_f32_2(uint32_t batch, float k, float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting gemm_div_sum_scale_f32
+    */
+    static void __hoisted_gemm_div_sum_scale_f32_2(uint32_t batch, float k,
+                                                   float *y)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch)
         y[1024U * blockIdx.x + threadIdx.x] *= k;

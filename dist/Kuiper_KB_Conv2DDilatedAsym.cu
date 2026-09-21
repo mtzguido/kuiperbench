@@ -13,18 +13,15 @@ uint32_t Kuiper_KB_Conv2DDilatedAsym_conv2dd_out_dim_sz(uint32_t l, uint32_t k,
         return (padded - kspan) / s + 1U;
 }
 
-__global__
-/**
-  hoisted when extracting conv2d_dilated_asym_f32
-*/
-static void
-__hoisted_conv2d_dilated_asym_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
-                                    uint32_t w_in, uint32_t cout, uint32_t kh,
-                                    uint32_t kw, uint32_t sh, uint32_t sw,
-                                    uint32_t ph, uint32_t pw, uint32_t dh,
-                                    uint32_t dw, uint32_t h_out, uint32_t w_out,
-                                    float *gx, float *gw, float *gbias,
-                                    float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_dilated_asym_f32
+    */
+    static void __hoisted_conv2d_dilated_asym_f32_0(
+        uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
+        uint32_t kh, uint32_t kw, uint32_t sh, uint32_t sw, uint32_t ph,
+        uint32_t pw, uint32_t dh, uint32_t dw, uint32_t h_out, uint32_t w_out,
+        float *gx, float *gw, float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * cout * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -78,12 +75,11 @@ void Kuiper_KB_Conv2DDilatedAsym_conv2d_dilated_asym_f32(
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting conv2d_dilated_asym80_alloc_f32
-*/
-static void
-__hoisted_conv2d_dilated_asym80_alloc_f32_0(float *gbias)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_dilated_asym80_alloc_f32
+    */
+    static void __hoisted_conv2d_dilated_asym80_alloc_f32_0(float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < 64U)
         gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;

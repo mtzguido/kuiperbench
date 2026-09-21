@@ -1,17 +1,15 @@
 
 #include "Kuiper_KB_Conv3DGeneral.h"
 
-__global__
-/**
-  hoisted when extracting conv3d_general_f32
-*/
-static void
-__hoisted_conv3d_general_f32_0(uint32_t b, uint32_t cin, uint32_t d_in,
-                               uint32_t h_in, uint32_t w_in, uint32_t cout,
-                               uint32_t kd, uint32_t kh, uint32_t kw,
-                               uint32_t stride, uint32_t pad, uint32_t d_out,
-                               uint32_t h_out, uint32_t w_out, float *gx,
-                               float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv3d_general_f32
+    */
+    static void __hoisted_conv3d_general_f32_0(
+        uint32_t b, uint32_t cin, uint32_t d_in, uint32_t h_in, uint32_t w_in,
+        uint32_t cout, uint32_t kd, uint32_t kh, uint32_t kw, uint32_t stride,
+        uint32_t pad, uint32_t d_out, uint32_t h_out, uint32_t w_out, float *gx,
+        float *gw, float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * cout * d_out * h_out * w_out) {
         uint32_t how = h_out * w_out;

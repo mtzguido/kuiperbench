@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_MeanVarNorm.h"
 
-__global__
-/**
-  hoisted when extracting mean_var_norm
-*/
-static void
-__hoisted_mean_var_norm_0(uint32_t d, float *scratch, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting mean_var_norm
+    */
+    static void __hoisted_mean_var_norm_0(uint32_t d, float *scratch,
+                                          float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -28,12 +28,12 @@ __hoisted_mean_var_norm_0(uint32_t d, float *scratch, float *out)
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting mean_var_norm
-*/
-static void
-__hoisted_mean_var_norm_1(uint32_t d, float *scratch, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting mean_var_norm
+    */
+    static void __hoisted_mean_var_norm_1(uint32_t d, float *scratch,
+                                          float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -57,13 +57,12 @@ __hoisted_mean_var_norm_1(uint32_t d, float *scratch, float *out)
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting mean_var_norm
-*/
-static void
-__hoisted_mean_var_norm_2(uint32_t d, float *scratch, float inv,
-                          float neg_mean_inv)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting mean_var_norm
+    */
+    static void __hoisted_mean_var_norm_2(uint32_t d, float *scratch, float inv,
+                                          float neg_mean_inv)
 {
     if (1024U * blockIdx.x + threadIdx.x < d)
         scratch[1024U * blockIdx.x + threadIdx.x] =

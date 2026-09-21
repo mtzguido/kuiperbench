@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_CrossEntropyLoss.h"
 
-__global__
-/**
-  hoisted when extracting ce_scalar_out_f32
-*/
-static void
-__hoisted_ce_scalar_out_f32_0(float x, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting ce_scalar_out_f32
+    */
+    static void __hoisted_ce_scalar_out_f32_0(float x, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < 1U)
         out[1024U * blockIdx.x + threadIdx.x] = x;
@@ -22,12 +21,11 @@ float *Kuiper_KB_CrossEntropyLoss_ce_scalar_out_f32(float x)
     return out;
 }
 
-__global__
-/**
-  hoisted when extracting ce_loss_fw_f32
-*/
-static void
-__hoisted_ce_loss_fw_f32_0(uint32_t c, float *x_, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting ce_loss_fw_f32
+    */
+    static void __hoisted_ce_loss_fw_f32_0(uint32_t c, float *x_, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -51,12 +49,12 @@ __hoisted_ce_loss_fw_f32_0(uint32_t c, float *x_, float *out)
         out[blockIdx.x] = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting ce_loss_fw_f32
-*/
-static void
-__hoisted_ce_loss_fw_f32_1(uint32_t c, float *scratch, float sum)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting ce_loss_fw_f32
+    */
+    static void __hoisted_ce_loss_fw_f32_1(uint32_t c, float *scratch,
+                                           float sum)
 {
     if (1024U * blockIdx.x + threadIdx.x < c) {
         float x = scratch[1024U * blockIdx.x + threadIdx.x];
@@ -64,12 +62,11 @@ __hoisted_ce_loss_fw_f32_1(uint32_t c, float *scratch, float sum)
     }
 }
 
-__global__
-/**
-  hoisted when extracting ce_loss_fw_f32
-*/
-static void
-__hoisted_ce_loss_fw_f32_2(uint32_t b, float *t_dev, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting ce_loss_fw_f32
+    */
+    static void __hoisted_ce_loss_fw_f32_2(uint32_t b, float *t_dev, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;

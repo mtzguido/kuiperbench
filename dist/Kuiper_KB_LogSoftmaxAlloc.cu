@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_LogSoftmaxAlloc.h"
 
-__global__
-/**
-  hoisted when extracting logsoftmax_alloc_f32
-*/
-static void
-__hoisted_logsoftmax_alloc_f32_0(uint32_t cols, float *output, float *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting logsoftmax_alloc_f32
+    */
+    static void __hoisted_logsoftmax_alloc_f32_0(uint32_t cols, float *output,
+                                                 float *sums)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -30,13 +30,12 @@ __hoisted_logsoftmax_alloc_f32_0(uint32_t cols, float *output, float *sums)
         sums[blockIdx.x] = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting logsoftmax_alloc_f32
-*/
-static void
-__hoisted_logsoftmax_alloc_f32_1(uint32_t rows, uint32_t cols, float *output,
-                                 float *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting logsoftmax_alloc_f32
+    */
+    static void __hoisted_logsoftmax_alloc_f32_1(uint32_t rows, uint32_t cols,
+                                                 float *output, float *sums)
 {
     if (1024U * blockIdx.x + threadIdx.x < rows * cols) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / cols;
@@ -76,12 +75,12 @@ float *Kuiper_KB_LogSoftmaxAlloc_logsoftmax_alloc_f32(uint32_t rows,
     return _return;
 }
 
-__global__
-/**
-  hoisted when extracting logsoftmax_alloc_f64
-*/
-static void
-__hoisted_logsoftmax_alloc_f64_0(uint32_t cols, double *output, double *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting logsoftmax_alloc_f64
+    */
+    static void __hoisted_logsoftmax_alloc_f64_0(uint32_t cols, double *output,
+                                                 double *sums)
 {
     double *sa = (double *) KPR_SHMEM_AT(0U);
     double acc = (double) 0LL;
@@ -105,13 +104,12 @@ __hoisted_logsoftmax_alloc_f64_0(uint32_t cols, double *output, double *sums)
         sums[blockIdx.x] = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting logsoftmax_alloc_f64
-*/
-static void
-__hoisted_logsoftmax_alloc_f64_1(uint32_t rows, uint32_t cols, double *output,
-                                 double *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting logsoftmax_alloc_f64
+    */
+    static void __hoisted_logsoftmax_alloc_f64_1(uint32_t rows, uint32_t cols,
+                                                 double *output, double *sums)
 {
     if (1024U * blockIdx.x + threadIdx.x < rows * cols) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / cols;

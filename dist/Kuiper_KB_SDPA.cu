@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_SDPA.h"
 
-__global__
-/**
-  hoisted when extracting smul_fw_f32
-*/
-static void
-__hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_f32
+    */
+    static void __hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -49,12 +48,12 @@ __hoisted_row_softmax_rm_f32_0(uint32_t n, float *a, float *maxs, uint32_t nthm)
         maxs[blockIdx.x] = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting row_softmax_rm_f32
-*/
-static void
-__hoisted_row_softmax_rm_f32_1(uint32_t m, uint32_t n, float *a, float *maxs)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting row_softmax_rm_f32
+    */
+    static void __hoisted_row_softmax_rm_f32_1(uint32_t m, uint32_t n, float *a,
+                                               float *maxs)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -92,12 +91,12 @@ __hoisted_row_softmax_rm_f32_2(uint32_t n, uint32_t nth, float *a, float *sums)
         sums[blockIdx.x] = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting row_softmax_rm_f32
-*/
-static void
-__hoisted_row_softmax_rm_f32_3(uint32_t m, uint32_t n, float *a, float *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting row_softmax_rm_f32
+    */
+    static void __hoisted_row_softmax_rm_f32_3(uint32_t m, uint32_t n, float *a,
+                                               float *sums)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -155,13 +154,12 @@ extern void Kuiper_KB_BatchedGEMM_batched_gemm_f32(uint32_t batch,
                                                    uint32_t cols, float *a,
                                                    float *b, float *c);
 
-__global__
-/**
-  hoisted when extracting sdpa_f32
-*/
-static void
-__hoisted_sdpa_f32_0(uint32_t s, uint32_t d, float *gQ, float *gK, uint32_t bh,
-                     float *gScores)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting sdpa_f32
+    */
+    static void __hoisted_sdpa_f32_0(uint32_t s, uint32_t d, float *gQ,
+                                     float *gK, uint32_t bh, float *gScores)
 {
     if (1024U * blockIdx.x + threadIdx.x < bh * s * s) {
         uint32_t page = (1024U * blockIdx.x + threadIdx.x) % bh;

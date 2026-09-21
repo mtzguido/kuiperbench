@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_L1Norm.h"
 
-__global__
-/**
-  hoisted when extracting l1norm_fw
-*/
-static void
-__hoisted_l1norm_fw_0(uint32_t b, uint32_t d, float *x, float *sum_abs)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting l1norm_fw
+    */
+    static void __hoisted_l1norm_fw_0(uint32_t b, uint32_t d, float *x,
+                                      float *sum_abs)
 {
     if (1024U * blockIdx.x + threadIdx.x < b) {
         uint32_t ci_ref = 0U;
@@ -20,24 +20,23 @@ __hoisted_l1norm_fw_0(uint32_t b, uint32_t d, float *x, float *sum_abs)
     }
 }
 
-__global__
-/**
-  hoisted when extracting l1norm_fw
-*/
-static void
-__hoisted_l1norm_fw_1(uint32_t b, float dim_f, float *sum_abs)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting l1norm_fw
+    */
+    static void __hoisted_l1norm_fw_1(uint32_t b, float dim_f, float *sum_abs)
 {
     if (1024U * blockIdx.x + threadIdx.x < b)
         sum_abs[1024U * blockIdx.x + threadIdx.x] =
             dim_f / sum_abs[1024U * blockIdx.x + threadIdx.x];
 }
 
-__global__
-/**
-  hoisted when extracting l1norm_fw
-*/
-static void
-__hoisted_l1norm_fw_2(uint32_t b, uint32_t d, float *x, float *sum_abs)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting l1norm_fw
+    */
+    static void __hoisted_l1norm_fw_2(uint32_t b, uint32_t d, float *x,
+                                      float *sum_abs)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * d) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / d;

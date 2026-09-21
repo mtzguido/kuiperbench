@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_ReduceMean.h"
 
-__global__
-/**
-  hoisted when extracting reduce_mean_fw_f32
-*/
-static void
-__hoisted_reduce_mean_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting reduce_mean_fw_f32
+    */
+    static void __hoisted_reduce_mean_fw_f32_0(uint32_t m, uint32_t d, float *x,
+                                               float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -28,12 +28,12 @@ __hoisted_reduce_mean_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y)
         y[blockIdx.x] = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting reduce_mean_fw_f32
-*/
-static void
-__hoisted_reduce_mean_fw_f32_1(float *y, float inv_d, uint32_t bm)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting reduce_mean_fw_f32
+    */
+    static void __hoisted_reduce_mean_fw_f32_1(float *y, float inv_d,
+                                               uint32_t bm)
 {
     if (1024U * blockIdx.x + threadIdx.x < bm)
         y[1024U * blockIdx.x + threadIdx.x] *= inv_d;
@@ -57,12 +57,12 @@ void Kuiper_KB_ReduceMean_reduce_mean_fw_f32(uint32_t b, uint32_t m, uint32_t d,
     MUST(cudaStreamDestroy(s0));
 }
 
-__global__
-/**
-  hoisted when extracting reduce_mean_alloc_f32
-*/
-static void
-__hoisted_reduce_mean_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting reduce_mean_alloc_f32
+    */
+    static void __hoisted_reduce_mean_alloc_f32_0(uint32_t m, uint32_t d,
+                                                  float *x, float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -84,12 +84,12 @@ __hoisted_reduce_mean_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y)
         y[blockIdx.x] = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting reduce_mean_alloc_f32
-*/
-static void
-__hoisted_reduce_mean_alloc_f32_1(float *y, float inv_d, uint32_t bm1)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting reduce_mean_alloc_f32
+    */
+    static void __hoisted_reduce_mean_alloc_f32_1(float *y, float inv_d,
+                                                  uint32_t bm1)
 {
     if (1024U * blockIdx.x + threadIdx.x < bm1)
         y[1024U * blockIdx.x + threadIdx.x] *= inv_d;

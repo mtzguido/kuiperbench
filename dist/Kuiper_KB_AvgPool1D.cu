@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_AvgPool1D.h"
 
-__global__
-/**
-  hoisted when extracting smul_fw_f32
-*/
-static void
-__hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_f32
+    */
+    static void __hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -39,14 +38,15 @@ float Kuiper_KB_AvgPool1D_avgpool_recip_f32(uint32_t k)
     return (float) 1LL / (float) (int64_t) (uint64_t) k;
 }
 
-__global__
-/**
-  hoisted when extracting avgpool1d_fw_rm_f32
-*/
-static void
-__hoisted_avgpool1d_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p, uint32_t d,
-                                uint32_t bc, uint32_t l, uint32_t l_out,
-                                float *input, float *output)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting avgpool1d_fw_rm_f32
+    */
+    static void __hoisted_avgpool1d_fw_rm_f32_0(uint32_t k, uint32_t s,
+                                                uint32_t p, uint32_t d,
+                                                uint32_t bc, uint32_t l,
+                                                uint32_t l_out, float *input,
+                                                float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;

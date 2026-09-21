@@ -1,16 +1,14 @@
 
 #include "Kuiper_KB_Conv2DAlloc.h"
 
-__global__
-/**
-  hoisted when extracting conv2d_general_f32
-*/
-static void
-__hoisted_conv2d_general_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
-                               uint32_t w_in, uint32_t cout, uint32_t kh,
-                               uint32_t kw, uint32_t stride, uint32_t pad,
-                               uint32_t h_out, uint32_t w_out, float *gx,
-                               float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_general_f32
+    */
+    static void __hoisted_conv2d_general_f32_0(
+        uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
+        uint32_t kh, uint32_t kw, uint32_t stride, uint32_t pad, uint32_t h_out,
+        uint32_t w_out, float *gx, float *gw, float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * cout * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -151,12 +149,12 @@ Kuiper_KB_Conv2DAlloc_conv2d_raw_alloc_bias_f32(uint32_t b, uint32_t cin,
             gw, gbias)});
 }
 
-__global__
-/**
-  hoisted when extracting conv2d_raw_alloc_zero_f32
-*/
-static void
-__hoisted_conv2d_raw_alloc_zero_f32_0(uint32_t cout, float *gbias)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_raw_alloc_zero_f32
+    */
+    static void __hoisted_conv2d_raw_alloc_zero_f32_0(uint32_t cout,
+                                                      float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < cout)
         gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;

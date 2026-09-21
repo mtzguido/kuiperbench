@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_LayerNorm.h"
 
-__global__
-/**
-  hoisted when extracting layer_norm
-*/
-static void
-__hoisted_layer_norm_0(uint32_t n, float *scratch, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting layer_norm
+    */
+    static void __hoisted_layer_norm_0(uint32_t n, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -28,12 +27,11 @@ __hoisted_layer_norm_0(uint32_t n, float *scratch, float *out)
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting layer_norm
-*/
-static void
-__hoisted_layer_norm_1(uint32_t n, float *scratch, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting layer_norm
+    */
+    static void __hoisted_layer_norm_1(uint32_t n, float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -57,37 +55,34 @@ __hoisted_layer_norm_1(uint32_t n, float *scratch, float *out)
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting layer_norm
-*/
-static void
-__hoisted_layer_norm_2(uint32_t n, float *scratch, float inv,
-                       float neg_mean_inv)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting layer_norm
+    */
+    static void __hoisted_layer_norm_2(uint32_t n, float *scratch, float inv,
+                                       float neg_mean_inv)
 {
     if (1024U * blockIdx.x + threadIdx.x < n)
         scratch[1024U * blockIdx.x + threadIdx.x] =
             scratch[1024U * blockIdx.x + threadIdx.x] * inv + neg_mean_inv;
 }
 
-__global__
-/**
-  hoisted when extracting layer_norm
-*/
-static void
-__hoisted_layer_norm_3(uint32_t n, float *gamma, float *scratch)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting layer_norm
+    */
+    static void __hoisted_layer_norm_3(uint32_t n, float *gamma, float *scratch)
 {
     if (1024U * blockIdx.x + threadIdx.x < n)
         scratch[1024U * blockIdx.x + threadIdx.x] *=
             gamma[1024U * blockIdx.x + threadIdx.x];
 }
 
-__global__
-/**
-  hoisted when extracting layer_norm
-*/
-static void
-__hoisted_layer_norm_4(uint32_t n, float *beta, float *scratch)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting layer_norm
+    */
+    static void __hoisted_layer_norm_4(uint32_t n, float *beta, float *scratch)
 {
     if (1024U * blockIdx.x + threadIdx.x < n)
         scratch[1024U * blockIdx.x + threadIdx.x] +=

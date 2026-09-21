@@ -1,13 +1,13 @@
 
 #include "Kuiper_KB_GEMMAlloc.h"
 
-__global__
-/**
-  hoisted when extracting gemm_naive3_alloc_f32
-*/
-static void
-__hoisted_gemm_naive3_alloc_f32_0(uint32_t m, uint32_t n, uint32_t k, float *a,
-                                  float *b, float *c)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting gemm_naive3_alloc_f32
+    */
+    static void __hoisted_gemm_naive3_alloc_f32_0(uint32_t m, uint32_t n,
+                                                  uint32_t k, float *a,
+                                                  float *b, float *c)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -44,13 +44,12 @@ float *Kuiper_KB_GEMMAlloc_gemm_naive3_alloc_f32(uint32_t m, uint32_t n,
     return c;
 }
 
-__global__
-/**
-  hoisted when extracting gemm_naive1_alloc_f32
-*/
-static void
-__hoisted_gemm_naive1_alloc_f32_0(uint32_t n, uint32_t k, float *a, float *b,
-                                  float *c)
+__global__ __launch_bounds__(1)
+    /**
+      hoisted when extracting gemm_naive1_alloc_f32
+    */
+    static void __hoisted_gemm_naive1_alloc_f32_0(uint32_t n, uint32_t k,
+                                                  float *a, float *b, float *c)
 {
     uint32_t trow = blockIdx.x / n;
     uint32_t tcol = blockIdx.x % n;
