@@ -1,13 +1,12 @@
 
 #include "Kuiper_KB_MaskedCumSum.h"
 
-__global__
-/**
-  hoisted when extracting masked_cumsum_fw_f32
-*/
-static void
-__hoisted_masked_cumsum_fw_f32_0(float *input, uint8_t *mask, uint32_t n1,
-                                 float *scratch)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting masked_cumsum_fw_f32
+    */
+    static void __hoisted_masked_cumsum_fw_f32_0(float *input, uint8_t *mask,
+                                                 uint32_t n1, float *scratch)
 {
     if (1024U * blockIdx.x + threadIdx.x < n1) {
         float x1 = input[1024U * blockIdx.x + threadIdx.x];
@@ -16,12 +15,12 @@ __hoisted_masked_cumsum_fw_f32_0(float *input, uint8_t *mask, uint32_t n1,
     }
 }
 
-__global__
-/**
-  hoisted when extracting masked_cumsum_fw_f32
-*/
-static void
-__hoisted_masked_cumsum_fw_f32_1(uint32_t d, float *output, float *scratch)
+__global__ __launch_bounds__(1)
+    /**
+      hoisted when extracting masked_cumsum_fw_f32
+    */
+    static void __hoisted_masked_cumsum_fw_f32_1(uint32_t d, float *output,
+                                                 float *scratch)
 {
     float acc = (float) 0LL;
     uint32_t di_ref = 0U;

@@ -1,13 +1,12 @@
 
 #include "Kuiper_KB_TransposedGEMM.h"
 
-__global__
-/**
-  hoisted when extracting matmul_f32_atb
-*/
-static void
-__hoisted_matmul_f32_atb_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
-                           float *gB, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul_f32_atb
+    */
+    static void __hoisted_matmul_f32_atb_0(uint32_t m, uint32_t n, uint32_t k,
+                                           float *gA, float *gB, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -38,13 +37,12 @@ void Kuiper_KB_TransposedGEMM_matmul_f32_atb(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting matmul_f32_abt
-*/
-static void
-__hoisted_matmul_f32_abt_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
-                           float *gB, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul_f32_abt
+    */
+    static void __hoisted_matmul_f32_abt_0(uint32_t m, uint32_t n, uint32_t k,
+                                           float *gA, float *gB, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -75,13 +73,12 @@ void Kuiper_KB_TransposedGEMM_matmul_f32_abt(uint32_t m, uint32_t n, uint32_t k,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting matmul_f32_atbt
-*/
-static void
-__hoisted_matmul_f32_atbt_0(uint32_t m, uint32_t n, uint32_t k, float *gA,
-                            float *gB, float *gC)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting matmul_f32_atbt
+    */
+    static void __hoisted_matmul_f32_atbt_0(uint32_t m, uint32_t n, uint32_t k,
+                                            float *gA, float *gB, float *gC)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t trow = (1024U * blockIdx.x + threadIdx.x) / n;

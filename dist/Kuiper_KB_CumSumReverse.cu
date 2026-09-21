@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_CumSumReverse.h"
 
-__global__
-/**
-  hoisted when extracting cumsum_reverse_fw_f32
-*/
-static void
-__hoisted_cumsum_reverse_fw_f32_0(uint32_t d, float *input_r, float *output_r)
+__global__ __launch_bounds__(1)
+    /**
+      hoisted when extracting cumsum_reverse_fw_f32
+    */
+    static void __hoisted_cumsum_reverse_fw_f32_0(uint32_t d, float *input_r,
+                                                  float *output_r)
 {
     float acc = (float) 0LL;
     uint32_t di_ref = 0U;

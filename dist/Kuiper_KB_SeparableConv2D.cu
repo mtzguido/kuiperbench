@@ -7,15 +7,16 @@ static uint32_t dwconv2d_out_dim(uint32_t n, uint32_t k, uint32_t stride,
     return (n + 2U * pad - k) / stride + 1U;
 }
 
-__global__
-/**
-  hoisted when extracting dwconv2d_f32
-*/
-static void
-__hoisted_dwconv2d_f32_0(uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in,
-                         uint32_t kh, uint32_t kw, uint32_t stride,
-                         uint32_t pad, uint32_t h_out, uint32_t w_out,
-                         float *gx, float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting dwconv2d_f32
+    */
+    static void __hoisted_dwconv2d_f32_0(uint32_t b, uint32_t c, uint32_t h_in,
+                                         uint32_t w_in, uint32_t kh,
+                                         uint32_t kw, uint32_t stride,
+                                         uint32_t pad, uint32_t h_out,
+                                         uint32_t w_out, float *gx, float *gw,
+                                         float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * c * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -65,16 +66,14 @@ static void dwconv2d_f32(uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting conv2d_general_f32
-*/
-static void
-__hoisted_conv2d_general_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
-                               uint32_t w_in, uint32_t cout, uint32_t kh,
-                               uint32_t kw, uint32_t stride, uint32_t pad,
-                               uint32_t h_out, uint32_t w_out, float *gx,
-                               float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_general_f32
+    */
+    static void __hoisted_conv2d_general_f32_0(
+        uint32_t b, uint32_t cin, uint32_t h_in, uint32_t w_in, uint32_t cout,
+        uint32_t kh, uint32_t kw, uint32_t stride, uint32_t pad, uint32_t h_out,
+        uint32_t w_out, float *gx, float *gw, float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * cout * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -152,23 +151,21 @@ float *Kuiper_KB_SeparableConv2D_separable_alloc_f32(
     return gy;
 }
 
-__global__
-/**
-  hoisted when extracting separable86_alloc_f32
-*/
-static void
-__hoisted_separable86_alloc_f32_0(float *bias_dw)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting separable86_alloc_f32
+    */
+    static void __hoisted_separable86_alloc_f32_0(float *bias_dw)
 {
     if (1024U * blockIdx.x + threadIdx.x < 64U)
         bias_dw[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;
 }
 
-__global__
-/**
-  hoisted when extracting separable86_alloc_f32
-*/
-static void
-__hoisted_separable86_alloc_f32_1(float *bias_pw)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting separable86_alloc_f32
+    */
+    static void __hoisted_separable86_alloc_f32_1(float *bias_pw)
 {
     if (1024U * blockIdx.x + threadIdx.x < 128U)
         bias_pw[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;

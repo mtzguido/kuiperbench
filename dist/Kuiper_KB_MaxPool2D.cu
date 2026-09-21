@@ -13,15 +13,13 @@ uint32_t Kuiper_KB_MaxPool2D_pool_out_len_1d_sz(uint32_t l, uint32_t k,
         return (padded - kspan) / s + 1U;
 }
 
-__global__
-/**
-  hoisted when extracting maxpool2d_axis_fw_rm_f32
-*/
-static void
-__hoisted_maxpool2d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
-                                     uint32_t d, uint32_t bc, uint32_t l,
-                                     uint32_t l_out, float *input,
-                                     float *output)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting maxpool2d_axis_fw_rm_f32
+    */
+    static void __hoisted_maxpool2d_axis_fw_rm_f32_0(
+        uint32_t k, uint32_t s, uint32_t p, uint32_t d, uint32_t bc, uint32_t l,
+        uint32_t l_out, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
@@ -59,15 +57,15 @@ void Kuiper_KB_MaxPool2D_maxpool2d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-__global__
-/**
-  hoisted when extracting maxpool2d_full_alloc_f32
-*/
-static void
-__hoisted_maxpool2d_full_alloc_f32_0(uint32_t kh, uint32_t sh, uint32_t ph,
-                                     uint32_t dh, uint32_t bc, uint32_t h,
-                                     uint32_t wo, uint32_t ho, float *mid2,
-                                     float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting maxpool2d_full_alloc_f32
+    */
+    static void __hoisted_maxpool2d_full_alloc_f32_0(uint32_t kh, uint32_t sh,
+                                                     uint32_t ph, uint32_t dh,
+                                                     uint32_t bc, uint32_t h,
+                                                     uint32_t wo, uint32_t ho,
+                                                     float *mid2, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < bc * wo * ho) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / ho;

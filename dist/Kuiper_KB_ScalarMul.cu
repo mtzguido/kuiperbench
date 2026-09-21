@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_ScalarMul.h"
 
-__global__
-/**
-  hoisted when extracting smul_fw_f32
-*/
-static void
-__hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_f32
+    */
+    static void __hoisted_smul_fw_f32_0(float c, uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -22,12 +21,11 @@ void Kuiper_KB_ScalarMul_smul_fw_f32(float c, uint32_t lena, float *a)
     MUST(cudaStreamDestroy(s1));
 }
 
-__global__
-/**
-  hoisted when extracting smul_fw_f64
-*/
-static void
-__hoisted_smul_fw_f64_0(double c, uint32_t lena, double *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_f64
+    */
+    static void __hoisted_smul_fw_f64_0(double c, uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -43,12 +41,11 @@ void Kuiper_KB_ScalarMul_smul_fw_f64(double c, uint32_t lena, double *a)
     MUST(cudaStreamDestroy(s1));
 }
 
-__global__
-/**
-  hoisted when extracting smul_fw_u32
-*/
-static void
-__hoisted_smul_fw_u32_0(uint32_t c, uint32_t lena, uint32_t *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_u32
+    */
+    static void __hoisted_smul_fw_u32_0(uint32_t c, uint32_t lena, uint32_t *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -64,12 +61,11 @@ void Kuiper_KB_ScalarMul_smul_fw_u32(uint32_t c, uint32_t lena, uint32_t *a)
     MUST(cudaStreamDestroy(s1));
 }
 
-__global__
-/**
-  hoisted when extracting smul_fw_u64
-*/
-static void
-__hoisted_smul_fw_u64_0(uint64_t c, uint32_t lena, uint64_t *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_fw_u64
+    */
+    static void __hoisted_smul_fw_u64_0(uint64_t c, uint32_t lena, uint64_t *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= c;
@@ -85,12 +81,12 @@ void Kuiper_KB_ScalarMul_smul_fw_u64(uint64_t c, uint32_t lena, uint64_t *a)
     MUST(cudaStreamDestroy(s1));
 }
 
-__global__
-/**
-  hoisted when extracting smul_out_f32
-*/
-static void
-__hoisted_smul_out_f32_0(float cst, uint32_t lena, float *c, float *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_out_f32
+    */
+    static void __hoisted_smul_out_f32_0(float cst, uint32_t lena, float *c,
+                                         float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         c[1024U * blockIdx.x + threadIdx.x] =
@@ -108,12 +104,12 @@ void Kuiper_KB_ScalarMul_smul_out_f32(float cst, uint32_t lena, float *c,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting smul_out_f64
-*/
-static void
-__hoisted_smul_out_f64_0(double cst, uint32_t lena, double *c, double *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_out_f64
+    */
+    static void __hoisted_smul_out_f64_0(double cst, uint32_t lena, double *c,
+                                         double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         c[1024U * blockIdx.x + threadIdx.x] =
@@ -131,12 +127,12 @@ void Kuiper_KB_ScalarMul_smul_out_f64(double cst, uint32_t lena, double *c,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting smul_out_u32
-*/
-static void
-__hoisted_smul_out_u32_0(uint32_t cst, uint32_t lena, uint32_t *c, uint32_t *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_out_u32
+    */
+    static void __hoisted_smul_out_u32_0(uint32_t cst, uint32_t lena,
+                                         uint32_t *c, uint32_t *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         c[1024U * blockIdx.x + threadIdx.x] =
@@ -154,12 +150,12 @@ void Kuiper_KB_ScalarMul_smul_out_u32(uint32_t cst, uint32_t lena, uint32_t *c,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting smul_out_u64
-*/
-static void
-__hoisted_smul_out_u64_0(uint64_t cst, uint32_t lena, uint64_t *c, uint64_t *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting smul_out_u64
+    */
+    static void __hoisted_smul_out_u64_0(uint64_t cst, uint32_t lena,
+                                         uint64_t *c, uint64_t *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         c[1024U * blockIdx.x + threadIdx.x] =

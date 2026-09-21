@@ -28,12 +28,12 @@ __hoisted_row_softmax_rm_f32_0(uint32_t n, float *a, float *maxs, uint32_t nthm)
         maxs[blockIdx.x] = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting row_softmax_rm_f32
-*/
-static void
-__hoisted_row_softmax_rm_f32_1(uint32_t m, uint32_t n, float *a, float *maxs)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting row_softmax_rm_f32
+    */
+    static void __hoisted_row_softmax_rm_f32_1(uint32_t m, uint32_t n, float *a,
+                                               float *maxs)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -71,12 +71,12 @@ __hoisted_row_softmax_rm_f32_2(uint32_t n, uint32_t nth, float *a, float *sums)
         sums[blockIdx.x] = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting row_softmax_rm_f32
-*/
-static void
-__hoisted_row_softmax_rm_f32_3(uint32_t m, uint32_t n, float *a, float *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting row_softmax_rm_f32
+    */
+    static void __hoisted_row_softmax_rm_f32_3(uint32_t m, uint32_t n, float *a,
+                                               float *sums)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -157,12 +157,12 @@ __hoisted_row_softmax_rm_f64_0(uint32_t n, double *a, double *maxs,
         maxs[blockIdx.x] = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting row_softmax_rm_f64
-*/
-static void
-__hoisted_row_softmax_rm_f64_1(uint32_t m, uint32_t n, double *a, double *maxs)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting row_softmax_rm_f64
+    */
+    static void __hoisted_row_softmax_rm_f64_1(uint32_t m, uint32_t n,
+                                               double *a, double *maxs)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;
@@ -201,12 +201,12 @@ __hoisted_row_softmax_rm_f64_2(uint32_t n, uint32_t nth, double *a,
         sums[blockIdx.x] = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting row_softmax_rm_f64
-*/
-static void
-__hoisted_row_softmax_rm_f64_3(uint32_t m, uint32_t n, double *a, double *sums)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting row_softmax_rm_f64
+    */
+    static void __hoisted_row_softmax_rm_f64_3(uint32_t m, uint32_t n,
+                                               double *a, double *sums)
 {
     if (1024U * blockIdx.x + threadIdx.x < m * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;

@@ -1,12 +1,11 @@
 
 #include "Kuiper_KB_HardTanh.h"
 
-__global__
-/**
-  hoisted when extracting htanh_fw_f32
-*/
-static void
-__hoisted_htanh_fw_f32_0(uint32_t lena, float *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting htanh_fw_f32
+    */
+    static void __hoisted_htanh_fw_f32_0(uint32_t lena, float *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float x = a[1024U * blockIdx.x + threadIdx.x];
@@ -27,12 +26,11 @@ void Kuiper_KB_HardTanh_htanh_fw_f32(uint32_t lena, float *a)
     MUST(cudaStreamDestroy(s1));
 }
 
-__global__
-/**
-  hoisted when extracting htanh_fw_f64
-*/
-static void
-__hoisted_htanh_fw_f64_0(uint32_t lena, double *a)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting htanh_fw_f64
+    */
+    static void __hoisted_htanh_fw_f64_0(uint32_t lena, double *a)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double x = a[1024U * blockIdx.x + threadIdx.x];
@@ -53,12 +51,12 @@ void Kuiper_KB_HardTanh_htanh_fw_f64(uint32_t lena, double *a)
     MUST(cudaStreamDestroy(s1));
 }
 
-__global__
-/**
-  hoisted when extracting htanh_alloc_f32
-*/
-static void
-__hoisted_htanh_alloc_f32_0(uint32_t lena, float *input, float *output)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting htanh_alloc_f32
+    */
+    static void __hoisted_htanh_alloc_f32_0(uint32_t lena, float *input,
+                                            float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         float y = input[1024U * blockIdx.x + threadIdx.x];
@@ -85,12 +83,12 @@ float *Kuiper_KB_HardTanh_htanh_alloc_f32(uint32_t lena, float *input)
     return _return;
 }
 
-__global__
-/**
-  hoisted when extracting htanh_alloc_f64
-*/
-static void
-__hoisted_htanh_alloc_f64_0(uint32_t lena, double *input, double *output)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting htanh_alloc_f64
+    */
+    static void __hoisted_htanh_alloc_f64_0(uint32_t lena, double *input,
+                                            double *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena) {
         double y = input[1024U * blockIdx.x + threadIdx.x];

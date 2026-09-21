@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_Frobenius.h"
 
-__global__
-/**
-  hoisted when extracting frobenius_fw_f32
-*/
-static void
-__hoisted_frobenius_fw_f32_0(uint32_t lena, float *a, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting frobenius_fw_f32
+    */
+    static void __hoisted_frobenius_fw_f32_0(uint32_t lena, float *a,
+                                             float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -30,12 +30,12 @@ __hoisted_frobenius_fw_f32_0(uint32_t lena, float *a, float *out)
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting frobenius_fw_f32
-*/
-static void
-__hoisted_frobenius_fw_f32_1(uint32_t lena, float *a, float inv_norm)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting frobenius_fw_f32
+    */
+    static void __hoisted_frobenius_fw_f32_1(uint32_t lena, float *a,
+                                             float inv_norm)
 {
     if (1024U * blockIdx.x + threadIdx.x < lena)
         a[1024U * blockIdx.x + threadIdx.x] *= inv_norm;

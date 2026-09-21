@@ -6,14 +6,15 @@ uint32_t Kuiper_KB_Conv2DSquare_conv2d_square_out_sz(uint32_t l, uint32_t k)
     return l - k + 1U;
 }
 
-__global__
-/**
-  hoisted when extracting conv2d_square_f32
-*/
-static void
-__hoisted_conv2d_square_f32_0(uint32_t b, uint32_t cin, uint32_t h_in,
-                              uint32_t cout, uint32_t k, uint32_t h_out,
-                              float *gx, float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_square_f32
+    */
+    static void __hoisted_conv2d_square_f32_0(uint32_t b, uint32_t cin,
+                                              uint32_t h_in, uint32_t cout,
+                                              uint32_t k, uint32_t h_out,
+                                              float *gx, float *gw,
+                                              float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * cout * h_out * h_out) {
         uint32_t how = h_out * h_out;
@@ -66,12 +67,11 @@ void Kuiper_KB_Conv2DSquare_conv2d_square_f32(uint32_t b, uint32_t cin,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting conv2d_square63_alloc_f32
-*/
-static void
-__hoisted_conv2d_square63_alloc_f32_0(float *gbias)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting conv2d_square63_alloc_f32
+    */
+    static void __hoisted_conv2d_square63_alloc_f32_0(float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < 128U)
         gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;

@@ -1,13 +1,13 @@
 
 #include "Kuiper_KB_HingeLoss.h"
 
-__global__
-/**
-  hoisted when extracting hinge_loss_broadcast_f32
-*/
-static void
-__hoisted_hinge_loss_broadcast_f32_0(uint32_t b, uint32_t n, float *targets,
-                                     float *scratch)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting hinge_loss_broadcast_f32
+    */
+    static void __hoisted_hinge_loss_broadcast_f32_0(uint32_t b, uint32_t n,
+                                                     float *targets,
+                                                     float *scratch)
 {
     if (1024U * blockIdx.x + threadIdx.x < n * b) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / b;
@@ -18,12 +18,12 @@ __hoisted_hinge_loss_broadcast_f32_0(uint32_t b, uint32_t n, float *targets,
     }
 }
 
-__global__
-/**
-  hoisted when extracting hinge_loss_broadcast_f32
-*/
-static void
-__hoisted_hinge_loss_broadcast_f32_1(uint32_t elems, float *scratch, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting hinge_loss_broadcast_f32
+    */
+    static void __hoisted_hinge_loss_broadcast_f32_1(uint32_t elems,
+                                                     float *scratch, float *out)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -45,12 +45,11 @@ __hoisted_hinge_loss_broadcast_f32_1(uint32_t elems, float *scratch, float *out)
         *out = *sa;
 }
 
-__global__
-/**
-  hoisted when extracting hinge_loss_broadcast_f32
-*/
-static void
-__hoisted_hinge_loss_broadcast_f32_2(float mean, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting hinge_loss_broadcast_f32
+    */
+    static void __hoisted_hinge_loss_broadcast_f32_2(float mean, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < 1U)
         out[1024U * blockIdx.x + threadIdx.x] = mean;

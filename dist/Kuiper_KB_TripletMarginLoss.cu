@@ -3,12 +3,11 @@
 
 float Kuiper_KB_TripletMarginLoss_triplet_default_eps_f32 = 0.000001;
 
-__global__
-/**
-  hoisted when extracting triplet_scalar_out_f32
-*/
-static void
-__hoisted_triplet_scalar_out_f32_0(float x, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting triplet_scalar_out_f32
+    */
+    static void __hoisted_triplet_scalar_out_f32_0(float x, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < 1U)
         out[1024U * blockIdx.x + threadIdx.x] = x;
@@ -24,13 +23,12 @@ float *Kuiper_KB_TripletMarginLoss_triplet_scalar_out_f32(float x)
     return out;
 }
 
-__global__
-/**
-  hoisted when extracting triplet_fw_f32
-*/
-static void
-__hoisted_triplet_fw_f32_0(uint32_t d, float eps, float *scratch_a,
-                           float *scratch_b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting triplet_fw_f32
+    */
+    static void __hoisted_triplet_fw_f32_0(uint32_t d, float eps,
+                                           float *scratch_a, float *scratch_b)
 {
     if (1024U * blockIdx.x + threadIdx.x < d) {
         float d1 = scratch_a[1024U * blockIdx.x + threadIdx.x] -
@@ -39,12 +37,12 @@ __hoisted_triplet_fw_f32_0(uint32_t d, float eps, float *scratch_a,
     }
 }
 
-__global__
-/**
-  hoisted when extracting triplet_fw_f32
-*/
-static void
-__hoisted_triplet_fw_f32_1(uint32_t d, float *scratch_a, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting triplet_fw_f32
+    */
+    static void __hoisted_triplet_fw_f32_1(uint32_t d, float *scratch_a,
+                                           float *out)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -66,13 +64,12 @@ __hoisted_triplet_fw_f32_1(uint32_t d, float *scratch_a, float *out)
         *out = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting triplet_fw_f32
-*/
-static void
-__hoisted_triplet_fw_f32_2(uint32_t d, float eps, float *scratch_a,
-                           float *scratch_b)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting triplet_fw_f32
+    */
+    static void __hoisted_triplet_fw_f32_2(uint32_t d, float eps,
+                                           float *scratch_a, float *scratch_b)
 {
     if (1024U * blockIdx.x + threadIdx.x < d) {
         float d1 = scratch_a[1024U * blockIdx.x + threadIdx.x] -
@@ -81,12 +78,12 @@ __hoisted_triplet_fw_f32_2(uint32_t d, float eps, float *scratch_a,
     }
 }
 
-__global__
-/**
-  hoisted when extracting triplet_fw_f32
-*/
-static void
-__hoisted_triplet_fw_f32_3(uint32_t d, float *scratch_a, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting triplet_fw_f32
+    */
+    static void __hoisted_triplet_fw_f32_3(uint32_t d, float *scratch_a,
+                                           float *out)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -108,12 +105,11 @@ __hoisted_triplet_fw_f32_3(uint32_t d, float *scratch_a, float *out)
         *out = *sa1;
 }
 
-__global__
-/**
-  hoisted when extracting triplet_fw_f32
-*/
-static void
-__hoisted_triplet_fw_f32_4(uint32_t b, float *t_dev, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting triplet_fw_f32
+    */
+    static void __hoisted_triplet_fw_f32_4(uint32_t b, float *t_dev, float *out)
 {
     float *sa1 = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;

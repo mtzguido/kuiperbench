@@ -1,13 +1,13 @@
 
 #include "Kuiper_KB_ArgmaxReduceDim.h"
 
-__global__
-/**
-  hoisted when extracting argmaxreduce_dim_fw_f32
-*/
-static void
-__hoisted_argmaxreduce_dim_fw_f32_0(uint32_t m, uint32_t d, float *x,
-                                    int64_t *y, uint32_t bm)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting argmaxreduce_dim_fw_f32
+    */
+    static void __hoisted_argmaxreduce_dim_fw_f32_0(uint32_t m, uint32_t d,
+                                                    float *x, int64_t *y,
+                                                    uint32_t bm)
 {
     if (1024U * blockIdx.x + threadIdx.x < bm) {
         uint32_t ci_ref = 0U;
@@ -39,13 +39,13 @@ void Kuiper_KB_ArgmaxReduceDim_argmaxreduce_dim_fw_f32(uint32_t b, uint32_t m,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting argmaxreduce_dim_alloc_f32
-*/
-static void
-__hoisted_argmaxreduce_dim_alloc_f32_0(uint32_t m, uint32_t d, float *x,
-                                       int64_t *y, uint32_t bm1)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting argmaxreduce_dim_alloc_f32
+    */
+    static void __hoisted_argmaxreduce_dim_alloc_f32_0(uint32_t m, uint32_t d,
+                                                       float *x, int64_t *y,
+                                                       uint32_t bm1)
 {
     if (1024U * blockIdx.x + threadIdx.x < bm1) {
         uint32_t ci_ref = 0U;

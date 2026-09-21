@@ -13,15 +13,13 @@ uint32_t Kuiper_KB_MaxPool3D_pool_out_len_1d_sz(uint32_t l, uint32_t k,
         return (padded - kspan) / s + 1U;
 }
 
-__global__
-/**
-  hoisted when extracting maxpool3d_axis_fw_rm_f32
-*/
-static void
-__hoisted_maxpool3d_axis_fw_rm_f32_0(uint32_t k, uint32_t s, uint32_t p,
-                                     uint32_t d, uint32_t bc, uint32_t l,
-                                     uint32_t l_out, float *input,
-                                     float *output)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting maxpool3d_axis_fw_rm_f32
+    */
+    static void __hoisted_maxpool3d_axis_fw_rm_f32_0(
+        uint32_t k, uint32_t s, uint32_t p, uint32_t d, uint32_t bc, uint32_t l,
+        uint32_t l_out, float *input, float *output)
 {
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
@@ -59,15 +57,13 @@ void Kuiper_KB_MaxPool3D_maxpool3d_axis_fw_rm_f32(uint32_t k, uint32_t s,
     }
 }
 
-__global__
-/**
-  hoisted when extracting maxpool3d_raw_alloc_f32
-*/
-static void
-__hoisted_maxpool3d_raw_alloc_f32_0(uint32_t k, uint32_t s, uint32_t p,
-                                    uint32_t d, uint32_t h, uint32_t wo,
-                                    float *mid_h_in, uint32_t ho,
-                                    uint32_t rows_h, float *mid_h)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting maxpool3d_raw_alloc_f32
+    */
+    static void __hoisted_maxpool3d_raw_alloc_f32_0(
+        uint32_t k, uint32_t s, uint32_t p, uint32_t d, uint32_t h, uint32_t wo,
+        float *mid_h_in, uint32_t ho, uint32_t rows_h, float *mid_h)
 {
     if (1024U * blockIdx.x + threadIdx.x < rows_h * ho) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / ho;
@@ -90,15 +86,14 @@ __hoisted_maxpool3d_raw_alloc_f32_0(uint32_t k, uint32_t s, uint32_t p,
     }
 }
 
-__global__
-/**
-  hoisted when extracting maxpool3d_raw_alloc_f32
-*/
-static void
-__hoisted_maxpool3d_raw_alloc_f32_1(uint32_t k, uint32_t s, uint32_t p,
-                                    uint32_t d, uint32_t depth, uint32_t wo,
-                                    uint32_t ho, float *mid_d_in, uint32_t do_,
-                                    uint32_t rows_d, float *out)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting maxpool3d_raw_alloc_f32
+    */
+    static void __hoisted_maxpool3d_raw_alloc_f32_1(
+        uint32_t k, uint32_t s, uint32_t p, uint32_t d, uint32_t depth,
+        uint32_t wo, uint32_t ho, float *mid_d_in, uint32_t do_,
+        uint32_t rows_d, float *out)
 {
     if (1024U * blockIdx.x + threadIdx.x < rows_d * do_) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / do_;

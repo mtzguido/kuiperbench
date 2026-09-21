@@ -1,13 +1,13 @@
 
 #include "Kuiper_KB_BatchedGEMM.h"
 
-__global__
-/**
-  hoisted when extracting batched_gemm_f32
-*/
-static void
-__hoisted_batched_gemm_f32_0(uint32_t batch, uint32_t rows, uint32_t shared,
-                             uint32_t cols, float *a, float *b, float *c)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting batched_gemm_f32
+    */
+    static void __hoisted_batched_gemm_f32_0(uint32_t batch, uint32_t rows,
+                                             uint32_t shared, uint32_t cols,
+                                             float *a, float *b, float *c)
 {
     if (1024U * blockIdx.x + threadIdx.x < batch * rows * cols) {
         uint32_t page = (1024U * blockIdx.x + threadIdx.x) % batch;

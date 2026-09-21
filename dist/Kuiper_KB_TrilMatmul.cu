@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_TrilMatmul.h"
 
-__global__
-/**
-  hoisted when extracting tril_matmul_f32
-*/
-static void
-__hoisted_tril_matmul_f32_0(uint32_t n, float *gA, float *gB, float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting tril_matmul_f32
+    */
+    static void __hoisted_tril_matmul_f32_0(uint32_t n, float *gA, float *gB,
+                                            float *y)
 {
     if (1024U * blockIdx.x + threadIdx.x < n * n) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / n;

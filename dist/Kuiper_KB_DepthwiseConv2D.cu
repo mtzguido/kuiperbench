@@ -8,15 +8,16 @@ uint32_t Kuiper_KB_DepthwiseConv2D_dwconv2d_out_dim(uint32_t n, uint32_t k,
     return (n + 2U * pad - k) / stride + 1U;
 }
 
-__global__
-/**
-  hoisted when extracting dwconv2d_f32
-*/
-static void
-__hoisted_dwconv2d_f32_0(uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in,
-                         uint32_t kh, uint32_t kw, uint32_t stride,
-                         uint32_t pad, uint32_t h_out, uint32_t w_out,
-                         float *gx, float *gw, float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting dwconv2d_f32
+    */
+    static void __hoisted_dwconv2d_f32_0(uint32_t b, uint32_t c, uint32_t h_in,
+                                         uint32_t w_in, uint32_t kh,
+                                         uint32_t kw, uint32_t stride,
+                                         uint32_t pad, uint32_t h_out,
+                                         uint32_t w_out, float *gx, float *gw,
+                                         float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * c * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -66,16 +67,14 @@ void Kuiper_KB_DepthwiseConv2D_dwconv2d_f32(
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting dwconv2d_alloc_f32
-*/
-static void
-__hoisted_dwconv2d_alloc_f32_0(uint32_t b, uint32_t c, uint32_t h_in,
-                               uint32_t w_in, uint32_t kh, uint32_t kw,
-                               uint32_t stride, uint32_t pad, uint32_t h_out,
-                               uint32_t w_out, float *gx, float *gw,
-                               float *gbias, float *gy)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting dwconv2d_alloc_f32
+    */
+    static void __hoisted_dwconv2d_alloc_f32_0(
+        uint32_t b, uint32_t c, uint32_t h_in, uint32_t w_in, uint32_t kh,
+        uint32_t kw, uint32_t stride, uint32_t pad, uint32_t h_out,
+        uint32_t w_out, float *gx, float *gw, float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < b * c * h_out * w_out) {
         uint32_t how = h_out * w_out;
@@ -190,12 +189,12 @@ Kuiper_KB_DepthwiseConv2D_dwconv2d_raw_alloc_bias_f32(
             gbias)});
 }
 
-__global__
-/**
-  hoisted when extracting dwconv2d_raw_alloc_zero_f32
-*/
-static void
-__hoisted_dwconv2d_raw_alloc_zero_f32_0(uint32_t c, float *gbias)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting dwconv2d_raw_alloc_zero_f32
+    */
+    static void __hoisted_dwconv2d_raw_alloc_zero_f32_0(uint32_t c,
+                                                        float *gbias)
 {
     if (1024U * blockIdx.x + threadIdx.x < c)
         gbias[1024U * blockIdx.x + threadIdx.x] = (float) 0LL;

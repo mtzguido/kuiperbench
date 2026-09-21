@@ -1,12 +1,12 @@
 
 #include "Kuiper_KB_ReduceSum.h"
 
-__global__
-/**
-  hoisted when extracting reduce_sum_fw_f32
-*/
-static void
-__hoisted_reduce_sum_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting reduce_sum_fw_f32
+    */
+    static void __hoisted_reduce_sum_fw_f32_0(uint32_t m, uint32_t d, float *x,
+                                              float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
@@ -39,12 +39,12 @@ void Kuiper_KB_ReduceSum_reduce_sum_fw_f32(uint32_t b, uint32_t m, uint32_t d,
     MUST(cudaStreamDestroy(s));
 }
 
-__global__
-/**
-  hoisted when extracting reduce_sum_alloc_f32
-*/
-static void
-__hoisted_reduce_sum_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y)
+__global__ __launch_bounds__(1024)
+    /**
+      hoisted when extracting reduce_sum_alloc_f32
+    */
+    static void __hoisted_reduce_sum_alloc_f32_0(uint32_t m, uint32_t d,
+                                                 float *x, float *y)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
     float acc = (float) 0LL;
