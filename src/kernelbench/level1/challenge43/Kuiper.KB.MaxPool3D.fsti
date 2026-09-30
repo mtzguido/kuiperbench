@@ -101,7 +101,8 @@ let maxpool3d_mid_h_view
   (w_out h_out : pos)
   (sx : chest2 f32 (bc * depth * h) w)
   : chest2 f32 (bc * (h_out * w_out)) depth
-  = from_seq (l2_bcm_pages bc (h_out * w_out) depth)
+  = assert (bc * depth * w_out * h_out == bc * (h_out * w_out) * depth);
+    from_seq (l2_bcm_pages bc (h_out * w_out) depth)
       (to_seq (l2_bcm_pages (bc * depth) w_out h_out)
         (windowreduce_result reducer_fmax_f32
           (maxpool3d_mid_w_view bc depth h w kw sw pw dw w_out sx)

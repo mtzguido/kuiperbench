@@ -121,7 +121,11 @@ let unfolded_mask_map
     let rhs = masked_chest sx sm in
     let aux (i : abs (b @| d @| INil))
       : Lemma (acc lhs i == acc rhs i)
-      = ()
+      = let (r, (c, ())) = i in
+        FStar.Math.Lemmas.lemma_div_mod_plus c r d;
+        FStar.Math.Lemmas.small_div c d;
+        FStar.Math.Lemmas.small_mod c d;
+        assert (unfold_index (fold_index i) == i)
     in
     Classical.forall_intro aux;
     Kuiper.Chest.lemma_equal_intro lhs rhs;

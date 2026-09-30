@@ -23,7 +23,7 @@ module SZ = Kuiper.SizeT
 inline_for_extraction noextract
 fn recast
   (#et : Type0)
-  (#r1 #c1 #r2 #c2 : nat)
+  (#r1 #c1 #r2 #c2 : erased nat)
   (#l1 : layout2 r1 c1 { is_full l1 })
   (l2 : layout2 r2 c2 { is_full l2 })
   (a1 : T.array2 et l1)
@@ -58,7 +58,7 @@ fn recast
 inline_for_extraction noextract
 let recast_view
   (#et : Type0)
-  (#r1 #c1 #r2 #c2 : nat)
+  (#r1 #c1 #r2 #c2 : erased nat)
   (#l1 : layout2 r1 c1)
   (l2 : layout2 r2 c2)
   (a1 : T.array2 et l1)
@@ -77,7 +77,7 @@ let recast_view
 inline_for_extraction noextract
 fn recast_gpu
   (#et : Type0)
-  (#r1 #c1 #r2 #c2 : nat)
+  (#r1 #c1 #r2 #c2 : erased nat)
   (#l1 : layout2 r1 c1 { is_full l1 })
   (l2 : layout2 r2 c2 { is_full l2 })
   (a1 : T.array2 et l1)
