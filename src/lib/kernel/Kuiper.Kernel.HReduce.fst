@@ -416,6 +416,7 @@ fn iteration
 
       let s2 = array1_read_from_slice r nextid;
       (**)acc1_chest1_append_boundary s_left s_right;
+      (**)assert pure (s2 == acc1 s_right 0);
       (**)assert (pure (s2 `approximates` rsum (Seq.slice vr nextid end_)));
 
       let s = add s1 s2;

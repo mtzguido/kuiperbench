@@ -548,12 +548,13 @@ let row_mean_var_normalized_intro
   (#bd : nat) (d : pos)
   (sx sx' : Seq.lseq f32 bd)
   (off : nat { off + d <= bd })
+  (row : Seq.lseq f32 d { row == Seq.slice sx off (off + d) })
   (eps inv_d : f32)
   (sum sum2 mean m2 var var_eps inv neg_mean_inv : f32)
   : Lemma
       (requires
-        sum  %~ rsum (to_real_seq (Seq.slice sx off (off + d))) /\
-        sum2 %~ frobenius_sumsq_r (to_real_seq (Seq.slice sx off (off + d))) /\
+        sum  %~ rsum (to_real_seq row) /\
+        sum2 %~ frobenius_sumsq_r (to_real_seq row) /\
         mean == mul sum inv_d /\
         m2 == mul sum2 inv_d /\
         var == sub m2 (mul mean mean) /\
@@ -561,8 +562,7 @@ let row_mean_var_normalized_intro
         inv == rsqrt var_eps /\
         neg_mean_inv == sub zero (mul mean inv) /\
         Seq.slice sx' off (off + d) ==
-          affine_result #f32 inv neg_mean_inv #d
-            (Seq.slice sx off (off + d)) /\
+          affine_result #f32 inv neg_mean_inv #d row /\
         inv_d %~ (1.0R /. FStar.Real.of_int d) /\
         row_mean_var_domain sx off d eps)
       (ensures row_mean_var_normalized sx sx' off d eps inv_d)
@@ -815,7 +815,7 @@ fn mean_var_norm_row
                affine_result #f32 inv neg_mean_inv #d (reveal row_g));
   row_mean_var_normalized_intro #(b * d) d
     (chest1_to_seq (reveal sx)) (chest1_to_seq (reveal vfinal))
-    rv_off eps inv_d sum1 sum2 mean m2 var var_eps inv neg_mean_inv;
+    rv_off row_g eps inv_d sum1 sum2 mean m2 var var_eps inv neg_mean_inv;
   assert pure (row_mean_var_normalized (chest1_to_seq (reveal sx))
     (chest1_to_seq (reveal vfinal)) rv_off d eps inv_d);
   assert pure (exists (inv_w neg_mean_inv_w : f32).
