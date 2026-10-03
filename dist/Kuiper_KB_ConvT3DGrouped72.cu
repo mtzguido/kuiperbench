@@ -19,12 +19,15 @@ __global__ __launch_bounds__(1024)
                                                         float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < 28311552U) {
-        uint32_t oc = (1024U * blockIdx.x + threadIdx.x) % 3538944U / 110592U;
-        uint32_t g = oc / 8U;
-        uint32_t oc_pg = oc % 8U;
-        uint32_t r2 = (1024U * blockIdx.x + threadIdx.x) % 3538944U % 110592U;
-        uint32_t r3 = r2 % 4608U;
-        uint32_t od_pd = r2 / 4608U + 1U;
+        uint32_t g =
+            (1024U * blockIdx.x + threadIdx.x) % 3538944U / 110592U / 8U;
+        uint32_t oc_pg =
+            (1024U * blockIdx.x + threadIdx.x) % 3538944U / 110592U % 8U;
+        uint32_t r3 =
+            (1024U * blockIdx.x + threadIdx.x) % 3538944U % 110592U % 4608U;
+        uint32_t od_pd =
+            (1024U * blockIdx.x + threadIdx.x) % 3538944U % 110592U / 4608U +
+            1U;
         uint32_t oh_ph = r3 / 96U + 2U;
         uint32_t ow_pw = r3 % 96U + 3U;
         float acc = (float) 0LL;
@@ -68,7 +71,9 @@ __global__ __launch_bounds__(1024)
                 ite *
                 gw[(((ic * 8U + oc_pg) * 3U + kd_i) * 5U + kh_i) * 7U + kw_i];
         }
-        gy[1024U * blockIdx.x + threadIdx.x] = gbias[oc] + acc;
+        gy[1024U * blockIdx.x + threadIdx.x] =
+            gbias[(1024U * blockIdx.x + threadIdx.x) % 3538944U / 110592U] +
+            acc;
     }
 }
 

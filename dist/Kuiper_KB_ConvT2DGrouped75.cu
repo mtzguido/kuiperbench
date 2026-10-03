@@ -19,30 +19,33 @@ __global__ __launch_bounds__(1024)
                                                         float *gbias, float *gy)
 {
     if (1024U * blockIdx.x + threadIdx.x < 201586688U) {
-        uint32_t g =
-            (1024U * blockIdx.x + threadIdx.x) % 12599168U / 196862U / 16U;
-        uint32_t oc_pg =
-            (1024U * blockIdx.x + threadIdx.x) % 12599168U / 196862U % 16U;
-        uint32_t oh_ph =
-            (1024U * blockIdx.x + threadIdx.x) % 12599168U % 196862U / 766U +
-            1U;
-        uint32_t ow_pw =
-            (1024U * blockIdx.x + threadIdx.x) % 12599168U % 196862U % 766U +
-            2U;
         float acc = (float) 0LL;
         uint32_t k = 0U;
         for (; k < 120U; k++) {
             uint32_t kk = k;
-            uint32_t ic = g * 8U + kk / 15U;
+            uint32_t ic = (1024U * blockIdx.x + threadIdx.x) % 12599168U /
+                              196862U / 16U * 8U +
+                          kk / 15U;
             uint32_t r = kk % 15U;
             uint32_t kh_i = r / 5U;
             uint32_t kw_i = r % 5U;
             uint32_t kh_dh = kh_i * 2U;
             uint32_t kw_dw = kw_i;
             float ite;
-            if (oh_ph >= kh_dh && ow_pw >= kw_dw) {
-                uint32_t h_num = oh_ph - kh_dh;
-                uint32_t w_num = ow_pw - kw_dw;
+            if ((1024U * blockIdx.x + threadIdx.x) % 12599168U % 196862U /
+                            766U +
+                        1U >=
+                    kh_dh &&
+                (1024U * blockIdx.x + threadIdx.x) % 12599168U % 196862U %
+                            766U +
+                        2U >=
+                    kw_dw) {
+                uint32_t h_num = (1024U * blockIdx.x + threadIdx.x) %
+                                     12599168U % 196862U / 766U +
+                                 1U - kh_dh;
+                uint32_t w_num = (1024U * blockIdx.x + threadIdx.x) %
+                                     12599168U % 196862U % 766U +
+                                 2U - kw_dw;
                 if (h_num % 2U == 0U && w_num % 3U == 0U) {
                     uint32_t hi = h_num / 2U;
                     uint32_t wi = w_num / 3U;
@@ -59,7 +62,12 @@ __global__ __launch_bounds__(1024)
                     ite = (float) 0LL;
             } else
                 ite = (float) 0LL;
-            acc += ite * gw[((ic * 16U + oc_pg) * 3U + kh_i) * 5U + kw_i];
+            acc += ite * gw[((ic * 16U + (1024U * blockIdx.x + threadIdx.x) %
+                                             12599168U / 196862U % 16U) *
+                                 3U +
+                             kh_i) *
+                                5U +
+                            kw_i];
         }
         gy[1024U * blockIdx.x + threadIdx.x] =
             gbias[(1024U * blockIdx.x + threadIdx.x) % 12599168U / 196862U] +

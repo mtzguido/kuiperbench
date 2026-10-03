@@ -310,9 +310,8 @@ __global__ __launch_bounds__(1024)
             sum += a[page * m * k + trow * k + vk] *
                    b[page * k * n + vk * n + tcol];
         }
-        float s1 = sum;
         c[page * m * n + trow * n + tcol] =
-            beta * c[page * m * n + trow * n + tcol] + alpha * s1;
+            beta * c[page * m * n + trow * n + tcol] + alpha * sum;
     }
 }
 
