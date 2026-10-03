@@ -26,16 +26,15 @@ __global__ __launch_bounds__(1024)
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
         float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = (float) 0LL - INFINITY;
-        KRML_HOST_IGNORE(&buf);
+        KRML_HOST_IGNORE(&((float) 0LL - INFINITY));
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
             bool in_bounds = pos >= p && pos - p < l;
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - p;
-            float raw = input[r_sz * l + dpos_ref];
-            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
+            acc = fmaxf(acc, in_bounds ? input[r_sz * l + dpos_ref]
+                                       : (float) 0LL - INFINITY);
         }
         output[r_sz * l_out + j_sz] = acc;
     }
@@ -70,17 +69,18 @@ __global__ __launch_bounds__(1024)
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % ho;
         float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = (float) 0LL - INFINITY;
-        KRML_HOST_IGNORE(&buf);
+        KRML_HOST_IGNORE(&((float) 0LL - INFINITY));
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
             bool in_bounds = pos >= p && pos - p < h;
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - p;
-            float raw =
-                mid_h_in[r_sz / wo * h * wo + dpos_ref * wo + r_sz % wo];
-            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
+            acc = fmaxf(
+                acc,
+                in_bounds
+                    ? mid_h_in[r_sz / wo * h * wo + dpos_ref * wo + r_sz % wo]
+                    : (float) 0LL - INFINITY);
         }
         mid_h[r_sz / wo * ho * wo + j_sz * wo + r_sz % wo] = acc;
     }
@@ -100,17 +100,17 @@ __global__ __launch_bounds__(1024)
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % do_;
         float acc = (float) 0LL - INFINITY;
         uint32_t di_ref = 0U;
-        float buf = (float) 0LL - INFINITY;
-        KRML_HOST_IGNORE(&buf);
+        KRML_HOST_IGNORE(&((float) 0LL - INFINITY));
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
             bool in_bounds = pos >= p && pos - p < depth;
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - p;
-            float raw = mid_d_in[r_sz / (ho * wo) * depth * ho * wo +
-                                 dpos_ref * ho * wo + r_sz % (ho * wo)];
-            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
+            acc = fmaxf(
+                acc, in_bounds ? mid_d_in[r_sz / (ho * wo) * depth * ho * wo +
+                                          dpos_ref * ho * wo + r_sz % (ho * wo)]
+                               : (float) 0LL - INFINITY);
         }
         out[r_sz / (ho * wo) * do_ * ho * wo + j_sz * ho * wo +
             r_sz % (ho * wo)] = acc;

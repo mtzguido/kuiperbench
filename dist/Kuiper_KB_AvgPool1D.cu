@@ -53,16 +53,14 @@ __global__ __launch_bounds__(1024)
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
         float acc = (float) 0LL;
         uint32_t di_ref = 0U;
-        float buf = (float) 0LL;
-        KRML_HOST_IGNORE(&buf);
+        KRML_HOST_IGNORE(&(float) 0LL);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
             bool in_bounds = pos >= p && pos - p < l;
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - p;
-            float raw = input[r_sz * l + dpos_ref];
-            acc += in_bounds ? raw : (float) 0LL;
+            acc += in_bounds ? input[r_sz * l + dpos_ref] : (float) 0LL;
         }
         output[r_sz * l_out + j_sz] = acc;
     }
