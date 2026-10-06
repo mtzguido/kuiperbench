@@ -8,6 +8,7 @@ open Kuiper.Tensor.Layout.Alg
 open Kuiper.Tensor.Layout.BCMPages
 open Kuiper.Spec.SumReduceDim
 open Kuiper.Spec.MeanReduceDim
+module RO = Kuiper.Float.Realops
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 module Map = Kuiper.Kernel.Map
@@ -103,9 +104,11 @@ fn reduce_mean_fw_f32_impl
   let d_i64 = FStar.Int.Cast.uint64_to_int64
                 (FStar.SizeT.sizet_to_uint64 d);
   assert pure (FStar.Int64.v d_i64 == SZ.v d);
-  of_int_approx #f32 d_i64;
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int d_i64 d_i64;
   assert pure ((one #f32) `v_approximates` 1.0R);
-  div_approx (one #f32) (of_int #f32 d_i64)
+  approx_div #f32 #_ #_ #_ #_;
+  approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) (of_int #f32 d_i64)
     1.0R (FStar.Real.of_int (SZ.v d));
   assert pure (inv_d %~ (1.0R /. FStar.Real.of_int (SZ.v d)));
 

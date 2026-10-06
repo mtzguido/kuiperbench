@@ -9,6 +9,7 @@ open Kuiper.Monoid.Reduce.F32 { reducer_fadd_f32 }
 open Kuiper.Kernel.WindowReduce1D { windowreduce, windowreduce_result }
 open Kuiper.Spec.Pool1D { pool_out_len_1d }
 open Kuiper.Seq.Common { lseq_map }
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module EM = Kuiper.EMatrix
 module ML = FStar.Math.Lemmas
@@ -38,9 +39,11 @@ let avgpool_recip_f32 (k : szp)
   = let k_i64 = FStar.Int.Cast.uint64_to_int64
       (FStar.SizeT.sizet_to_uint64 k) in
     assert (FStar.Int64.v k_i64 == SZ.v k);
-    of_int_approx #f32 k_i64;
+    approx_of_int #f32 #_ #_ #_ #_;
+    approx_apply (of_int #f32) RO.r_of_int k_i64 k_i64;
     assert ((one #f32) %~ 1.0R);
-    div_approx (one #f32) (of_int #f32 k_i64)
+    approx_div #f32 #_ #_ #_ #_;
+    approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) (of_int #f32 k_i64)
       1.0R (FStar.Real.of_int (SZ.v k));
     let r : f32 = div (one #f32) (of_int #f32 k_i64) in
     assert (r %~ (1.0R /. FStar.Real.of_int (SZ.v k)));

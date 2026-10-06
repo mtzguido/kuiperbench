@@ -17,7 +17,7 @@ the bridge does not supply it.
 
 The public [layernorm_domain] precondition requires every real
 [var + eps] to be positive.  On that domain, the packaged
-[Kuiper.Approximates.rsqrt_approx] law connects the float
+[Kuiper.Approximates.approx_rsqrt] law connects the float
 [rsqrt] operation to [FStar.Math.Sqrt.rsqrt].
 
 Proof shape

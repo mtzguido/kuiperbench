@@ -6,6 +6,7 @@ open Kuiper.Approximates
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.HuberLoss
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
@@ -69,16 +70,17 @@ let huber_step_approx_lemma (#t:Type0)
           (ensures huber_step #t a b %~ real_huber_step ra rb)
           (* The [floating_real_like] instance does not appear in the
              head [%~] pattern, so we add the standard [has_type]
-             trigger (same idiom as the *_approx_pat lemmas) to keep
+             trigger (same idiom as the packaged approximation laws) to keep
              the SMT pattern well-formed and let it fire per-element
              inside [lseq_map2 ... %~ lseq_map2 ...]. *)
           [SMTPat (huber_step #t a b %~ real_huber_step ra rb);
            SMTPat (has_type rr (floating_real_like t))]
-  = of_int_approx #t 2L;
+  = approx_of_int #t #_ #_ #_ #_;
+    approx_apply (of_int #t) RO.r_of_int 2L 2L;
     assert (Real.of_int (Int64.v 2L) == Real.of_int 2);
     assert ((of_int #t 2L) %~ Real.of_int 2);
-    (* Build the approximations step by step; the *_approx_pat SMTPats
-       (sub/fmax/mul/div/add) and a0/a1 fire on these terms. *)
+    (* Build the approximations step by step; the function contracts and
+       scalar arithmetic laws fire on these terms. *)
     let rd  = ra -. rb in
     let d : t = sub a b in
     assert (d %~ rd);
@@ -171,7 +173,8 @@ fn huber_loss
   let n64 : Int64.t = FStar.Int.Cast.uint64_to_int64 (FStar.SizeT.sizet_to_uint64 n);
   assert pure (Int64.v n64 == SZ.v n);
   let nn : t = of_int n64;
-  of_int_approx #t n64;
+  approx_of_int #t #_ #_ #_ #_;
+  approx_apply (of_int #t) RO.r_of_int n64 n64;
   assert pure (nn %~ Real.of_int n);
 
   let res : t = div s nn;

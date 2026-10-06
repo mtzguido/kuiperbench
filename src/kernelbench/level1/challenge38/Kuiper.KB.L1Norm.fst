@@ -13,6 +13,7 @@ open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward, l2_row_major, c_l2_row_major }
 open Kuiper.Spec.L1Norm
+module RO = Kuiper.Float.Realops
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 module Copy = Kuiper.KB.Tensor.Copy
@@ -61,7 +62,8 @@ let l1norm_row_aux
     assert (acc1 sfac r == div dim_f sum_abs);
     let row = EM.ematrix_row rx r in
     let rsum = l1_sum_r row in
-    div_approx dim_f sum_abs (FStar.Real.of_int d_n) rsum;
+    approx_div #f32 #_ #_ #_ #_;
+    approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div dim_f sum_abs (FStar.Real.of_int d_n) rsum;
     let rscale = l1_scale_r #d_n row in
     let out = Kuiper.Kernel.RowScale.s_row_scale sfac sx in
     let aux (j:nat{j<d_n}) : Lemma
@@ -176,7 +178,8 @@ fn l1norm_fw
   let d_i64 = FStar.Int.Cast.uint64_to_int64
     (FStar.SizeT.sizet_to_uint64 d);
   assert pure (FStar.Int64.v d_i64 == SZ.v d);
-  of_int_approx #f32 d_i64;
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int d_i64 d_i64;
   assert pure (dim_f %~ FStar.Real.of_int (SZ.v d));
   l1norm_fw_f32_impl b d dim_f x rx;
 }

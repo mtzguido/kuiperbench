@@ -9,6 +9,7 @@ open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.MeanVarNorm
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module TensorCopy = Kuiper.KB.Tensor.Copy
 
@@ -68,15 +69,18 @@ let row_mean_var_real_from_witnesses
       (1.0R /. FStar.Real.of_int d);
     assert (m2 %~ rm2);
     a_mul mean mean rmean rmean;
-    sub_approx m2 (mul mean mean) rm2 (rmean *. rmean);
+    approx_sub #f32 #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub m2 (mul mean mean) rm2 (rmean *. rmean);
     to_real_ok eps;
     a_add var eps (rm2 -. rmean *. rmean) (to_real eps);
     assert (var_eps %~ rarg);
-    rsqrt_approx var_eps rarg;
+    approx_rsqrt #f32 #_ #_ #_ #_;
+    approx_apply #f32 #FStar.Math.Sqrt.rpos rsqrt RO.r_rsqrt var_eps rarg;
     let rinv : real = FStar.Math.Sqrt.rsqrt rarg in
     assert (inv %~ rinv);
     a_mul mean inv rmean rinv;
-    sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
+    approx_sub #f32 #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
     assert (neg_mean_inv %~ (0.0R -. rmean *. rinv));
     let aux (j:nat{j<d}) : Lemma
       (Seq.index (Seq.slice sx' off (off+d)) j %~
@@ -912,8 +916,10 @@ let mvn_inv_d_approx (d:szp)
   = let d64 : Int64.t = FStar.Int.Cast.uint64_to_int64
       (FStar.SizeT.sizet_to_uint64 d) in
     assert (Int64.v d64 == SZ.v d);
-    of_int_approx #f32 d64;
-    div_approx (one #f32) (of_int #f32 d64)
+    approx_of_int #f32 #_ #_ #_ #_;
+    approx_apply (of_int #f32) RO.r_of_int d64 d64;
+    approx_div #f32 #_ #_ #_ #_;
+    approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) (of_int #f32 d64)
       1.0R (FStar.Real.of_int (SZ.v d))
 
 let mean_var_float_post_to_real

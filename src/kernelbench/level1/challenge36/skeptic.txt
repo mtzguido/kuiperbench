@@ -23,7 +23,7 @@ The only non-trivial step is `row_reduce_partial_sq_approx`
 to re-express it as `seq_fold_left add zero (seq_map sq_step
 row)` and discharges the approx via `sum_is_approx`.  There is no local
 `admit` or `magic`; the proof uses the packaged
-`Kuiper.Approximates.rsqrt_approx` law.
+`Kuiper.Approximates.approx_rsqrt` law.
 
 (c) Edge cases
 --------------

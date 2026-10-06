@@ -33,7 +33,7 @@ module Kuiper.KB.SDPA
    appears in the public functional claim.
 
    The direct real scale proof uses the packaged
-   [Kuiper.Approximates.rsqrt_approx] law. *)
+   [Kuiper.Approximates.approx_rsqrt] law. *)
 
 #lang-pulse
 open Kuiper

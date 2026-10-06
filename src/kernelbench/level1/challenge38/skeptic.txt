@@ -30,7 +30,7 @@ The bridge lemma [row_reduce_partial_l1_abs_approx] (proved in
 Kuiper.Spec.L1Norm.fst) shows the device-side deterministic left-fold
 of absolutes %~ l1_sum_r, via row_reduce_partial_eq_fold (induction
 using the row_reduce_partial_succ SMTPat), an indexwise application of
-[sub_approx] and [fmax_approx], and [sum_is_approx].
+[approx_sub] and [approx_fmax], and [sum_is_approx].
 
 (c) dim_f.  D / s now uses dim_f = l1_dim_f d = of_int (int64 d),
 computed INSIDE the verification boundary (extracts to

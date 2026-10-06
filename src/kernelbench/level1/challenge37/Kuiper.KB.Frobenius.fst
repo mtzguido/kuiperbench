@@ -7,6 +7,7 @@ open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
+module RO = Kuiper.Float.Realops
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
 module KS = Kuiper.Seq.Common
@@ -112,7 +113,8 @@ fn frobenius
   to_real_chest_to_seq (reveal va);
   let rss = frobenius_sumsq_r (to_real_seq (chest1_to_seq (reveal va)));
   assert pure (sumsq %~ rss);
-  rsqrt_approx sumsq rss;
+  approx_rsqrt #f32 #_ #_ #_ #_;
+  approx_apply #f32 #FStar.Math.Sqrt.rpos rsqrt RO.r_rsqrt sumsq rss;
   frobenius_map_post inv_norm (reveal va);
   ()
 }

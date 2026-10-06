@@ -7,6 +7,7 @@ open Kuiper.Tensor
 open Kuiper.Tensor.Layout { from_seq, to_seq }
 open Kuiper.Tensor.Layout.Alg { l1_forward, l2_row_major, l2_col_major }
 open Kuiper.Spec.HingeLoss
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
@@ -36,9 +37,11 @@ let hinge_step_approx
   = to_real_ok (zero #f32);
     to_real_ok (one #f32);
     a_mul prediction target rprediction rtarget;
-    sub_approx (one #f32) (mul prediction target)
+    approx_sub #f32 #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub (one #f32) (mul prediction target)
       1.0R (rprediction *. rtarget);
-    fmax_approx (zero #f32) (sub (one #f32) (mul prediction target))
+    approx_fmax #f32 #_ #_ #_ #_;
+    approx_apply2 fmax RO.r_fmax (zero #f32) (sub (one #f32) (mul prediction target))
       0.0R (1.0R -. rprediction *. rtarget)
 
 (* Transposing only the logical view turns the row-major (B,N) scratch into
@@ -237,10 +240,12 @@ fn hinge_loss_broadcast
     (FStar.SizeT.sizet_to_uint64 elems);
   assert pure (Int64.v total64 == SZ.v b * SZ.v n);
   let denom : f32 = of_int total64;
-  of_int_approx #f32 total64;
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int total64 total64;
   assert pure (denom %~ Real.of_int (b * n));
   let mean : f32 = div sum denom;
-  div_approx sum denom
+  approx_div #f32 #_ #_ #_ #_;
+  approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div sum denom
     (rsum (real_hinge_terms b n (reveal rp) (reveal rt)))
     (Real.of_int (b * n));
   assert pure

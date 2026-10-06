@@ -12,6 +12,7 @@ open Kuiper.Approximates.Base
 open Kuiper.EMatrix
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.BatchNorm
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module Map = Kuiper.Kernel.Map
 module HRed = Kuiper.Kernel.HReduce
@@ -273,7 +274,8 @@ let bn_row_result_approx
       assert (x %~ rx);
       a_mul x inv rx rinv;
       a_mul mean inv rmean rinv;
-      sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
+      approx_sub #f32 #_ #_ #_ #_;
+      approx_apply2 sub RO.r_sub (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
       a_add (mul x inv) (sub (zero #f32) (mul mean inv))
         (rx *. rinv) (0.0R -. (rmean *. rinv));
       a_mul
@@ -495,11 +497,14 @@ fn batchnorm_channel
   a_mul sum inv_n rsum (reveal rinv_n);
   a_mul sumsq inv_n rsumsq (reveal rinv_n);
   a_mul mean mean rmean rmean;
-  sub_approx m2 (mul mean mean) rm2 (rmean *. rmean);
+  approx_sub #f32 #_ #_ #_ #_;
+  approx_apply2 sub RO.r_sub m2 (mul mean mean) rm2 (rmean *. rmean);
   a_add var eps rvar (reveal reps);
-  rsqrt_approx var_eps positive_rvar_eps;
+  approx_rsqrt #f32 #_ #_ #_ #_;
+  approx_apply #f32 #FStar.Math.Sqrt.rpos rsqrt RO.r_rsqrt var_eps positive_rvar_eps;
   a_mul mean inv rmean rinv;
-  sub_approx (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
+  approx_sub #f32 #_ #_ #_ #_;
+  approx_apply2 sub RO.r_sub (zero #f32) (mul mean inv) 0.0R (rmean *. rinv);
 
   (* Pass 1: row ← (row - μ) * inv = inv*row + neg_mean_inv. *)
   Map.map_gpu (affine_step inv neg_mean_inv) nhw
@@ -733,8 +738,10 @@ fn batchnorm_fw_f32
     (FStar.SizeT.sizet_to_uint64 nhw);
   assert pure (Int64.v nhw64 == n * (reveal hw_n));
   let nhw_f : f32 = of_int nhw64;
-  of_int_approx #f32 nhw64;
-  div_approx (one #f32) nhw_f 1.0R
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int nhw64 nhw64;
+  approx_div #f32 #_ #_ #_ #_;
+  approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) nhw_f 1.0R
     (FStar.Real.of_int (n * (reveal hw_n)));
   assert pure (inv_n %~ bn_inv_n_r (n * (reveal hw_n)));
   batch_norm n c #hw_n hw nhw eps inv_n reps

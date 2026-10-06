@@ -8,6 +8,7 @@ open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.TripletMarginLoss
 open Kuiper.Seq.Common { (@!) }
 open Kuiper.Float.Casts
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
@@ -164,7 +165,8 @@ let sqdiff_approx (eps x y : f32) (rx ry : real)
           (ensures sq_diff_step_f32 eps x y
                    %~ sqdiff_step_r (to_real eps) rx ry)
   = to_real_ok eps;
-    sub_approx x y rx ry;
+    approx_sub #f32 #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub x y rx ry;
     a_add (sub x y) eps (rx -. ry) (to_real eps);
     a_mul (add (sub x y) eps) (add (sub x y) eps)
       ((rx -. ry) +. to_real eps) ((rx -. ry) +. to_real eps)
@@ -177,9 +179,11 @@ let triplet_step_approx
                    %~ real_triplet_step (to_real margin) rd_ap rd_an)
   = to_real_ok margin;
     to_real_ok (zero #f32);
-    sub_approx d_ap d_an rd_ap rd_an;
+    approx_sub #f32 #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub d_ap d_an rd_ap rd_an;
     a_add (sub d_ap d_an) margin (rd_ap -. rd_an) (to_real margin);
-    fmax_approx (zero #f32) (add (sub d_ap d_an) margin)
+    approx_fmax #f32 #_ #_ #_ #_;
+    approx_apply2 fmax RO.r_fmax (zero #f32) (add (sub d_ap d_an) margin)
       0.0R ((rd_ap -. rd_an) +. to_real margin)
 
 (* A valid row slice of related flat sequences remains related. *)
@@ -500,14 +504,16 @@ fn triplet_fw_f32
       (hide (SZ.v i)) ra rp;
     let rsq_ap = real_sq_dist (to_real eps) d (trow ra d i) (trow rp d i);
     real_sq_dist_nonnegative (to_real eps) d (trow ra d i) (trow rp d i);
-    sqrt_approx sumsq_p rsq_ap;
+    approx_sqrt #f32 #_ #_ #_ #_;
+    approx_apply #f32 #FStar.Math.Sqrt.rnonneg sqrt RO.r_sqrt sumsq_p rsq_ap;
     let d_ap_r = sqrt sumsq_p;
 
     let sumsq_n = dist_sq_row d eps anchor negative scratch_a scratch_b off
       (hide (SZ.v i)) ra rn;
     let rsq_an = real_sq_dist (to_real eps) d (trow ra d i) (trow rn d i);
     real_sq_dist_nonnegative (to_real eps) d (trow ra d i) (trow rn d i);
-    sqrt_approx sumsq_n rsq_an;
+    approx_sqrt #f32 #_ #_ #_ #_;
+    approx_apply #f32 #FStar.Math.Sqrt.rnonneg sqrt RO.r_sqrt sumsq_n rsq_an;
     let d_an_r = sqrt sumsq_n;
 
     (* ── margin step + store ────────────────────────────────────── *)
@@ -547,10 +553,12 @@ fn triplet_fw_f32
     (FStar.SizeT.sizet_to_uint64 b);
   assert pure (Int64.v b64 == SZ.v b);
   let bf : f32 = of_int b64;
-  of_int_approx #f32 b64;
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int b64 b64;
   assert pure (bf %~ Real.of_int b);
   assert pure (inv_b == div one bf);
-  div_approx (one #f32) bf 1.0R (Real.of_int b);
+  approx_div #f32 #_ #_ #_ #_;
+  approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) bf 1.0R (Real.of_int b);
   let m : f32 = mul s inv_b;
   a_mul s inv_b (rsum (reveal terms)) (1.0R /. Real.of_int b);
   assert pure (rsum (reveal terms) == rsum (real_triplet_terms b d

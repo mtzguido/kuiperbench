@@ -8,6 +8,7 @@ open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Approximates.Base
 open Kuiper.Spec.Frobenius
 open Kuiper.Spec.L2Norm
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module Copy = Kuiper.KB.Tensor.Copy
 module HRed = Kuiper.Kernel.HReduce
@@ -232,7 +233,8 @@ let l2_loop_step_lemma
             Seq.slice sx_post (r * d) (r * d + d) ==
             Seq.slice sx_pre  (r * d) (r * d + d)))
       = l2_blit_step_lemma b d sx sx_pre sx_post vi inv sumsq;
-        rsqrt_approx sumsq rss;
+        approx_rsqrt #f32 #_ #_ #_ #_;
+        approx_apply #f32 #FStar.Math.Sqrt.rpos rsqrt RO.r_rsqrt sumsq rss;
         to_real_seq_is_approx row;
         frobenius_result_approx inv (FStar.Math.Sqrt.rsqrt rss) row rrow
     in
