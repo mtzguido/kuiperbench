@@ -278,9 +278,8 @@ __global__ __launch_bounds__(1)
         sum +=
             a[page * m * k + trow * k + vk] * b[page * k * n + vk * n + tcol];
     }
-    float s1 = sum;
     c[page * m * n + trow * n + tcol] =
-        beta * c[page * m * n + trow * n + tcol] + alpha * s1;
+        beta * c[page * m * n + trow * n + tcol] + alpha * sum;
 }
 
 void Klas_GEMM_Naive1_batched_gemm_f32(float alpha, float beta, uint32_t batch,

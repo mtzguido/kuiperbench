@@ -8,11 +8,11 @@ __global__ __launch_bounds__(1024)
     static void __hoisted_masked_cumsum_fw_f32_0(float *input, uint8_t *mask,
                                                  uint32_t n1, float *scratch)
 {
-    if (1024U * blockIdx.x + threadIdx.x < n1) {
-        float x1 = input[1024U * blockIdx.x + threadIdx.x];
+    if (1024U * blockIdx.x + threadIdx.x < n1)
         scratch[1024U * blockIdx.x + threadIdx.x] =
-            mask[1024U * blockIdx.x + threadIdx.x] == 0U ? (float) 0LL : x1;
-    }
+            mask[1024U * blockIdx.x + threadIdx.x] == 0U
+                ? (float) 0LL
+                : input[1024U * blockIdx.x + threadIdx.x];
 }
 
 __global__ __launch_bounds__(1)
