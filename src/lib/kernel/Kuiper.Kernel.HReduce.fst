@@ -412,19 +412,19 @@ fn iteration
       let s1 = array1_read_from_slice r tid;
       (**)assert pure (SZ.v tid - SZ.v tid == 0);
       (**)acc1_chest1_append_left s_left s_right 0;
-      (**)assert (pure (s1 `approximates` rsum (Seq.slice vr tid nextid)));
+      (**)assert (pure (s1 %~ rsum (Seq.slice vr tid nextid)));
 
       let s2 = array1_read_from_slice r nextid;
       (**)acc1_chest1_append_boundary s_left s_right;
       (**)assert pure (s2 == acc1 s_right 0);
-      (**)assert (pure (s2 `approximates` rsum (Seq.slice vr nextid end_)));
+      (**)assert (pure (s2 %~ rsum (Seq.slice vr nextid end_)));
 
       let s = add s1 s2;
       (**)lem_append_slice vr tid nextid end_;
       (**)seq_approximates_append s1 s2 (Seq.slice vr tid nextid) (Seq.slice vr nextid end_);
-      (**)assert (pure ((s1 `add` s2) `approximates` rsum (Seq.append (Seq.slice vr tid nextid) (Seq.slice vr nextid end_))));
+      (**)assert (pure ((s1 `add` s2) %~ rsum (Seq.append (Seq.slice vr tid nextid) (Seq.slice vr nextid end_))));
       (**)rsum_append (Seq.slice vr tid nextid) (Seq.slice vr nextid end_);
-      (**)assert (pure (s `approximates` rsum (Seq.slice vr tid end_)));
+      (**)assert (pure (s %~ rsum (Seq.slice vr tid end_)));
 
       // gpu_array_write r tid s;
       array1_write_to_slice r tid s;

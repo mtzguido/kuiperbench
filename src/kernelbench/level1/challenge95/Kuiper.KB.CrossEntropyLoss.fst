@@ -7,6 +7,7 @@ open Kuiper.Approximates
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.CrossEntropyLoss
 open Kuiper.Seq.Common { (@!) }
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module LSM = Kuiper.Kernel.LogSoftmax
 module HRed = Kuiper.Kernel.HReduce
@@ -209,7 +210,8 @@ let neg_approx_f32 (v : f32) (rv : real)
   : Lemma (requires v %~ rv)
           (ensures (sub (zero #f32) v) %~ (0.0R -. rv))
   = assert ((zero #f32) %~ 0.0R);
-    sub_approx #f32 (zero #f32) v 0.0R rv
+    approx_sub #f32 #_ #_ #_ #_;
+    approx_apply2 (sub #f32) RO.r_sub (zero #f32) v 0.0R rv
 
 (* Unfold [ce_term_r] for an in-range target: the guard reduces to the
    real log-softmax branch. *)
@@ -429,10 +431,12 @@ fn ce_loss_impl
     (FStar.SizeT.sizet_to_uint64 b);
   assert pure (Int64.v b64 == SZ.v b);
   let bf : f32 = of_int b64;
-  of_int_approx #f32 b64;
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int b64 b64;
   assert pure (bf %~ Real.of_int b);
   assert pure (inv_b == div one bf);
-  div_approx (one #f32) bf 1.0R (Real.of_int b);
+  approx_div #f32 #_ #_ #_ #_;
+  approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) bf 1.0R (Real.of_int b);
   let m : f32 = mul s inv_b;
   a_mul s inv_b (rsum (reveal terms)) (1.0R /. Real.of_int b);
   real_cross_entropy_mul b c rp (reveal stv_s);

@@ -6,6 +6,7 @@ open Kuiper.Approximates
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.MSELoss
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
@@ -96,7 +97,8 @@ fn mse_loss
   let n64 : Int64.t = FStar.Int.Cast.uint64_to_int64 (FStar.SizeT.sizet_to_uint64 n);
   assert pure (Int64.v n64 == SZ.v n);
   let nn : t = of_int n64;
-  of_int_approx #t n64;
+  approx_of_int #t #_ #_ #_ #_;
+  approx_apply (of_int #t) RO.r_of_int n64 n64;
   assert pure (nn %~ Real.of_int n);
 
   let res : t = div s nn;

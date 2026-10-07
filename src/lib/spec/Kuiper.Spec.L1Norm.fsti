@@ -18,7 +18,7 @@ module Kuiper.Spec.L1Norm
 
    The pinned floating interface does not give the primitive [fabs] a real
    approximation law.  The kernel therefore uses the equivalent branchless
-   expression [fmax x (0 - x)].  Its packaged [sub_approx] and [fmax_approx]
+   expression [fmax x (0 - x)].  Its packaged [approx_sub] and [approx_fmax]
    laws prove that it approximates [rmax x (0 - x)], the real absolute value,
    without a local axiom.
 

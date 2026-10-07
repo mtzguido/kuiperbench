@@ -9,6 +9,7 @@ open Kuiper.Floating.Base
 open Kuiper.Kernel.HReduce
 open Kuiper.Seq.Common
 open Kuiper.Chest
+module RO = Kuiper.Float.Realops
 module Seq = FStar.Seq
 module EM = Kuiper.EMatrix
 module KS = Kuiper.Seq.Common
@@ -85,8 +86,10 @@ let l1_abs_approx
   : Lemma (requires x %~ rx)
           (ensures l1_abs x %~ l1_abs_r rx)
   = assert (zero #t %~ 0.0R);
-    sub_approx (zero #t) x 0.0R rx;
-    fmax_approx x (sub zero x) rx (0.0R -. rx)
+    approx_sub #t #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub (zero #t) x 0.0R rx;
+    approx_fmax #t #_ #_ #_ #_;
+    approx_apply2 fmax RO.r_fmax x (sub zero x) rx (0.0R -. rx)
 
 let row_l1_abs_prefix_approx
   (#t:Type0)

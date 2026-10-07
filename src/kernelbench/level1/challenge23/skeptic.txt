@@ -33,8 +33,8 @@ the proof.  Given
   - for every row i, `sums[i] %~ rsum (lseq_map rexp (row i ra))`
     (delivered by `reduce_batched_block`'s post-condition),
 the lemma concludes `s_row_div_exp sums sa %~ row_softmax_real ra`
-by lifting `exp_approx` and `div_approx` cell-wise.  The non-zero
-denominator side condition for `div_approx` is discharged by
+by lifting `approx_fexp` and `approx_div` cell-wise.  The non-zero
+denominator side condition for `approx_div` is discharged by
 `sum_non_zero` since `rexp x > 0` always.
 
 Trust budget

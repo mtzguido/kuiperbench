@@ -19,7 +19,7 @@ module Kuiper.KB.LayerNorm
    row in/out of a fixed-size scratch buffer.  γ and β are held with
    fractional permission throughout (read-only across the row loop).
    The direct real proof uses the packaged
-   [Kuiper.Approximates.rsqrt_approx] law.  The existing
+   [Kuiper.Approximates.approx_rsqrt] law.  The existing
    [map_gpu2] sendability debt is documented in the module's skeptic. *)
 
 #lang-pulse

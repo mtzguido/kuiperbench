@@ -19,7 +19,7 @@ module Kuiper.KB.RMSNorm
      3. row_scale                   -- in-place scale each row
 
    The reciprocal-square-root approximation law is supplied by the packaged
-   [Kuiper.Approximates.rsqrt_approx]. *)
+   [Kuiper.Approximates.approx_rsqrt]. *)
 
 #lang-pulse
 open Kuiper

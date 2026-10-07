@@ -12,7 +12,7 @@ module Kuiper.Spec.TripletMarginLoss
                           - dist_eps(a_b, n_b) + margin)
 
    There are no existential floating-point intermediates in [triplet_post].
-   The proof crosses each f32 square root through [sqrt_approx] and composes
+   The proof crosses each f32 square root through [approx_sqrt] and composes
    the ordinary arithmetic approximation laws through the margin step and
    final mean. *)
 

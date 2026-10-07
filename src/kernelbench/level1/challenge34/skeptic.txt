@@ -18,7 +18,7 @@ reciprocal; it is not an unchecked caller argument.
 
 The public precondition [mean_var_domain] requires each real
 [var + eps] to be positive.  This is the exact domain on which the packaged
-[Kuiper.Approximates.rsqrt_approx] law connects floating
+[Kuiper.Approximates.approx_rsqrt] law connects floating
 [rsqrt] to [FStar.Math.Sqrt.rsqrt].
 
 Proof shape

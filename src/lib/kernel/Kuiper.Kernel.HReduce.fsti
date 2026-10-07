@@ -11,14 +11,6 @@ module EM = Kuiper.EMatrix
 // TODO: generalize operation? It currently always uses `add`
 // from the scalar class.
 
-(* Could we use this instead of approx2? *)
-instance approx_function_can_approximate
-  (dom1 dom2 cod1 cod2 : Type)
-  {| can_approximate dom1 dom2, can_approximate cod1 cod2 |}
-  : can_approximate (dom1 -> cod1) (dom2 -> cod2) = {
-  approximates = (fun f g -> forall x y. x %~ y ==> f x %~ g y);
-}
-
 inline_for_extraction noextract
 type reduce_ty (et : Type0) {| scalar et, real_like et |} =
   fn (pre_map : et -> et)

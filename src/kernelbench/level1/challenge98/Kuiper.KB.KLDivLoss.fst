@@ -6,6 +6,7 @@ open Kuiper.Approximates
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Spec.KLDivLoss
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module HRed = Kuiper.Kernel.HReduce
 module Map = Kuiper.Kernel.Map
@@ -19,9 +20,12 @@ let kl_step_approx
   : Lemma
       (requires p %~ rp /\ tt %~ rt /\ rp >. 0.0R /\ rt >. 0.0R)
       (ensures kl_step #t p tt %~ real_kl_step rp rt)
-  = log_approx p rp;
-    log_approx tt rt;
-    sub_approx (flog tt) (flog p) (log rt) (log rp);
+  = approx_flog #t #_ #_ #_ #_;
+    approx_apply #t #(r:real{r >. 0.0R}) flog RO.r_log p rp;
+    approx_flog #t #_ #_ #_ #_;
+    approx_apply #t #(r:real{r >. 0.0R}) flog RO.r_log tt rt;
+    approx_sub #t #_ #_ #_ #_;
+    approx_apply2 sub RO.r_sub (flog tt) (flog p) (log rt) (log rp);
     a_mul tt (sub (flog tt) (flog p)) rt (log rt -. log rp)
 
 #push-options ""
@@ -95,10 +99,12 @@ fn kl_div_loss
     (FStar.SizeT.sizet_to_uint64 batches);
   assert pure (Int64.v b64 == SZ.v batches);
   let bf : t = of_int b64;
-  of_int_approx #t b64;
+  approx_of_int #t #_ #_ #_ #_;
+  approx_apply (of_int #t) RO.r_of_int b64 b64;
   assert pure (bf %~ Real.of_int batches);
   let res : t = div s bf;
-  div_approx s bf (real_kl_sum n rp rt) (Real.of_int batches);
+  approx_div #t #_ #_ #_ #_;
+  approx_apply2 #t #real #t #(r:real{r =!= 0.0R}) div RO.r_div s bf (real_kl_sum n rp rt) (Real.of_int batches);
   res;
 }
 #pop-options

@@ -24,7 +24,7 @@ module Kuiper.KB.BatchNorm
      - Kuiper.Array1.arr_read_1      (host read of γ[ci], β[ci])
 
    The real-valued proof uses the packaged
-   [Kuiper.Approximates.rsqrt_approx] law.  There is
+   [Kuiper.Approximates.approx_rsqrt] law.  There is
    no challenge-local [magic ()], [admit ()], or [assume pure].  The [magic]
    inherited via [Kuiper.Kernel.Map.map_gpu]'s
    [kpre_sendable]/[kpost_sendable] (tree-wide debt for plain

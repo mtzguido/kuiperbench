@@ -9,7 +9,7 @@ module Kuiper.Spec.KLDivLoss
 
    The public kernel takes the positive batch size and returns the
    batch mean.  Its inputs are related to positive real sequences, so
-   [log_approx] connects both floating logs to [Kuiper.Real.log]. *)
+   [approx_flog] connects both floating logs to [Kuiper.Real.log]. *)
 
 open Kuiper.Common
 open Kuiper.Real

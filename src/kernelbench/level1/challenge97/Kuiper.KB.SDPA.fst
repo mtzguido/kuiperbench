@@ -26,13 +26,14 @@ module Kuiper.KB.SDPA
    new Array3<->Array1 reshape for the scalar-multiply.
 
    The direct real scale proof uses the packaged
-   [Kuiper.Approximates.rsqrt_approx] law. *)
+   [Kuiper.Approximates.approx_rsqrt] law. *)
 
 #lang-pulse
 open Kuiper
 open Kuiper.Tensor
 open Kuiper.Tensor.Layout.Alg
 open Kuiper.EMatrix
+module RO = Kuiper.Float.Realops
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 module RS = Kuiper.Kernel.RowSoftmax
@@ -886,9 +887,11 @@ let sdpa_scale_approx (d : szp)
       (FStar.SizeT.sizet_to_uint64 d) in
     assert (Int64.v d64 == SZ.v d);
     let df : f32 = of_int d64 in
-    of_int_approx #f32 d64;
+    approx_of_int #f32 #_ #_ #_ #_;
+    approx_apply (of_int #f32) RO.r_of_int d64 d64;
     assert (df %~ FStar.Real.of_int d);
-    rsqrt_approx df (FStar.Real.of_int d)
+    approx_rsqrt #f32 #_ #_ #_ #_;
+    approx_apply #f32 #FStar.Math.Sqrt.rpos rsqrt RO.r_rsqrt df (FStar.Real.of_int d)
 
 let batched_matmul_approx
   (#batch #rows #shared #cols:nat)

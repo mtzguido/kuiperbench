@@ -7,7 +7,7 @@ module Kuiper.KB.RMSNorm
    Launch 3: row_scale sum_sq x      → x[i,c] ← x[i,c] * sum_sq[i]
 
    The direct real proof uses the packaged
-   [Kuiper.Approximates.rsqrt_approx] law. *)
+   [Kuiper.Approximates.approx_rsqrt] law. *)
 
 #lang-pulse
 open Kuiper
@@ -17,6 +17,7 @@ open Kuiper.Tensor.Layout.Alg { l1_forward }
 open Kuiper.Tensor.Layout.BCMPages
 open Kuiper.Spec.RMSNorm
 open Kuiper.Spec.Frobenius
+module RO = Kuiper.Float.Realops
 module EM = Kuiper.EMatrix
 module SZ = Kuiper.SizeT
 module Map = Kuiper.Kernel.Map
@@ -76,7 +77,8 @@ let rmsnorm_row_aux
     assert (rss *. (1.0R /. FStar.Real.of_int c_n) ==
             rss /. FStar.Real.of_int c_n);
     assert (rarg >. 0.0R);
-    rsqrt_approx (add (mul sumsq inv_c) eps) rarg;
+    approx_rsqrt #f32 #_ #_ #_ #_;
+    approx_apply #f32 #FStar.Math.Sqrt.rpos rsqrt RO.r_rsqrt (add (mul sumsq inv_c) eps) rarg;
     let rinv = FStar.Math.Sqrt.rsqrt rarg in
     let out = Kuiper.Kernel.RowScale.s_row_scale sfac sx in
     let aux (j:nat{j<c_n}) : Lemma
@@ -191,8 +193,10 @@ fn rmsnorm_fw
   let c_i64 = FStar.Int.Cast.uint64_to_int64
     (FStar.SizeT.sizet_to_uint64 c);
   assert pure (FStar.Int64.v c_i64 == SZ.v c);
-  of_int_approx #f32 c_i64;
-  div_approx (one #f32) (of_int #f32 c_i64)
+  approx_of_int #f32 #_ #_ #_ #_;
+  approx_apply (of_int #f32) RO.r_of_int c_i64 c_i64;
+  approx_div #f32 #_ #_ #_ #_;
+  approx_apply2 #f32 #real #f32 #(r:real{r =!= 0.0R}) div RO.r_div (one #f32) (of_int #f32 c_i64)
     1.0R (FStar.Real.of_int (SZ.v c));
   assert pure (inv_c %~ (1.0R /. FStar.Real.of_int (SZ.v c)));
   rmsnorm_fw_f32_impl b hw c eps inv_c x;

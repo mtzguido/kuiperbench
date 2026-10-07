@@ -24,7 +24,7 @@ Faithfulness to PyTorch's
     So target * (log(target) - log(predictions))  = our kl_step.
   * 'batchmean' divides by batch_size, not by N_total.  The verified entry
     computes this division itself.
-  * [log_approx] and the arithmetic approximation laws connect every
+  * [approx_flog] and the arithmetic approximation laws connect every
     floating step to the direct real operation.
 
 Inherited debt:

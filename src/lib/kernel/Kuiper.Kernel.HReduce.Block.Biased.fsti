@@ -6,7 +6,6 @@ open Kuiper
 open Kuiper.EMatrix
 open Kuiper.Tensor
 module SZ = Kuiper.SizeT
-open Kuiper.Kernel.HReduce {} (* for the [approx_function_can_approximate] instance *)
 
 (* ── reduce_batched_block_biased: biased batched block reduction ──────────
    Like [reduce_batched_block] but takes an additional 1D bias array. Each

@@ -5,6 +5,7 @@ open Kuiper
 open Kuiper.Real { exp, log }
 open Kuiper.EMatrix
 open Kuiper.Seq.Common
+module RO = Kuiper.Float.Realops
 module SZ = Kuiper.SizeT
 module KB = Kuiper.Kernel.HReduce.Block
 module RB = Kuiper.Kernel.RowBroadcast
@@ -108,8 +109,10 @@ let s_row_broadcast_approx_log_softmax
       assert (v_approximates (acc2 sa i j) (acc2 ra i j));
       assert (v_approximates (acc1 sums i) denom);
       // flog sums[i] %~ log denom, then cell - flog sums[i] %~ cell - log denom
-      log_approx #et (acc1 sums i) denom;
-      sub_approx #et (acc2 sa i j) (flog (acc1 sums i)) (acc2 ra i j) (log denom);
+      approx_flog #et #_ #_ #_ #_;
+      approx_apply #et #(r:real{r >. 0.0R}) (flog #et) RO.r_log (acc1 sums i) denom;
+      approx_sub #et #_ #_ #_ #_;
+      approx_apply2 (sub #et) RO.r_sub (acc2 sa i j) (flog (acc1 sums i)) (acc2 ra i j) (log denom);
       // both sides reduce to canonical cell forms
       assert (Chest.acc lhs idx == sub (acc2 sa i j) (flog (acc1 sums i)));
       // [acc2_row_log_softmax_real] (SMTPat) reduces the golden-spec cell
