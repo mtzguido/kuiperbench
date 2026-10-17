@@ -241,10 +241,10 @@ __global__ __launch_bounds__(1)
     float sum = (float) 0LL;
     for (; k1 < k; k1++) {
         uint32_t vk = k1;
-        sum +=
-            a[page * m * k + trow * k + vk] * b[page * k * n + vk * n + tcol];
+        sum += a[page * (m * k) + (trow * k + vk)] *
+               b[page * (k * n) + (vk * n + tcol)];
     }
-    c[page * m * n + trow * n + tcol] = sum;
+    c[page * (m * n) + (trow * n + tcol)] = sum;
 }
 
 void Klas_GEMM_Naive1_batched_matmul_f32(uint32_t batch, uint32_t m, uint32_t n,
@@ -252,7 +252,7 @@ void Klas_GEMM_Naive1_batched_matmul_f32(uint32_t batch, uint32_t m, uint32_t n,
                                          float *c)
 {
     cudaStream_t s = KPR_FRESH_STREAM();
-    KPR_KCALL(__hoisted_batched_matmul_f32_0, batch * m * n, 1U, 0U, s, batch,
+    KPR_KCALL(__hoisted_batched_matmul_f32_0, batch * (m * n), 1U, 0U, s, batch,
               m, n, k, a, b, c);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
@@ -275,12 +275,12 @@ __global__ __launch_bounds__(1)
     float sum = (float) 0LL;
     for (; k1 < k; k1++) {
         uint32_t vk = k1;
-        sum +=
-            a[page * m * k + trow * k + vk] * b[page * k * n + vk * n + tcol];
+        sum += a[page * (m * k) + (trow * k + vk)] *
+               b[page * (k * n) + (vk * n + tcol)];
     }
     float s1 = sum;
-    c[page * m * n + trow * n + tcol] =
-        beta * c[page * m * n + trow * n + tcol] + alpha * s1;
+    c[page * (m * n) + (trow * n + tcol)] =
+        beta * c[page * (m * n) + (trow * n + tcol)] + alpha * s1;
 }
 
 void Klas_GEMM_Naive1_batched_gemm_f32(float alpha, float beta, uint32_t batch,
@@ -288,7 +288,7 @@ void Klas_GEMM_Naive1_batched_gemm_f32(float alpha, float beta, uint32_t batch,
                                        float *a, float *b, float *c)
 {
     cudaStream_t s = KPR_FRESH_STREAM();
-    KPR_KCALL(__hoisted_batched_gemm_f32_0, batch * m * n, 1U, 0U, s, alpha,
+    KPR_KCALL(__hoisted_batched_gemm_f32_0, batch * (m * n), 1U, 0U, s, alpha,
               beta, batch, m, n, k, a, b, c);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));

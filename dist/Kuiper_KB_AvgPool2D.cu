@@ -104,11 +104,11 @@ __global__ __launch_bounds__(1024)
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - 0U;
-            float raw = mid_h_in[r_sz / w_out * h * w_out + dpos_ref * w_out +
+            float raw = mid_h_in[r_sz / w_out * (h * w_out) + dpos_ref * w_out +
                                  r_sz % w_out];
             acc += in_bounds ? raw : (float) 0LL;
         }
-        out[r_sz / w_out * h_out * w_out + j_sz * w_out + r_sz % w_out] = acc;
+        out[r_sz / w_out * (h_out * w_out) + j_sz * w_out + r_sz % w_out] = acc;
     }
 }
 

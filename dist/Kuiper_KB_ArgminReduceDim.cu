@@ -15,7 +15,7 @@ __global__ __launch_bounds__(1024)
         float bv_ref = INFINITY;
         for (; ci_ref < d; ci_ref++) {
             uint32_t ci_v = ci_ref;
-            float v = x[(1024U * blockIdx.x + threadIdx.x) / m * d * m +
+            float v = x[(1024U * blockIdx.x + threadIdx.x) / m * (d * m) +
                         ci_v * m + (1024U * blockIdx.x + threadIdx.x) % m];
             if (v < bv_ref) {
                 bv_ref = v;
@@ -53,7 +53,7 @@ __global__ __launch_bounds__(1024)
         float bv_ref = INFINITY;
         for (; ci_ref < d; ci_ref++) {
             uint32_t ci_v = ci_ref;
-            float v = x[(1024U * blockIdx.x + threadIdx.x) / m * d * m +
+            float v = x[(1024U * blockIdx.x + threadIdx.x) / m * (d * m) +
                         ci_v * m + (1024U * blockIdx.x + threadIdx.x) % m];
             if (v < bv_ref) {
                 bv_ref = v;

@@ -80,10 +80,10 @@ __global__ __launch_bounds__(1024)
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - ph;
-            float raw = mid2[r_sz / wo * h * wo + dpos_ref * wo + r_sz % wo];
+            float raw = mid2[r_sz / wo * (h * wo) + dpos_ref * wo + r_sz % wo];
             acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
         }
-        out[r_sz / wo * ho * wo + j_sz * wo + r_sz % wo] = acc;
+        out[r_sz / wo * (ho * wo) + j_sz * wo + r_sz % wo] = acc;
     }
 }
 

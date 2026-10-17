@@ -36,7 +36,7 @@ __global__ __launch_bounds__(1024)
     }
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -46,7 +46,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        out[blockIdx.x] = *sa;
+        out[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -75,7 +75,7 @@ __global__ __launch_bounds__(1024)
         acc += t_dev[idx1];
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf01 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -85,7 +85,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 float *Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
@@ -115,10 +115,10 @@ float *Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
         MUST(cudaStreamDestroy(s0));
         float *local_out = (float *) KRML_HOST_MALLOC(sizeof(float));
         if (local_out != NULL)
-            *local_out = (float) 0LL;
+            local_out[0U] = (float) 0LL;
         MUST(cudaMemcpy(local_out, out0, (uint32_t) sizeof(float),
                         cudaMemcpyDeviceToHost));
-        float res = *local_out;
+        float res = local_out[0U];
         KRML_HOST_FREE(local_out);
         MUST(cudaFree(out0));
         float sum = res;
@@ -130,15 +130,15 @@ float *Kuiper_KB_CrossEntropyLoss_ce_loss_fw_f32(uint32_t b, uint32_t c,
         MUST(cudaStreamDestroy(s));
         float *tmp0 = (float *) KRML_HOST_MALLOC(sizeof(float));
         if (tmp0 != NULL)
-            *tmp0 = (float) 0LL;
+            tmp0[0U] = (float) 0LL;
         int64_t *tmp = (int64_t *) KRML_HOST_CALLOC(1U, sizeof(int64_t));
         MUST(cudaMemcpy(tmp, targets + i, (uint32_t) sizeof(int64_t),
                         cudaMemcpyDeviceToHost));
-        int64_t x = *tmp;
+        int64_t x = tmp[0U];
         KRML_HOST_FREE(tmp);
         MUST(cudaMemcpy(tmp0, scratch + (uint32_t) (uint64_t) x,
                         (uint32_t) sizeof(float), cudaMemcpyDeviceToHost));
-        float x0 = *tmp0;
+        float x0 = tmp0[0U];
         KRML_HOST_FREE(tmp0);
         t_host[i] = (float) 0LL - x0;
     }

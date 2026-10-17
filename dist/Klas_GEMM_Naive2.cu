@@ -261,7 +261,7 @@ __global__ __launch_bounds__(1024)
                                                uint32_t n, uint32_t k, float *a,
                                                float *b, float *c)
 {
-    if (1024U * blockIdx.x + threadIdx.x < batch * m * n) {
+    if (1024U * blockIdx.x + threadIdx.x < batch * (m * n)) {
         uint32_t page = (1024U * blockIdx.x + threadIdx.x) % batch;
         uint32_t rest = (1024U * blockIdx.x + threadIdx.x) / batch;
         uint32_t trow = rest / n;
@@ -270,10 +270,10 @@ __global__ __launch_bounds__(1024)
         float sum = (float) 0LL;
         for (; k1 < k; k1++) {
             uint32_t vk = k1;
-            sum += a[page * m * k + trow * k + vk] *
-                   b[page * k * n + vk * n + tcol];
+            sum += a[page * (m * k) + (trow * k + vk)] *
+                   b[page * (k * n) + (vk * n + tcol)];
         }
-        c[page * m * n + trow * n + tcol] = sum;
+        c[page * (m * n) + (trow * n + tcol)] = sum;
     }
 }
 
@@ -283,7 +283,8 @@ void Klas_GEMM_Naive2_batched_matmul_f32(uint32_t batch, uint32_t m, uint32_t n,
 {
     cudaStream_t s = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_batched_matmul_f32_0,
-              batch * m * n / 1024U + (uint32_t) (batch * m * n % 1024U != 0U),
+              batch * (m * n) / 1024U +
+                  (uint32_t) (batch * (m * n) % 1024U != 0U),
               1024U, 0U, s, batch, m, n, k, a, b, c);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));
@@ -298,7 +299,7 @@ __global__ __launch_bounds__(1024)
                                              uint32_t n, uint32_t k, float *a,
                                              float *b, float *c)
 {
-    if (1024U * blockIdx.x + threadIdx.x < batch * m * n) {
+    if (1024U * blockIdx.x + threadIdx.x < batch * (m * n)) {
         uint32_t page = (1024U * blockIdx.x + threadIdx.x) % batch;
         uint32_t rest = (1024U * blockIdx.x + threadIdx.x) / batch;
         uint32_t trow = rest / n;
@@ -307,12 +308,12 @@ __global__ __launch_bounds__(1024)
         float sum = (float) 0LL;
         for (; k1 < k; k1++) {
             uint32_t vk = k1;
-            sum += a[page * m * k + trow * k + vk] *
-                   b[page * k * n + vk * n + tcol];
+            sum += a[page * (m * k) + (trow * k + vk)] *
+                   b[page * (k * n) + (vk * n + tcol)];
         }
         float s1 = sum;
-        c[page * m * n + trow * n + tcol] =
-            beta * c[page * m * n + trow * n + tcol] + alpha * s1;
+        c[page * (m * n) + (trow * n + tcol)] =
+            beta * c[page * (m * n) + (trow * n + tcol)] + alpha * s1;
     }
 }
 
@@ -322,7 +323,8 @@ void Klas_GEMM_Naive2_batched_gemm_f32(float alpha, float beta, uint32_t batch,
 {
     cudaStream_t s = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_batched_gemm_f32_0,
-              batch * m * n / 1024U + (uint32_t) (batch * m * n % 1024U != 0U),
+              batch * (m * n) / 1024U +
+                  (uint32_t) (batch * (m * n) % 1024U != 0U),
               1024U, 0U, s, alpha, beta, batch, m, n, k, a, b, c);
     MUST(cudaStreamSynchronize(s));
     MUST(cudaStreamDestroy(s));

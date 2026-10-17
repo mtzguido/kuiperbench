@@ -12,7 +12,7 @@ __global__ __launch_bounds__(1024)
         uint32_t ci_ref = 0U;
         float acc_ref = (float) 0LL;
         for (; ci_ref < c; ci_ref++) {
-            float v = x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw +
+            float v = x[(1024U * blockIdx.x + threadIdx.x) / hw * (c * hw) +
                         ci_ref * hw + (1024U * blockIdx.x + threadIdx.x) % hw];
             acc_ref += v * v;
         }
@@ -42,7 +42,7 @@ __global__ __launch_bounds__(1024)
     if (1024U * blockIdx.x + threadIdx.x < bhw * c) {
         uint32_t row = (1024U * blockIdx.x + threadIdx.x) / c;
         uint32_t col = (1024U * blockIdx.x + threadIdx.x) % c;
-        x[row / hw * c * hw + col * hw + row % hw] *= sum_sq[row];
+        x[row / hw * (c * hw) + col * hw + row % hw] *= sum_sq[row];
     }
 }
 
