@@ -14,11 +14,11 @@ __global__ __launch_bounds__(1024)
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < nhw; idx1 += 1024U) {
         uint32_t vidx = idx1;
-        acc += x[vidx / hw * c * hw + i * hw + vidx % hw];
+        acc += x[vidx / hw * (c * hw) + i * hw + vidx % hw];
     }
     sa[threadIdx.x] = acc;
     uint32_t n1 = 0U;
-    for (; 1U << (uint32_t) n1 < 1024U; n1++) {
+    for (; (uint32_t) (1U << (uint32_t) n1) < 1024U; n1++) {
         uint32_t __anf01 = n1;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -28,7 +28,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -44,12 +44,12 @@ __global__ __launch_bounds__(1024)
     uint32_t idx1 = threadIdx.x;
     for (; idx1 < nhw; idx1 += 1024U) {
         uint32_t vidx = idx1;
-        float v = x[vidx / hw * c * hw + i * hw + vidx % hw];
+        float v = x[vidx / hw * (c * hw) + i * hw + vidx % hw];
         acc += v * v;
     }
     sa[threadIdx.x] = acc;
     uint32_t n1 = 0U;
-    for (; 1U << (uint32_t) n1 < 1024U; n1++) {
+    for (; (uint32_t) (1U << (uint32_t) n1) < 1024U; n1++) {
         uint32_t __anf01 = n1;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -59,7 +59,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -71,9 +71,9 @@ __global__ __launch_bounds__(1024)
                                              float inv, float neg_mean_inv)
 {
     if (1024U * blockIdx.x + threadIdx.x < nhw)
-        x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
+        x[(1024U * blockIdx.x + threadIdx.x) / hw * (c * hw) + i * hw +
           (1024U * blockIdx.x + threadIdx.x) % hw] =
-            x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
+            x[(1024U * blockIdx.x + threadIdx.x) / hw * (c * hw) + i * hw +
               (1024U * blockIdx.x + threadIdx.x) % hw] *
                 inv +
             neg_mean_inv;
@@ -88,9 +88,9 @@ __global__ __launch_bounds__(1024)
                                              float g_c, float b_c)
 {
     if (1024U * blockIdx.x + threadIdx.x < nhw)
-        x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
+        x[(1024U * blockIdx.x + threadIdx.x) / hw * (c * hw) + i * hw +
           (1024U * blockIdx.x + threadIdx.x) % hw] =
-            x[(1024U * blockIdx.x + threadIdx.x) / hw * c * hw + i * hw +
+            x[(1024U * blockIdx.x + threadIdx.x) / hw * (c * hw) + i * hw +
               (1024U * blockIdx.x + threadIdx.x) % hw] *
                 g_c +
             b_c;
@@ -106,18 +106,18 @@ void Kuiper_KB_BatchNorm_batchnorm_fw_f32(uint32_t c, uint32_t hw, uint32_t nhw,
         uint32_t i = idx;
         float *ca0 = (float *) KRML_HOST_MALLOC(sizeof(float));
         if (ca0 != NULL)
-            *ca0 = (float) 0LL;
+            ca0[0U] = (float) 0LL;
         MUST(cudaMemcpy(ca0, gamma + i, (uint32_t) sizeof(float),
                         cudaMemcpyDeviceToHost));
-        float x10 = *ca0;
+        float x10 = ca0[0U];
         KRML_HOST_FREE(ca0);
         float g_c = x10;
         float *ca = (float *) KRML_HOST_MALLOC(sizeof(float));
         if (ca != NULL)
-            *ca = (float) 0LL;
+            ca[0U] = (float) 0LL;
         MUST(cudaMemcpy(ca, beta + i, (uint32_t) sizeof(float),
                         cudaMemcpyDeviceToHost));
-        float x1 = *ca;
+        float x1 = ca[0U];
         KRML_HOST_FREE(ca);
         float b_c = x1;
         float *out0 = (float *) KPR_GPU_ALLOC(sizeof(float), 1U);

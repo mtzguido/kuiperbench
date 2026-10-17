@@ -15,7 +15,7 @@ __global__ __launch_bounds__(1024)
         for (; ci_ref < d; ci_ref++)
             acc_ref =
                 fminf(acc_ref,
-                      x[(1024U * blockIdx.x + threadIdx.x) / m * d * m +
+                      x[(1024U * blockIdx.x + threadIdx.x) / m * (d * m) +
                         ci_ref * m + (1024U * blockIdx.x + threadIdx.x) % m]);
         y[1024U * blockIdx.x + threadIdx.x] = acc_ref;
     }
@@ -47,7 +47,7 @@ __global__ __launch_bounds__(1024)
         for (; ci_ref < d; ci_ref++)
             acc_ref =
                 fminf(acc_ref,
-                      x[(1024U * blockIdx.x + threadIdx.x) / m * d * m +
+                      x[(1024U * blockIdx.x + threadIdx.x) / m * (d * m) +
                         ci_ref * m + (1024U * blockIdx.x + threadIdx.x) % m]);
         y[1024U * blockIdx.x + threadIdx.x] = acc_ref;
     }

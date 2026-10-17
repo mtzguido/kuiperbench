@@ -4,7 +4,7 @@
 uint64_t Kuiper_Example_OffsetMemcpyD2D_main(void)
 {
     uint64_t *src = (uint64_t *) KRML_HOST_CALLOC(8U, sizeof(uint64_t));
-    *src = 10ULL;
+    src[0U] = 10ULL;
     uint64_t *ga = (uint64_t *) KPR_GPU_ALLOC(sizeof(uint64_t), 8U);
     uint64_t *zeros = (uint64_t *) KRML_HOST_CALLOC(8U, sizeof(uint64_t));
     MUST(cudaMemcpy(ga, zeros, (uint32_t) sizeof(uint64_t) * 8U,

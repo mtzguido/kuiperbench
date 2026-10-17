@@ -119,10 +119,10 @@ __global__ __launch_bounds__(1024)
             if (in_bounds)
                 dpos_ref = pos - ph;
             float raw =
-                mid_h_in[r_sz / wo * h * wo + dpos_ref * wo + r_sz % wo];
+                mid_h_in[r_sz / wo * (h * wo) + dpos_ref * wo + r_sz % wo];
             acc += in_bounds ? raw : (float) 0LL;
         }
-        mid_h[r_sz / wo * ho * wo + j_sz * wo + r_sz % wo] = acc;
+        mid_h[r_sz / wo * (ho * wo) + j_sz * wo + r_sz % wo] = acc;
     }
 }
 
@@ -148,11 +148,11 @@ __global__ __launch_bounds__(1024)
             uint32_t dpos_ref = 0U;
             if (in_bounds)
                 dpos_ref = pos - pd;
-            float raw = mid_d_in[r_sz / (ho * wo) * depth * ho * wo +
-                                 dpos_ref * ho * wo + r_sz % (ho * wo)];
+            float raw = mid_d_in[r_sz / (ho * wo) * (depth * (ho * wo)) +
+                                 dpos_ref * (ho * wo) + r_sz % (ho * wo)];
             acc += in_bounds ? raw : (float) 0LL;
         }
-        out[r_sz / (ho * wo) * do_ * ho * wo + j_sz * ho * wo +
+        out[r_sz / (ho * wo) * (do_ * (ho * wo)) + j_sz * (ho * wo) +
             r_sz % (ho * wo)] = acc;
     }
 }
@@ -190,7 +190,7 @@ Kuiper_KB_AvgPool3D_avgpool3d_full_alloc_f32(
     float *mid_d_in = mid_h;
     uint32_t do_ =
         Kuiper_KB_AvgPool3D_pool_out_len_1d_sz(depth, kd, sd, pd, dd);
-    uint32_t rows_d = bc * ho * wo;
+    uint32_t rows_d = bc * (ho * wo);
     float *out = (float *) KPR_GPU_ALLOC(sizeof(float), rows_d * do_);
     if (do_ != 0U) {
         cudaStream_t s = KPR_FRESH_STREAM();

@@ -10,13 +10,14 @@ __hoisted_maxreduce_dim_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y,
                                  uint32_t nthm)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = x[blockIdx.x / m * d * m + threadIdx.x * m + blockIdx.x % m];
+    float acc = x[blockIdx.x / m * (d * m) + threadIdx.x * m + blockIdx.x % m];
     uint32_t idx = threadIdx.x + nthm;
     for (; idx < d; idx += nthm)
-        acc = fmaxf(acc, x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m]);
+        acc =
+            fmaxf(acc, x[blockIdx.x / m * (d * m) + idx * m + blockIdx.x % m]);
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < nthm; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < nthm; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -26,7 +27,7 @@ __hoisted_maxreduce_dim_fw_f32_0(uint32_t m, uint32_t d, float *x, float *y,
                 sa[threadIdx.x] = fmaxf(sa[threadIdx.x], sa[nextid]);
     }
     if (threadIdx.x == 0U)
-        y[blockIdx.x] = *sa;
+        y[blockIdx.x] = sa[0U];
 }
 
 void Kuiper_KB_MaxReduceDim_maxreduce_dim_fw_f32(uint32_t b, uint32_t m,
@@ -55,13 +56,14 @@ __hoisted_maxreduce_dim_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y,
                                     uint32_t nthm)
 {
     float *sa = (float *) KPR_SHMEM_AT(0U);
-    float acc = x[blockIdx.x / m * d * m + threadIdx.x * m + blockIdx.x % m];
+    float acc = x[blockIdx.x / m * (d * m) + threadIdx.x * m + blockIdx.x % m];
     uint32_t idx = threadIdx.x + nthm;
     for (; idx < d; idx += nthm)
-        acc = fmaxf(acc, x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m]);
+        acc =
+            fmaxf(acc, x[blockIdx.x / m * (d * m) + idx * m + blockIdx.x % m]);
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < nthm; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < nthm; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -71,7 +73,7 @@ __hoisted_maxreduce_dim_alloc_f32_0(uint32_t m, uint32_t d, float *x, float *y,
                 sa[threadIdx.x] = fmaxf(sa[threadIdx.x], sa[nextid]);
     }
     if (threadIdx.x == 0U)
-        y[blockIdx.x] = *sa;
+        y[blockIdx.x] = sa[0U];
 }
 
 float *Kuiper_KB_MaxReduceDim_maxreduce_dim_alloc_f32(uint32_t b, uint32_t m,

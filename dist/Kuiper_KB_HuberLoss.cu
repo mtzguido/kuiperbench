@@ -52,7 +52,7 @@ __global__ __launch_bounds__(1024)
         acc += scratch[idx];
     sa[threadIdx.x] = acc;
     uint32_t n1 = 0U;
-    for (; 1U << (uint32_t) n1 < 1024U; n1++) {
+    for (; (uint32_t) (1U << (uint32_t) n1) < 1024U; n1++) {
         uint32_t __anf01 = n1;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -62,7 +62,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 float *Kuiper_KB_HuberLoss_huber_loss_fw_f32(uint32_t n, float *predictions,

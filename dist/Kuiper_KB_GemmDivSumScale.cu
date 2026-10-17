@@ -43,7 +43,7 @@ __global__ __launch_bounds__(1024)
         acc += gC[blockIdx.x * hidden + idx];
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -53,7 +53,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        y[blockIdx.x] = *sa;
+        y[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)

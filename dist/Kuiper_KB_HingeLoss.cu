@@ -32,7 +32,7 @@ __global__ __launch_bounds__(1024)
         acc += scratch[idx];
     sa[threadIdx.x] = acc;
     uint32_t n1 = 0U;
-    for (; 1U << (uint32_t) n1 < 1024U; n1++) {
+    for (; (uint32_t) (1U << (uint32_t) n1) < 1024U; n1++) {
         uint32_t __anf01 = n1;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -42,7 +42,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -61,7 +61,7 @@ float *Kuiper_KB_HingeLoss_hinge_loss_broadcast_f32(uint32_t b, uint32_t n,
 {
     uint32_t elems = b * n;
     float *scratch = (float *) KPR_GPU_ALLOC(sizeof(float), elems);
-    MUST(cudaMemcpy(scratch, predictions, (uint32_t) sizeof(float) * b * n,
+    MUST(cudaMemcpy(scratch, predictions, (uint32_t) sizeof(float) * (b * n),
                     cudaMemcpyDeviceToDevice));
     cudaStream_t s0 = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_hinge_loss_broadcast_f32_0,

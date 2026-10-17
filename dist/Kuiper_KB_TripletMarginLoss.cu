@@ -51,7 +51,7 @@ __global__ __launch_bounds__(1024)
         acc += scratch_a[idx1];
     sa1[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf01 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -61,7 +61,7 @@ __global__ __launch_bounds__(1024)
                 sa1[threadIdx.x] += sa1[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa1;
+        *out = sa1[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -92,7 +92,7 @@ __global__ __launch_bounds__(1024)
         acc += scratch_a[idx1];
     sa1[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf01 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -102,7 +102,7 @@ __global__ __launch_bounds__(1024)
                 sa1[threadIdx.x] += sa1[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa1;
+        *out = sa1[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -118,7 +118,7 @@ __global__ __launch_bounds__(1024)
         acc += t_dev[idx1];
     sa1[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf01 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -128,7 +128,7 @@ __global__ __launch_bounds__(1024)
                 sa1[threadIdx.x] += sa1[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa1;
+        *out = sa1[0U];
 }
 
 float *Kuiper_KB_TripletMarginLoss_triplet_fw_f32(uint32_t b, uint32_t d,

@@ -35,7 +35,7 @@ __hoisted_row_softmax_rm_f32_0(uint32_t n, float *a, float *maxs, uint32_t nthm)
         acc = fmaxf(acc, a[blockIdx.x * n + idx]);
     sa1[threadIdx.x] = acc;
     uint32_t n1 = 0U;
-    for (; 1U << (uint32_t) n1 < nthm; n1++) {
+    for (; (uint32_t) (1U << (uint32_t) n1) < nthm; n1++) {
         uint32_t __anf02 = n1;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -45,7 +45,7 @@ __hoisted_row_softmax_rm_f32_0(uint32_t n, float *a, float *maxs, uint32_t nthm)
                 sa1[threadIdx.x] = fmaxf(sa1[threadIdx.x], sa1[nextid]);
     }
     if (threadIdx.x == 0U)
-        maxs[blockIdx.x] = *sa1;
+        maxs[blockIdx.x] = sa1[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -78,7 +78,7 @@ __hoisted_row_softmax_rm_f32_2(uint32_t n, uint32_t nth, float *a, float *sums)
     }
     sa1[threadIdx.x] = acc;
     uint32_t n1 = 0U;
-    for (; 1U << (uint32_t) n1 < nth; n1++) {
+    for (; (uint32_t) (1U << (uint32_t) n1) < nth; n1++) {
         uint32_t __anf02 = n1;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -88,7 +88,7 @@ __hoisted_row_softmax_rm_f32_2(uint32_t n, uint32_t nth, float *a, float *sums)
                 sa1[threadIdx.x] += sa1[nextid];
     }
     if (threadIdx.x == 0U)
-        sums[blockIdx.x] = *sa1;
+        sums[blockIdx.x] = sa1[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -161,7 +161,7 @@ __global__ __launch_bounds__(1024)
     static void __hoisted_sdpa_f32_0(uint32_t s, uint32_t d, float *gQ,
                                      float *gK, uint32_t bh, float *gScores)
 {
-    if (1024U * blockIdx.x + threadIdx.x < bh * s * s) {
+    if (1024U * blockIdx.x + threadIdx.x < bh * (s * s)) {
         uint32_t page = (1024U * blockIdx.x + threadIdx.x) % bh;
         uint32_t rest = (1024U * blockIdx.x + threadIdx.x) / bh;
         uint32_t trow = rest / s;
@@ -170,10 +170,10 @@ __global__ __launch_bounds__(1024)
         float sum = (float) 0LL;
         for (; k < d; k++) {
             uint32_t vk = k;
-            sum += gQ[page * s * d + trow * d + vk] *
-                   gK[page * d * s + tcol * d + vk];
+            sum += gQ[page * (s * d) + (trow * d + vk)] *
+                   gK[page * (d * s) + (tcol * d + vk)];
         }
-        gScores[page * s * s + trow * s + tcol] = sum;
+        gScores[page * (s * s) + (trow * s + tcol)] = sum;
     }
 }
 
@@ -188,8 +188,8 @@ float *Kuiper_KB_SDPA_sdpa_f32(uint32_t b, uint32_t h, uint32_t s, uint32_t d,
     float scale = rsqrtf((float) (int64_t) (uint64_t) d);
     cudaStream_t s1 = KPR_FRESH_STREAM();
     KPR_KCALL(__hoisted_sdpa_f32_0,
-              bh * s * s / 1024U + (uint32_t) (bh * s * s % 1024U != 0U), 1024U,
-              0U, s1, s, d, gQ, gK, bh, gScores);
+              bh * (s * s) / 1024U + (uint32_t) (bh * (s * s) % 1024U != 0U),
+              1024U, 0U, s1, s, d, gQ, gK, bh, gScores);
     MUST(cudaStreamSynchronize(s1));
     MUST(cudaStreamDestroy(s1));
     uint32_t bhs1 = bh * s;

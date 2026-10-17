@@ -17,7 +17,7 @@ __global__ __launch_bounds__(1024)
     }
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -27,7 +27,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        sums[blockIdx.x] = *sa;
+        sums[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -53,7 +53,7 @@ float *Kuiper_KB_LogSoftmaxAlloc_logsoftmax_alloc_f32(uint32_t rows,
     float *_return;
     bool _return1 = false;
     float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), rows * cols);
-    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(float) * rows * cols,
+    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(float) * (rows * cols),
                     cudaMemcpyDeviceToDevice));
     float *output = dst;
     float *sums = (float *) KPR_GPU_ALLOC(sizeof(float), rows);
@@ -91,7 +91,7 @@ __global__ __launch_bounds__(1024)
     }
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -101,7 +101,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        sums[blockIdx.x] = *sa;
+        sums[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -127,7 +127,7 @@ double *Kuiper_KB_LogSoftmaxAlloc_logsoftmax_alloc_f64(uint32_t rows,
     double *_return;
     bool _return1 = false;
     double *dst = (double *) KPR_GPU_ALLOC(sizeof(double), rows * cols);
-    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(double) * rows * cols,
+    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(double) * (rows * cols),
                     cudaMemcpyDeviceToDevice));
     double *output = dst;
     double *sums = (double *) KPR_GPU_ALLOC(sizeof(double), rows);

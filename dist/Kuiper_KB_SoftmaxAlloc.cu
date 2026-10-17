@@ -16,7 +16,7 @@ __hoisted_softmax_alloc_f32_0(uint32_t cols, float *output, float *maxs,
         acc = fmaxf(acc, output[blockIdx.x * cols + idx]);
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < nthm; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < nthm; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -26,7 +26,7 @@ __hoisted_softmax_alloc_f32_0(uint32_t cols, float *output, float *maxs,
                 sa[threadIdx.x] = fmaxf(sa[threadIdx.x], sa[nextid]);
     }
     if (threadIdx.x == 0U)
-        maxs[blockIdx.x] = *sa;
+        maxs[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -59,7 +59,7 @@ __global__ __launch_bounds__(1024)
     }
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -69,7 +69,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        sums[blockIdx.x] = *sa;
+        sums[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -94,7 +94,7 @@ float *Kuiper_KB_SoftmaxAlloc_softmax_alloc_f32(uint32_t rows, uint32_t cols,
     float *_return;
     bool _return1 = false;
     float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), rows * cols);
-    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(float) * rows * cols,
+    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(float) * (rows * cols),
                     cudaMemcpyDeviceToDevice));
     float *output = dst;
     float *maxs = (float *) KPR_GPU_ALLOC(sizeof(float), rows);
@@ -150,7 +150,7 @@ __hoisted_softmax_alloc_f64_0(uint32_t cols, double *output, double *maxs,
         acc = fmax(acc, output[blockIdx.x * cols + idx]);
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < nthm; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < nthm; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -160,7 +160,7 @@ __hoisted_softmax_alloc_f64_0(uint32_t cols, double *output, double *maxs,
                 sa[threadIdx.x] = fmax(sa[threadIdx.x], sa[nextid]);
     }
     if (threadIdx.x == 0U)
-        maxs[blockIdx.x] = *sa;
+        maxs[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -193,7 +193,7 @@ __global__ __launch_bounds__(1024)
     }
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -203,7 +203,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        sums[blockIdx.x] = *sa;
+        sums[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -228,7 +228,7 @@ double *Kuiper_KB_SoftmaxAlloc_softmax_alloc_f64(uint32_t rows, uint32_t cols,
     double *_return;
     bool _return1 = false;
     double *dst = (double *) KPR_GPU_ALLOC(sizeof(double), rows * cols);
-    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(double) * rows * cols,
+    MUST(cudaMemcpy(dst, input, (uint32_t) sizeof(double) * (rows * cols),
                     cudaMemcpyDeviceToDevice));
     double *output = dst;
     double *maxs = (double *) KPR_GPU_ALLOC(sizeof(double), rows);

@@ -15,7 +15,7 @@ __global__ __launch_bounds__(1024)
         acc += scratch[idx1];
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf01 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -25,7 +25,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -44,7 +44,7 @@ __global__ __launch_bounds__(1024)
     }
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf01 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf01);
@@ -54,7 +54,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        *out = *sa;
+        *out = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -149,7 +149,7 @@ float *Kuiper_KB_MeanVarNorm_groupnorm35_alloc_f32(uint32_t b, uint32_t c,
 {
     float eps32 = (float) eps;
     uint32_t rows = b * groups;
-    uint32_t d = c / groups * h * w;
+    uint32_t d = c / groups * (h * w);
     uint32_t n = rows * d;
     float *dst = (float *) KPR_GPU_ALLOC(sizeof(float), n);
     MUST(cudaMemcpy(dst, x, (uint32_t) sizeof(float) * n,

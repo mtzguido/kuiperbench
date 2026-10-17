@@ -12,10 +12,10 @@ __global__ __launch_bounds__(1024)
     float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < d; idx += 1024U)
-        acc += x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m];
+        acc += x[blockIdx.x / m * (d * m) + idx * m + blockIdx.x % m];
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -25,7 +25,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        y[blockIdx.x] = *sa;
+        y[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
@@ -68,10 +68,10 @@ __global__ __launch_bounds__(1024)
     float acc = (float) 0LL;
     uint32_t idx = threadIdx.x;
     for (; idx < d; idx += 1024U)
-        acc += x[blockIdx.x / m * d * m + idx * m + blockIdx.x % m];
+        acc += x[blockIdx.x / m * (d * m) + idx * m + blockIdx.x % m];
     sa[threadIdx.x] = acc;
     uint32_t n = 0U;
-    for (; 1U << (uint32_t) n < 1024U; n++) {
+    for (; (uint32_t) (1U << (uint32_t) n) < 1024U; n++) {
         uint32_t __anf02 = n;
         __syncthreads();
         uint32_t nextid = threadIdx.x + (uint32_t) (1U << (uint32_t) __anf02);
@@ -81,7 +81,7 @@ __global__ __launch_bounds__(1024)
                 sa[threadIdx.x] += sa[nextid];
     }
     if (threadIdx.x == 0U)
-        y[blockIdx.x] = *sa;
+        y[blockIdx.x] = sa[0U];
 }
 
 __global__ __launch_bounds__(1024)
