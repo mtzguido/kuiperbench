@@ -102,7 +102,7 @@ let kpre
   (gid : natlt (rows * lo))
   : slprop
   = input |-> Frac (fIn /. (rows * lo)) sx **
-    tensor_pts_to_cell output (idx2 (gid / lo) (gid % lo))
+    pts_to_cell output (idx2 (gid / lo) (gid % lo))
       (acc2 sout (gid / lo) (gid % lo))
 
 unfold
@@ -120,7 +120,7 @@ let kpost
   (gid : natlt (rows * lo))
   : slprop
   = input |-> Frac (fIn /. (rows * lo)) sx **
-    tensor_pts_to_cell output (idx2 (gid / lo) (gid % lo))
+    pts_to_cell output (idx2 (gid / lo) (gid % lo))
       (window_red m (ematrix_to_row sx (gid / lo)) k s p d (gid % lo))
 
 (* ──────────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ let kpost
  * Each thread owns one output cell (r, j) (decoded from gid = r*lo + j)
  * and a 1/(rows*lo) fraction of the whole input.  It runs a K-iteration
  * loop over the dilated taps, reading in-bounds taps from the input
- * (via [tensor_read_cell']) and folding them into [acc] with [m.rop],
+ * (via [read_cell']) and folding them into [acc] with [m.rop],
  * then writes [acc] to the output cell.
  *
  * The loop invariant ties [acc] to [window_red_prefix m row k s p d j di]
@@ -178,7 +178,7 @@ fn read_tap
     pure ((not in_bounds) ==> v == m.rid)
 {
   if in_bounds {
-    tensor_read input (cidx2 (r_sz <: szlt rows) (raw <: szlt l))
+    read input (cidx2 (r_sz <: szlt rows) (raw <: szlt l))
   } else {
     m.rid
   }
@@ -229,7 +229,7 @@ fn kf
       acc |-> acc_v **
       v_ref |-> v_v **
       input |-> Frac (fIn /. (rows * lo)) sx **
-      tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt rows) (SZ.v j_sz <: natlt lo))
+      pts_to_cell output (idx2 (SZ.v r_sz <: natlt rows) (SZ.v j_sz <: natlt lo))
         (acc2 sout r_sz j_sz) **
       pure (SZ.v di_v <= SZ.v k /\
             acc_v == window_red_prefix m (reveal row_view) k s p d j_sz di_v)
@@ -252,7 +252,7 @@ fn kf
     };
     let dpos_safe : sz = !dpos_ref;
     assert pure (SZ.v dpos_safe < SZ.v l);
-    let raw : et = tensor_read input (cidx2 (r_sz <: szlt rows) (dpos_safe <: szlt l));
+    let raw : et = read input (cidx2 (r_sz <: szlt rows) (dpos_safe <: szlt l));
     let v : et = if in_bounds { raw } else { m.rid };
 
     assert (pure (in_bounds <==>
@@ -271,7 +271,7 @@ fn kf
   let acc_final : et = !acc;
   assert pure (acc_final == window_red m (reveal row_view) k s p d j_sz);
   assert pure (reveal row_view == ematrix_to_row sx r_sz);
-  tensor_write_cell output (cidx2 (r_sz <: szlt rows) (j_sz <: szlt lo)) acc_final;
+  write_cell output (cidx2 (r_sz <: szlt rows) (j_sz <: szlt lo)) acc_final;
   rewrite each (SZ.v r_sz) as (SZ.v gid / SZ.v lo);
   rewrite each (SZ.v j_sz) as (SZ.v gid % SZ.v lo);
   ()
@@ -330,16 +330,16 @@ fn pts_to_cell_fits
   (a : array2 et l)
   (ij : abs (rows @| cols @| INil))
   (#f : perm) (#v : et)
-  preserves tensor_pts_to_cell a #f ij v
+  preserves pts_to_cell a #f ij v
   ensures pure (SZ.fits (tlayout_ulen l))
 {
   let i : nat = l.imap.f ij;
-  tensor_pts_to_cell_eq a ij f v;
-  rewrite tensor_pts_to_cell a #f ij v
+  pts_to_cell_eq a ij f v;
+  rewrite pts_to_cell a #f ij v
        as pts_to_slice (core a) #f i (i + 1) (Seq.cons v Seq.empty);
   pts_to_slice_ref (core a) i (i + 1);
   rewrite pts_to_slice (core a) #f i (i + 1) (Seq.cons v Seq.empty)
-       as tensor_pts_to_cell a #f ij v;
+       as pts_to_cell a #f ij v;
 }
 
 (* Setup leaf: fold the post-[share_n] frac quantifier and post-[ilower]
@@ -362,18 +362,18 @@ fn setup_fold_kpre_step
     (forall+ (_ : natlt (rows * lo)).
        input |-> Frac (fIn /. (rows * lo)) sx) **
     (forall+ (r : natlt rows) (c : natlt lo).
-       tensor_pts_to_cell output (idx2 r c) (acc2 sout r c))
+       pts_to_cell output (idx2 r c) (acc2 sout r c))
   ensures
     forall+ (tid : natlt (rows * lo)).
       kpre m input output sx sout fIn tid
 {
   forevery_unfactor' (rows * lo) rows lo
     (fun (r : natlt rows) (c : natlt lo) ->
-       tensor_pts_to_cell output (idx2 r c) (acc2 sout r c));
+       pts_to_cell output (idx2 r c) (acc2 sout r c));
   forevery_zip #(natlt (rows * lo))
     (fun (_ : natlt (rows * lo)) -> input |-> Frac (fIn /. (rows * lo)) sx)
     (fun (tid : natlt (rows * lo)) ->
-       tensor_pts_to_cell output (tid_to_rc rows lo tid)
+       pts_to_cell output (tid_to_rc rows lo tid)
          (acc2 sout (tid / lo) (tid % lo)));
   forevery_ext _ (kpre m input output sx sout fIn);
   ()
@@ -407,34 +407,34 @@ fn teardown_unfold_kpost_step
     (forall+ (_ : natlt (rows * lo)).
        input |-> Frac (fIn /. (rows * lo)) sx) **
     (forall+ (r : natlt rows) (c : natlt lo).
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (acc2 (windowreduce_result m sx k s p d lo) r c))
 {
   (* 1. Split the (unfolded) kpost forall+ into two forall+s. *)
   forevery_unzip #(natlt (rows * lo))
     (fun (_ : natlt (rows * lo)) -> input |-> Frac (fIn /. (rows * lo)) sx)
     (fun (tid : natlt (rows * lo)) ->
-       tensor_pts_to_cell output (tid_to_rc rows lo tid)
+       pts_to_cell output (tid_to_rc rows lo tid)
          (window_red m (ematrix_to_row sx (tid / lo)) k s p d (tid % lo)));
   (* 2. Reindex the cell quantifier from [tid] to [(r, c)]. *)
   forevery_factor' (rows * lo) rows lo
     (fun (r : natlt rows) (c : natlt lo) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (window_red m (ematrix_to_row sx r) k s p d c));
   (* 3. Rewrite [window_red ...] to [acc2 (windowreduce_result ...) r c]. *)
   Classical.forall_intro_2
     (rewrite_macc_windowreduce_result #et #_ m #rows #l sx k s p d lo);
   forevery_ext_2
     (fun (r : natlt rows) (c : natlt lo) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (window_red m (ematrix_to_row sx r) k s p d c))
     (fun (r : natlt rows) (c : natlt lo) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (acc2 (windowreduce_result m sx k s p d lo) r c));
   (* 4. Extract [pure (SZ.fits (layout_size lout))] from a single cell. *)
   forevery_extract_2 #(natlt rows) #(natlt lo) (0 <: natlt rows) (0 <: natlt lo)
     (fun (r : natlt rows) (c : natlt lo) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (acc2 (windowreduce_result m sx k s p d lo) r c));
   (* 5. Re-wrap the cell quantifier into the (forall+ r c) shape. *)
   pts_to_cell_fits #et #rows #lo #lout output (ait_zero rows lo ())

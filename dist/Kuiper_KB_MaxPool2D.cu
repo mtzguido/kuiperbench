@@ -24,9 +24,9 @@ __global__ __launch_bounds__(1024)
     if (1024U * blockIdx.x + threadIdx.x < bc * l_out) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / l_out;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % l_out;
-        float acc = (float) 0LL - INFINITY;
+        float acc = -INFINITY;
         uint32_t di_ref = 0U;
-        float buf = (float) 0LL - INFINITY;
+        float buf = -INFINITY;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < k; di_ref++) {
             uint32_t pos = j_sz * s + di_ref * d;
@@ -35,7 +35,7 @@ __global__ __launch_bounds__(1024)
             if (in_bounds)
                 dpos_ref = pos - p;
             float raw = input[r_sz * l + dpos_ref];
-            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
+            acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
         }
         output[r_sz * l_out + j_sz] = acc;
     }
@@ -70,9 +70,9 @@ __global__ __launch_bounds__(1024)
     if (1024U * blockIdx.x + threadIdx.x < bc * wo * ho) {
         uint32_t r_sz = (1024U * blockIdx.x + threadIdx.x) / ho;
         uint32_t j_sz = (1024U * blockIdx.x + threadIdx.x) % ho;
-        float acc = (float) 0LL - INFINITY;
+        float acc = -INFINITY;
         uint32_t di_ref = 0U;
-        float buf = (float) 0LL - INFINITY;
+        float buf = -INFINITY;
         KRML_HOST_IGNORE(&buf);
         for (; di_ref < kh; di_ref++) {
             uint32_t pos = j_sz * sh + di_ref * dh;
@@ -81,7 +81,7 @@ __global__ __launch_bounds__(1024)
             if (in_bounds)
                 dpos_ref = pos - ph;
             float raw = mid2[r_sz / wo * (h * wo) + dpos_ref * wo + r_sz % wo];
-            acc = fmaxf(acc, in_bounds ? raw : (float) 0LL - INFINITY);
+            acc = fmaxf(acc, in_bounds ? raw : -INFINITY);
         }
         out[r_sz / wo * (ho * wo) + j_sz * wo + r_sz % wo] = acc;
     }

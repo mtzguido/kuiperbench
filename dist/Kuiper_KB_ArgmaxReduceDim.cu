@@ -12,7 +12,7 @@ __global__ __launch_bounds__(1024)
     if (1024U * blockIdx.x + threadIdx.x < bm) {
         uint32_t ci_ref = 0U;
         uint32_t bi_ref = 0U;
-        float bv_ref = (float) 0LL - INFINITY;
+        float bv_ref = -INFINITY;
         for (; ci_ref < d; ci_ref++) {
             uint32_t ci_v = ci_ref;
             float v = x[(1024U * blockIdx.x + threadIdx.x) / m * (d * m) +
@@ -50,7 +50,7 @@ __global__ __launch_bounds__(1024)
     if (1024U * blockIdx.x + threadIdx.x < bm1) {
         uint32_t ci_ref = 0U;
         uint32_t bi_ref = 0U;
-        float bv_ref = (float) 0LL - INFINITY;
+        float bv_ref = -INFINITY;
         for (; ci_ref < d; ci_ref++) {
             uint32_t ci_v = ci_ref;
             float v = x[(1024U * blockIdx.x + threadIdx.x) / m * (d * m) +

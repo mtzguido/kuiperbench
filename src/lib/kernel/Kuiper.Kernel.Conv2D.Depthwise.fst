@@ -140,7 +140,7 @@ fn read_x_padded
       let bc_ci_h_hi = bc_ci_h +^ hi;
       let bc_ci_h_hi_w = bc_ci_h_hi *^ w_in;
       let flat : szlt (b * c * h_in * w_in) = bc_ci_h_hi_w +^ wi;
-      let v = tensor_read gx (flat, ());
+      let v = read gx (flat, ());
       v
     } else {
       zero
@@ -179,7 +179,7 @@ fn read_w_tap
   Math.lemma_mult_le_right kw (ci * kh + kh_i + 1) (c * kh);
   let p1 = ci *^ kh +^ kh_i;
   let flat : szlt (c * 1 * kh * kw) = p1 *^ kw +^ kw_i;
-  tensor_read gw (flat, ())
+  read gw (flat, ())
 }
 
 #pop-options
@@ -335,9 +335,9 @@ fn kf
     k := !k +^ 1sz;
   };
 
-  let bias_v = tensor_read gbias (ci, ());
+  let bias_v = read gbias (ci, ());
   let result = add bias_v !acc;
-  tensor_write_cell gy (tid, ()) result
+  write_cell gy (tid, ()) result
 }
 
 #pop-options

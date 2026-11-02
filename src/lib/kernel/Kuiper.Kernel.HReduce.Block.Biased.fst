@@ -67,7 +67,7 @@ fn read_at
   ensures
     pure (res == acc2 sx row col)
 {
-  tensor_read x (cidx2 row col)
+  read x (cidx2 row col)
 }
 
 ghost
@@ -212,7 +212,7 @@ let kpre_block
   = x |-> Frac ((1.0R /. SZ.v rows) /. nth) sx **
     bias |-> Frac ((fbias /. SZ.v rows) /. nth) sbias **
     if_ (op_Equals #nat tid 0) (Cell output ((bid, ()) <: abs (SZ.v rows @| INil)) |-> (acc1 sout bid)) **
-    exists* (v : et). tensor_pts_to_cell (from_array (l1_forward nth) shmem._1) (tid, ()) v
+    exists* (v : et). pts_to_cell (from_array (l1_forward nth) shmem._1) (tid, ()) v
 
 unfold
 let kpost_block
@@ -340,7 +340,7 @@ fn kf_block
                  acc2 sx bid j %~ (vr_row @! j));
 
   (* Read bias value and partially apply pre_map *)
-  let bias_bid : et = tensor_read bias (cidx1 bid);
+  let bias_bid : et = read bias (cidx1 bid);
   assert pure (bias_bid == acc1 sbias bid);
   echest_approx_index sbias vbias bid;
   assert pure (bias_bid %~ (acc1 vbias bid));
@@ -348,7 +348,7 @@ fn kf_block
 
   (* Compute partial sum over stride and write to shmem. *)
   let psum : et = sum_stride_map_2d_biased pre_map_bid pre_map_bid_r rows cols x bid nth tid vr_row;
-  tensor_write_cell sa (tid, ()) psum;
+  write_cell sa (tid, ()) psum;
 
   (* Set up tree reduction state. *)
   let mut n : szlt 32 = 0sz;
@@ -396,17 +396,17 @@ fn kf_block
     (**)strided_sum_is_sum pre_map_bid_r vr_row nth;
 
     let res = array1_read_from_slice sa 0sz;
-    tensor_write_cell output (bid, ()) res;
+    write_cell output (bid, ()) res;
 
     with ss. assert array1_pts_to_slice sa 0 nth ss;
     unfold array1_pts_to_slice sa;
     let css : chest1 et nth = hide (mk1 #et #nth (fun (k:natlt nth) -> acc1 ss k));
     forevery_refine_ext' #nat #(fun (k:nat) -> 0 <= k /\ k < nth) (fun (k:nat) -> k < nth) _;
     forevery_ext
-      (fun (k:natlt nth) -> tensor_pts_to_cell sa ((k <: natlt nth), ()) (acc1 ss (k - 0)))
-      (fun (k:natlt nth) -> tensor_pts_to_cell sa (abs_bij.gg k) (acc (reveal css) (abs_bij.gg k)));
+      (fun (k:natlt nth) -> pts_to_cell sa ((k <: natlt nth), ()) (acc1 ss (k - 0)))
+      (fun (k:natlt nth) -> pts_to_cell sa (abs_bij.gg k) (acc (reveal css) (abs_bij.gg k)));
     forevery_iso_back (abs_bij #nth)
-      (fun (i : abs (nth @| INil)) -> tensor_pts_to_cell sa i (acc (reveal css) i));
+      (fun (i : abs (nth @| INil)) -> pts_to_cell sa i (acc (reveal css) i));
     tensor_implode sa #1.0R #(reveal css);
     rewrite each sa as from_array (l1_forward nth) shmem._1;
     if_intro_true' (op_Equals #nat tid 0) (

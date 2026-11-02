@@ -232,7 +232,7 @@ fn read_x_padded
     let hi = h_signed -^ pad;
     let wi = w_signed -^ pad;
     if (di <^ d_in && hi <^ h_in && wi <^ w_in) {
-      (* Bound [flat] for the [cit_fits] refinement of [tensor_read].  The
+      (* Bound [flat] for the [cit_fits] refinement of [read].  The
          same rank-bound chain as [read_w_tap]; the removed [macc_pat]
          SMTPat no longer discharges this nonlinear fact automatically. *)
       Math.lemma_mult_lt_right cin bi b;
@@ -245,7 +245,7 @@ fn read_x_padded
       let p2 = p1 *^ d_in +^ di;
       let p3 = p2 *^ h_in +^ hi;
       let flat : szlt (b * cin * d_in * h_in * w_in) = p3 *^ w_in +^ wi;
-      let v = tensor_read gx (flat, ());
+      let v = read gx (flat, ());
       v
     } else {
       zero
@@ -289,7 +289,7 @@ fn read_w_tap
   let p2 = p1 *^ kd +^ kd_i;
   let p3 = p2 *^ kh +^ kh_i;
   let flat : szlt (cout * cin * kd * kh * kw) = p3 *^ kw +^ kw_i;
-  tensor_read gw (flat, ())
+  read gw (flat, ())
 }
 
 #pop-options
@@ -521,7 +521,7 @@ fn kf
      equals [conv3d_out_at] applied to [tid] once the kernel-side decode
      of [tid] is shown to match the spec-side decode (modulo
      associativity of [*]). *)
-  let bias_v = tensor_read gbias (oc, ());
+  let bias_v = read gbias (oc, ());
   let result = add bias_v !acc;
 
   Math.paren_mul_right h_out w_out 1;
@@ -544,7 +544,7 @@ fn kf
   assert pure (result ==
     conv3d_out_at b cin d_in h_in w_in cout kd kh kw stride pad
                   d_out h_out w_out sx sw sbias tid);
-  tensor_write_cell gy (tid, ()) result
+  write_cell gy (tid, ()) result
 }
 
 #pop-options

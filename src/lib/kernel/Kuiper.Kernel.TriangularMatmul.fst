@@ -4,7 +4,6 @@ module Kuiper.Kernel.TriangularMatmul
 open Kuiper
 open Kuiper.Approximates
 open Kuiper.Tensor
-open Kuiper.Tensor { tensor_pts_to_cell as pts_to_cell }
 open Kuiper.Tensor.Layout.Alg { l2_row_major, l2_col_major }
 open Kuiper.Shape
 open Kuiper.Chest
@@ -267,8 +266,8 @@ fn kf
     let kk_raw : sz = !k;
     assert pure (SZ.v kk_raw < SZ.v n);
     let kk : szlt n = kk_raw;
-    let va = tensor_read gA (row, (kk, ()));
-    let vb = tensor_read gB (kk, (col, ()));
+    let va = read gA (row, (kk, ()));
+    let vb = read gB (kk, (col, ()));
     let prod = va `mul` vb;
     a_mul va vb
       (acc2 rA (SZ.v row) (SZ.v kk))
@@ -284,7 +283,7 @@ fn kf
 
   upper_reduction_is_matmul rA rB
     (SZ.v row) (SZ.v col) (SZ.v !k);
-  tensor_write_cell gC (row, (col, ())) !acc;
+  write_cell gC (row, (col, ())) !acc;
 }
 
 ghost

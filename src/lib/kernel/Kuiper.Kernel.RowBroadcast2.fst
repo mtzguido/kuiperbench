@@ -194,10 +194,10 @@ fn kf
 {
   let row : sz = tid /^ n; assert rewrites_to row (tid /^ n);
   let col : sz = tid %^ n; assert rewrites_to col (tid %^ n);
-  let x = tensor_read_cell b ((row <: szlt m), ((col <: szlt n), ()));
-  let v1 = tensor_read a1 ((row <: szlt m), ());
-  let v2 = tensor_read a2 ((row <: szlt m), ());
-  tensor_write_cell b ((row <: szlt m), ((col <: szlt n), ())) (f x v1 v2);
+  let x = read_cell b ((row <: szlt m), ((col <: szlt n), ()));
+  let v1 = read a1 ((row <: szlt m), ());
+  let v2 = read a2 ((row <: szlt m), ());
+  write_cell b ((row <: szlt m), ((col <: szlt n), ())) (f x v1 v2);
 }
 
 inline_for_extraction noextract

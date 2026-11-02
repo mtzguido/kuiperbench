@@ -398,10 +398,10 @@ fn concat_ff
   let ii = cconcat_index i;
   if SZ.(ii <^ n_sz) {
     let ii0 = SZ.(ii %^ n_sz);
-    tensor_read a0 (ii0, ())
+    read a0 (ii0, ())
   } else {
     let jj = SZ.((ii -^ n_sz) %^ n_sz);
-    tensor_read a1 (jj, ())
+    read a1 (jj, ())
   }
 }
 
