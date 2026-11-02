@@ -106,7 +106,7 @@ let kpre
   : slprop
   = input |-> Frac (fIn /. SZ.v rows) sx **
     (forall+ (c : natlt cols).
-       tensor_pts_to_cell output (idx2 bid c) (acc2 sout bid c))
+       pts_to_cell output (idx2 bid c) (acc2 sout bid c))
 
 unfold
 let kpost
@@ -124,7 +124,7 @@ let kpost
   : slprop
   = input |-> Frac (fIn /. SZ.v rows) sx **
     (forall+ (c : natlt cols).
-       tensor_pts_to_cell output (idx2 bid c)
+       pts_to_cell output (idx2 bid c)
          (scan_exclusive_at m (ematrix_row sx bid) c))
 
 (* ──────────────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ let cell_at_iter
   (di_v : nat)
   (c : natlt cols)
   : slprop
-  = tensor_pts_to_cell output (idx2 bid c)
+  = pts_to_cell output (idx2 bid c)
       (if c < di_v
          then scan_exclusive_at m (ematrix_row sx bid) c
          else acc2 sout bid c)
@@ -209,7 +209,7 @@ fn kf
     let di_old_sz : szlt cols = di_old;
 
     (* Read input cell [(bid, di_old)]. *)
-    let v : et = tensor_read input (cidx2 (bid <: szlt rows) (di_old_sz <: szlt cols));
+    let v : et = read input (cidx2 (bid <: szlt rows) (di_old_sz <: szlt cols));
     assert pure (v == acc2 sx bid di_old_sz);
     assert pure (Seq.index (reveal row_view) di_old_sz
                  == acc2 sx bid di_old_sz);
@@ -221,7 +221,7 @@ fn kf
     (* At [c = di_old] the [if c < di_v] branch is false, so we
      * own the cell at value [acc2 sout bid di_old]. *)
     rewrite (cell_at_iter m output sx sout bid di_old di_old_sz)
-         as (tensor_pts_to_cell output (idx2 (SZ.v bid <: natlt rows)
+         as (pts_to_cell output (idx2 (SZ.v bid <: natlt rows)
                                         (SZ.v di_old_sz <: natlt cols))
               (acc2 sout bid di_old_sz));
 
@@ -232,7 +232,7 @@ fn kf
     scan_partial_eq_exclusive_at m (reveal row_view) di_old_sz;
     assert pure (acc_old == scan_exclusive_at m (reveal row_view) di_old_sz);
 
-    tensor_write_cell output (cidx2 (bid <: szlt rows) (di_old_sz <: szlt cols)) acc_old;
+    write_cell output (cidx2 (bid <: szlt rows) (di_old_sz <: szlt cols)) acc_old;
 
     (* Update the running accumulator for the next iteration. *)
     scan_partial_step m (reveal row_view) di_old_sz;
@@ -246,7 +246,7 @@ fn kf
      * [di_v = di_new = di_old + 1].  At [c = di_old] the branch is now
      * [if c < di_new] = true, so the body is
      * [scan_exclusive_at m row_view di_old], matching [acc_old]. *)
-    rewrite (tensor_pts_to_cell output (idx2 (SZ.v bid <: natlt rows)
+    rewrite (pts_to_cell output (idx2 (SZ.v bid <: natlt rows)
                                         (SZ.v di_old_sz <: natlt cols))
                acc_old)
          as (cell_at_iter m output sx sout bid di_new
@@ -281,7 +281,7 @@ fn kf
 
   Kuiper.ForEvery.forevery_ext _
     (fun (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 (Ghost.reveal bid_n) c)
+       pts_to_cell output (idx2 (Ghost.reveal bid_n) c)
          (scan_exclusive_at m (ematrix_row sx (Ghost.reveal bid_n)) c));
 
   rewrite each (Ghost.reveal bid_n) as (SZ.v bid);
@@ -328,7 +328,7 @@ fn setup_rowblock
        input |-> Frac (fIn /. SZ.v rows) sx)
     (fun (bid : natlt rows) ->
        forall+ (c : natlt cols).
-         tensor_pts_to_cell output (idx2 bid c) (acc2 sout bid c));
+         pts_to_cell output (idx2 bid c) (acc2 sout bid c));
 
   Kuiper.ForEvery.forevery_ext _
     (fun (bid : natlt rows) ->
@@ -366,7 +366,7 @@ fn teardown_rowblock
     (fun (bid : natlt rows) ->
        (input |-> Frac (fIn /. SZ.v rows) sx) **
        (forall+ (c : natlt cols).
-          tensor_pts_to_cell output (idx2 bid c)
+          pts_to_cell output (idx2 bid c)
             (scan_exclusive_at m (ematrix_row sx bid) c)));
 
   Kuiper.ForEvery.forevery_unzip #(natlt rows)
@@ -374,7 +374,7 @@ fn teardown_rowblock
        input |-> Frac (fIn /. SZ.v rows) sx)
     (fun (bid : natlt rows) ->
        forall+ (c : natlt cols).
-         tensor_pts_to_cell output (idx2 bid c)
+         pts_to_cell output (idx2 bid c)
            (scan_exclusive_at m (ematrix_row sx bid) c));
 
   tensor_gather_n input rows;
@@ -383,10 +383,10 @@ fn teardown_rowblock
     (macc_scan2d_exclusive_result #et m #rows #cols sx);
   Kuiper.ForEvery.forevery_ext_2
     (fun (bid : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 bid c)
+       pts_to_cell output (idx2 bid c)
          (scan_exclusive_at m (ematrix_row sx bid) c))
     (fun (bid : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 bid c)
+       pts_to_cell output (idx2 bid c)
          (acc2 (scan2d_exclusive_result m sx) bid c));
 
   tensor_iraise2 output;

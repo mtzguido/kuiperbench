@@ -251,7 +251,7 @@ fn read_x_strided_pad_3d
         let p2 = p1 *^ d_in +^ di;
         let p3 = p2 *^ h_in +^ hi;
         let flat : szlt (b * (4 * cin_pg) * d_in * h_in * w_in) = p3 *^ w_in +^ wi;
-        let v = tensor_read gx (flat, ());
+        let v = read gx (flat, ());
         v
       } else {
         zero
@@ -300,7 +300,7 @@ fn read_w_tap_t3
   let p2 = p1 *^ kd +^ kd_i;
   let p3 = p2 *^ kh +^ kh_i;
   let flat : szlt ((4 * cin_pg) * cout_pg * kd * kh * kw) = p3 *^ kw +^ kw_i;
-  tensor_read gw (flat, ())
+  read gw (flat, ())
 }
 
 #pop-options
@@ -550,7 +550,7 @@ fn kf
      of [*]).  Same discharge pattern as [Kuiper.Kernel.Conv3D.Naive.kf]. *)
   let k_done = !k;
   reached_bound k_done n_taps (cin_pg * kd * kh * kw);
-  let bias_v = tensor_read gbias (oc, ());
+  let bias_v = read gbias (oc, ());
   let result = add bias_v !acc;
 
   Math.paren_mul_right h_out w_out 1;
@@ -577,7 +577,7 @@ fn kf
                                         dd dh dw
                                         d_out h_out w_out
                                         sx sw_l sbias tid);
-  tensor_write_cell gy (tid, ()) result
+  write_cell gy (tid, ()) result
 }
 
 #pop-options

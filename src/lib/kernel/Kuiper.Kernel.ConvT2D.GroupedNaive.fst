@@ -156,7 +156,7 @@ fn read_x_strided_pad
         let p1 = bi *^ cin +^ ic;
         let p2 = p1 *^ h_in +^ hi;
         let flat : szlt (b * (4 * cin_pg) * h_in * w_in) = p2 *^ w_in +^ wi;
-        let v = tensor_read gx (flat, ());
+        let v = read gx (flat, ());
         v
       } else {
         zero
@@ -201,7 +201,7 @@ fn read_w_tap_t
   let p1 = ic *^ cout_pg +^ oc;
   let p2 = p1 *^ kh +^ kh_i;
   let flat : szlt ((4 * cin_pg) * cout_pg * kh * kw) = p2 *^ kw +^ kw_i;
-  tensor_read gw (flat, ())
+  read gw (flat, ())
 }
 
 #pop-options
@@ -396,12 +396,12 @@ fn kf
     k := knew;
   };
 
-  let bias_v = tensor_read gbias (oc, ());
+  let bias_v = read gbias (oc, ());
   let result = add bias_v !acc;
   assert pure (result ==
     convT2d_grouped_out_at b cin_pg h_in w_in cout_pg kh kw
       sh sw ph pw dh dw h_out w_out sx sw_l sbias tid);
-  tensor_write_cell gy (tid, ()) result
+  write_cell gy (tid, ()) result
 }
 
 #pop-options

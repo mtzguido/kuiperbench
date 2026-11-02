@@ -168,7 +168,7 @@ fn read_x_padded_axis
       let bcin_ic_h_hi = bcin_ic_h +^ hi;
       let bcin_ic_h_hi_w = bcin_ic_h_hi *^ w_in;
       let flat : szlt (b * cin * h_in * w_in) = bcin_ic_h_hi_w +^ wi;
-      let v = tensor_read gx (flat, ());
+      let v = read gx (flat, ());
       v
     } else {
       zero
@@ -208,7 +208,7 @@ fn read_w_tap
   let p1 = oc *^ cin +^ ic;
   let p2 = p1 *^ kh +^ kh_i;
   let flat : szlt (cout * cin * kh * kw) = p2 *^ kw +^ kw_i;
-  tensor_read gw (flat, ())
+  read gw (flat, ())
 }
 
 #pop-options
@@ -385,9 +385,9 @@ fn kf
     k := next_k;
   };
 
-  let bias_v = tensor_read gbias (oc, ());
+  let bias_v = read gbias (oc, ());
   let result = add bias_v !acc;
-  tensor_write_cell gy (tid, ()) result
+  write_cell gy (tid, ()) result
 }
 
 #pop-options

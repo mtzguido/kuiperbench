@@ -3,7 +3,7 @@ module Kuiper.Kernel.BiasAdd
 (* Implementation of [Kuiper.Kernel.BiasAdd].
 
    One thread per output element.  Thread [tid] decodes [(i, j) =
-   (tid / n, tid % n)], reads [C[i,j]] (via [tensor_read], which yields
+   (tid / n, tid % n)], reads [C[i,j]] (via [read], which yields
    [acc2]) and [bias[j]], and writes [add C[i,j] bias[j]] into [y[tid]].
 
    The read of the second array [bias] by the computed sub-index [j =
@@ -118,9 +118,9 @@ fn kf
 {
   let i : szlt m = tid /^ n;
   let j : szlt n = tid %^ n;
-  let cv = tensor_read gC ((i <: szlt m), ((j <: szlt n), ()));
-  let bv = tensor_read gbias ((j <: szlt n), ());
-  tensor_write_cell gy ((tid <: szlt (m * n)), ()) (add cv bv);
+  let cv = read gC ((i <: szlt m), ((j <: szlt n), ()));
+  let bv = read gbias ((j <: szlt n), ());
+  write_cell gy ((tid <: szlt (m * n)), ()) (add cv bv);
 }
 
 #pop-options

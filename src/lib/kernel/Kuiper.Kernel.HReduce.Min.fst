@@ -169,7 +169,7 @@ fn kf_batched_min
   {
     let ci_v_raw = !ci_ref;
     let ci_v : szlt cols = ci_v_raw;
-    let v = tensor_read x (cidx2 gid ci_v);
+    let v = read x (cidx2 gid ci_v);
     let acc_v = !acc_ref;
     assert pure (
       row_fmin_partial sx gid (SZ.v ci_v + 1) ==
@@ -180,7 +180,7 @@ fn kf_batched_min
 
   with acc_v. assert acc_ref |-> acc_v;
   let final_acc = !acc_ref;
-  tensor_write_cell output ((gid <: szlt rows), ()) final_acc;
+  write_cell output ((gid <: szlt rows), ()) final_acc;
 
   fold kpost_batched_min rows cols x output sx sout gid;
 }

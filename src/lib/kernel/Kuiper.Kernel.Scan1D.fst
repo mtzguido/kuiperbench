@@ -111,7 +111,7 @@ let kpre
   (gid : natlt (rows * cols))
   : slprop
   = input |-> Frac (fIn /. (rows * cols)) sx **
-    tensor_pts_to_cell output (idx2 (gid / cols) (gid % cols))
+    pts_to_cell output (idx2 (gid / cols) (gid % cols))
       (acc2 sout (gid / cols) (gid % cols))
 
 unfold
@@ -128,7 +128,7 @@ let kpost
   (gid : natlt (rows * cols))
   : slprop
   = input |-> Frac (fIn /. (rows * cols)) sx **
-    tensor_pts_to_cell output (idx2 (gid / cols) (gid % cols))
+    pts_to_cell output (idx2 (gid / cols) (gid % cols))
       (scan_inclusive_at m (ematrix_row sx (gid / cols)) (gid % cols))
 
 (* ──────────────────────────────────────────────────────────────────────
@@ -177,7 +177,7 @@ fn kf
       di_ref |-> di_v **
       acc |-> acc_v **
       input |-> Frac (fIn /. (rows * cols)) sx **
-      tensor_pts_to_cell output (idx2 (SZ.v r_sz <: natlt rows) (SZ.v j_sz <: natlt cols))
+      pts_to_cell output (idx2 (SZ.v r_sz <: natlt rows) (SZ.v j_sz <: natlt cols))
         (acc2 sout r_sz j_sz) **
       pure (SZ.v di_v <= SZ.v bound /\
             acc_v == scan_partial m (reveal row_view) di_v)
@@ -185,7 +185,7 @@ fn kf
   {
     let di_v_raw : SZ.t = !di_ref;
     let di_v : szlt cols = di_v_raw;
-    let v : et = tensor_read input (cidx2 (r_sz <: szlt rows) (di_v <: szlt cols));
+    let v : et = read input (cidx2 (r_sz <: szlt rows) (di_v <: szlt cols));
 
     assert (pure (v == acc2 sx r_sz di_v));
     assert (pure (Seq.index (reveal row_view) di_v == acc2 sx r_sz di_v));
@@ -199,7 +199,7 @@ fn kf
   let acc_final : et = !acc;
   assert pure (acc_final == scan_inclusive_at m (reveal row_view) j_sz);
   assert pure (reveal row_view == ematrix_row sx r_sz);
-  tensor_write_cell output (cidx2 (r_sz <: szlt rows) (j_sz <: szlt cols)) acc_final;
+  write_cell output (cidx2 (r_sz <: szlt rows) (j_sz <: szlt cols)) acc_final;
   rewrite each (SZ.v r_sz) as (SZ.v gid / SZ.v cols);
   rewrite each (SZ.v j_sz) as (SZ.v gid % SZ.v cols);
   ()
@@ -236,20 +236,20 @@ fn pts_to_cell_fits
   (a : array2 et l)
   (ij : abs (rows @| cols @| INil))
   (#f : perm) (#v : et)
-  preserves tensor_pts_to_cell a #f ij v
+  preserves pts_to_cell a #f ij v
   ensures pure (SZ.fits (tlayout_ulen l))
 {
   let i : nat = l.imap.f ij;
-  tensor_pts_to_cell_eq a ij f v;
-  rewrite tensor_pts_to_cell a #f ij v
-       as pts_to_cell (core a) #f i v;
-  rewrite pts_to_cell (core a) #f i v
+  pts_to_cell_eq a ij f v;
+  rewrite pts_to_cell a #f ij v
+       as Kuiper.Array.pts_to_cell (core a) #f i v;
+  rewrite Kuiper.Array.pts_to_cell (core a) #f i v
        as pts_to_slice (core a) #f i (i + 1) (Seq.cons v Seq.empty);
   pts_to_slice_ref (core a) i (i + 1);
   rewrite pts_to_slice (core a) #f i (i + 1) (Seq.cons v Seq.empty)
-       as pts_to_cell (core a) #f i v;
-  rewrite pts_to_cell (core a) #f i v
-       as tensor_pts_to_cell a #f ij v;
+       as Kuiper.Array.pts_to_cell (core a) #f i v;
+  rewrite Kuiper.Array.pts_to_cell (core a) #f i v
+       as pts_to_cell a #f ij v;
 }
 
 (* Setup leaf: fold the post-[share_n] frac quantifier and post-[ilower]
@@ -272,18 +272,18 @@ fn setup_fold_kpre_step
     (forall+ (_ : natlt (rows * cols)).
        input |-> Frac (fIn /. (rows * cols)) sx) **
     (forall+ (r : natlt rows) (c : natlt cols).
-       tensor_pts_to_cell output (idx2 r c) (acc2 sout r c))
+       pts_to_cell output (idx2 r c) (acc2 sout r c))
   ensures
     forall+ (tid : natlt (rows * cols)).
       kpre m input output sx sout fIn tid
 {
   forevery_unfactor' (rows * cols) rows cols
     (fun (r : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 r c) (acc2 sout r c));
+       pts_to_cell output (idx2 r c) (acc2 sout r c));
   forevery_zip #(natlt (rows * cols))
     (fun (_ : natlt (rows * cols)) -> input |-> Frac (fIn /. (rows * cols)) sx)
     (fun (tid : natlt (rows * cols)) ->
-       tensor_pts_to_cell output (tid_to_rc rows cols tid)
+       pts_to_cell output (tid_to_rc rows cols tid)
          (acc2 sout (tid / cols) (tid % cols)));
   forevery_ext _ (kpre m input output sx sout fIn);
   ()
@@ -314,34 +314,34 @@ fn teardown_unfold_kpost_step
     (forall+ (_ : natlt (rows * cols)).
        input |-> Frac (fIn /. (rows * cols)) sx) **
     (forall+ (r : natlt rows) (c : natlt cols).
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (acc2 (scan2d_inclusive_result m sx) r c))
 {
   (* 1. Split the (unfolded) kpost forall+ into two forall+s. *)
   forevery_unzip #(natlt (rows * cols))
     (fun (_ : natlt (rows * cols)) -> input |-> Frac (fIn /. (rows * cols)) sx)
     (fun (tid : natlt (rows * cols)) ->
-       tensor_pts_to_cell output (tid_to_rc rows cols tid)
+       pts_to_cell output (tid_to_rc rows cols tid)
          (scan_inclusive_at m (ematrix_row sx (tid / cols)) (tid % cols)));
   (* 2. Reindex the cell quantifier from [tid] to [(r, c)]. *)
   forevery_factor' (rows * cols) rows cols
     (fun (r : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (scan_inclusive_at m (ematrix_row sx r) c));
   (* 3. Rewrite [scan_inclusive_at ...] to [acc2 (scan2d_inclusive_result ...) r c]. *)
   Classical.forall_intro_2
     (macc_scan2d_inclusive_result #et m #rows #cols sx);
   forevery_ext_2
     (fun (r : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (scan_inclusive_at m (ematrix_row sx r) c))
     (fun (r : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (acc2 (scan2d_inclusive_result m sx) r c));
   (* 4. Extract [pure (SZ.fits (layout_size lout))] from a single cell. *)
   forevery_extract_2 #(natlt rows) #(natlt cols) (0 <: natlt rows) (0 <: natlt cols)
     (fun (r : natlt rows) (c : natlt cols) ->
-       tensor_pts_to_cell output (idx2 r c)
+       pts_to_cell output (idx2 r c)
          (acc2 (scan2d_inclusive_result m sx) r c));
   pts_to_cell_fits #et #rows #cols #lout output (ait_zero rows cols ())
     #1.0R #(acc2 (scan2d_inclusive_result m sx) 0 0);

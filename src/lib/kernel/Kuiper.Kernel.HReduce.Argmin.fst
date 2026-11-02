@@ -176,7 +176,7 @@ fn kf_batched_argmin
   {
     let ci_v_raw = !ci_ref;
     let ci_v : szlt cols = ci_v_raw;
-    let v = tensor_read x (cidx2 gid ci_v);
+    let v = read x (cidx2 gid ci_v);
     let bv_v = !bv_ref;
     if lt v bv_v {
       bv_ref := v;
@@ -195,7 +195,7 @@ fn kf_batched_argmin
   let final_bi_i64 : I64.t = Cast.uint32_to_int64 final_bi_u32;
   assert pure (I64.v final_bi_i64 == SZ.v final_bi);
   assert pure (argmin_i64 cols sx gid == final_bi_i64);
-  tensor_write_cell output ((gid <: szlt rows), ()) final_bi_i64;
+  write_cell output ((gid <: szlt rows), ()) final_bi_i64;
 
   fold kpost_batched_argmin rows cols x output sx sout gid;
 }
